@@ -54,7 +54,7 @@ describe("citePresentation", () => {
     const page = source({ type: "web_page", title: "OpenAI official guide", locator: "https://other.example.test/article" });
     expect(citePresentation(page).label).toBe("other.example.test");
     expect(citePresentation({ ...page, locator: "https://docs.example.test/article" }).label).toBe("docs.example.test");
-    expect(citePresentation({ ...page, locator: "http://192.168.100.169:8929/project" }).label).toBe("192.168.100.169:8929");
+    expect(citePresentation({ ...page, locator: "http://localhost:8929/project" }).label).toBe("localhost:8929");
   });
 
   it("uses a recognized PDF identity without turning output page markers into positions", () => {
