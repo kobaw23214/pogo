@@ -1,0 +1,75 @@
+#!/opt/venv/bin/python3
+"""pdf-links <pdf> — 外部链接/参考文献清单。
+
+按首现顺序去重（归一化 URL：去 utm 参数与尾斜杠），带首现页号与锚文本；
+内部跳转（LINK_GOTO）只给计数。输出纯文本行，模型直接可读。
+"""
+import os
+import sys
+from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import pdflib
+import pymupdf
+
+
+def normalize_url(u):
+    """去 utm_*/追踪参数与尾斜杠，保留语义等价键。"""
+    try:
+        sp = urlsplit(u.strip())
+    except ValueError:
+        return u.strip()
+    q = [(k, v) for k, v in parse_qsl(sp.query, keep_blank_values=True)
+         if not k.lower().startswith(("utm_", "ref_", "fbclid", "gclid"))]
+    path = sp.path.rstrip("/") or ""
+    return urlunsplit((sp.scheme.lower(), sp.netloc.lower(), path, urlencode(q), ""))
+
+
+def main():
+    if len(sys.argv) != 2:
+        raise pdflib.Fail(2, "usage: pdf-links <pdf>")
+    doc = pdflib.open_guarded(sys.argv[1])
+
+    seen = {}
+    order = []
+    internal = 0
+    for pno in range(doc.page_count):
+        page = doc[pno]
+        try:
+            links = page.get_links()
+        except Exception:
+            continue
+        for lk in links:
+            kind = lk.get("kind")
+            if kind == pymupdf.LINK_GOTO:
+                internal += 1
+                continue
+            if kind != pymupdf.LINK_URI:
+                continue
+            uri = lk.get("uri") or ""
+            if not uri.lower().startswith(("http://", "https://")):
+                continue
+            key = normalize_url(uri)
+            if key in seen:
+                seen[key]["pages"].append(pno + 1)
+                continue
+            anchor = ""
+            try:
+                anchor = page.get_textbox(lk["from"]).strip().replace("\n", " ")
+            except Exception:
+                pass
+            seen[key] = {"url": uri, "pages": [pno + 1], "anchor": anchor[:80]}
+            order.append(key)
+
+    if not order:
+        print(f"# {os.path.basename(sys.argv[1])}: 无外部链接（内部跳转 {internal} 处）")
+        return
+    print(f"# {os.path.basename(sys.argv[1])} · 外部链接 {len(order)} 条（内部跳转 {internal} 处，未列）")
+    for k in order:
+        e = seen[k]
+        pgs = e["pages"] if len(e["pages"]) <= 3 else e["pages"][:3] + [f"…共{len(e['pages'])}次"]
+        anchor = f"「{e['anchor']}」" if e["anchor"] else ""
+        print(f"p{','.join(map(str, pgs))}  {e['url']}  {anchor}")
+
+
+pdflib.run(main)

@@ -1,0 +1,33 @@
+{
+  "name": "pogo-browser-runtime",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test test/*.test.js",
+    "mock:start": "node mock-platform/server.js",
+    "mock:test": "node --test mock-platform/server.test.js",
+    "auth:test": "node --test test/native-only.test.js",
+    "eval:test": "node --test eval/test/*.test.js",
+    "eval:validate": "node eval/run.js --mode validate",
+    "eval:model": "node eval/run.js --mode model",
+    "general:eval:test": "node --test eval/general-web/*.test.js eval/general-web/fixtures/*.test.js",
+    "general:eval:validate": "node eval/general-web/run.js --mode validate",
+    "general:eval:model": "node eval/general-web/run.js --mode model",
+    "general:preview": "node eval/general-web/preview.js",
+    "browser-use:eval:test": "node --test eval/browser-use-v2/*.test.js",
+    "browser-use:eval:validate": "node eval/browser-use-v2/run.js --mode validate",
+    "browser-use:eval:model": "node eval/browser-use-v2/run.js --mode model",
+    "evidence:eval:test": "node --test eval/evidence/evidence.test.js",
+    "evidence:eval:validate": "node eval/evidence/run.js --mode validate",
+    "evidence:eval:model": "node eval/evidence/run.js --mode model"
+  },
+  "dependencies": {
+    "playwright": "1.63.0",
+    "ws": "8.22.0"
+  }
+}

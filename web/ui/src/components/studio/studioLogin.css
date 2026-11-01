@@ -1,0 +1,86 @@
+.studio-login {
+  --paper: #f5f4ee;
+  --ink: #1d2428;
+  --blue: #006ec5;
+  --serif: Georgia, "Noto Serif SC", "Source Han Serif SC", "Songti SC", "SimSun", serif;
+  --sans: Inter, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  height: 100dvh;
+  width: 100%;
+  color-scheme: light;
+  color: var(--ink);
+  font: 15px/1.7 var(--sans);
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+button, input { font: inherit; }
+button { cursor: pointer; color: inherit; }
+button:disabled { cursor: wait; opacity: .6; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
+.login-dialog {
+  padding: 0;
+  border: 1px solid #bfc8c4;
+  max-width: 840px;
+  width: calc(100% - 40px);
+  max-height: calc(100dvh - 32px);
+  background: #f5f5ed;
+  color: var(--ink);
+  overflow: auto;
+  grid-template-columns: .88fr 1fr;
+  box-shadow: 0 30px 100px #10192340;
+}
+.login-dialog[open] { display: grid; }
+.login-dialog::backdrop { background: #17252665; backdrop-filter: blur(7px); }
+.dialog-close { position: absolute; right: 13px; top: 8px; border: 0; background: transparent; font-size: 30px; color: #607276; z-index: 5; width: 40px; height: 40px; }
+.login-art { position: relative; overflow: hidden; background: #dbe5e5; min-height: 580px; }
+.art-shell, .art-wave { background-image: url('../../assets/studio/scientific-atlas.webp'); background-size: 300% 200%; background-repeat: no-repeat; }
+.art-shell { background-position: 100% 0; }
+.art-wave { background-position: 50% 0; }
+.login-paper { position: absolute; top: 65px; left: -35px; width: 280px; height: 280px; transform: rotate(-10deg); }
+.login-paper-front { position: absolute; top: 120px; left: 95px; width: 265px; height: 265px; transform: rotate(13deg); }
+.login-art-title { position: absolute; left: 32px; bottom: 73px; font: 42px/1.1 var(--serif); letter-spacing: -1.4px; background: #dbe5e5e8; padding: 10px 0 18px; }
+.login-art-title span { display: block; font: 12px var(--sans); letter-spacing: 1px; margin-top: 20px; color: #607478; }
+.login-art-meta { position: absolute; bottom: 26px; left: 32px; font: 8px var(--mono); letter-spacing: 1px; color: #667d7d; }
+.login-form { padding: 40px 45px; min-width: 0; }
+.login-logo { mix-blend-mode: multiply; margin-bottom: 27px; }
+.eyebrow { font: 8px/1.5 var(--mono); letter-spacing: 1.5px; color: #53645f; margin: 0 0 13px; }
+.login-form h2 { font: 400 38px/1.3 var(--serif); letter-spacing: -1px; margin: 0; }
+.auth-switch { display: flex; border-bottom: 1px solid #d5ddd5; margin-top: 27px; gap: 21px; }
+.auth-switch button { min-height: 42px; padding: 7px 0; background: transparent; font-size: 12px; color: #647268; border: 0; border-bottom: 2px solid transparent; }
+.auth-switch [aria-pressed=true] { border-color: #263f45; color: #263f45; }
+.login-help { font-size: 13px; color: #647268; margin: 24px 0 0; }
+.login-form label { display: block; margin-top: 20px; font-size: 12px; color: #54675b; }
+.login-form input { display: block; width: 100%; height: 46px; margin-top: 6px; border: 1px solid #b7c4b3; background: #fbfcf7; padding: 0 12px; font-size: 16px; border-radius: 0; color: #24372d; }
+.login-form input::placeholder { color: #758575; }
+.secret-field { position: relative; }
+.secret-field input { padding-right: 58px; }
+.secret-toggle { position: absolute; top: 0; right: 1px; width: 54px; height: 46px; border: 0; background: transparent; font-size: 12px; color: #47665e; }
+.button { display: inline-flex; align-items: center; justify-content: space-between; gap: 24px; min-height: 46px; padding: 11px 21px; font: 13px/1.6 var(--sans); border: 1px solid var(--ink); }
+.button-dark { background: var(--ink); color: white; }
+.button-dark:hover:not(:disabled) { background: #0068b1; border-color: #0068b1; }
+.login-submit { width: 100%; margin-top: 27px; }
+.login-submit span:last-child:not(:first-child) { font-size: 18px; }
+/* The arrow keeps its box while busy (visibility, not removal) so the
+   submit row never reflows mid-request. */
+.login-arrow-hidden { visibility: hidden; }
+/* One line reserved whether or not an error is showing: the card's height
+   is constant across every click outcome. Empty = invisible, never absent. */
+.form-error { font-size: 13px; line-height: 1.7; color: #a12b26; background: #f7e9df; padding: 9px 11px; margin: 17px 0 0; border-left: 2px solid #bf5044; overflow-wrap: anywhere; min-height: 40px; box-sizing: border-box; }
+.form-error-empty { visibility: hidden; }
+/* Disabled toggling lands as a short fade instead of an instant restyle. */
+.login-form input, .auth-switch button, .login-submit, .secret-toggle { transition: color .12s ease, background-color .12s ease, border-color .12s ease, opacity .12s ease; }
+.login-footnote { font-size: 11px; color: #68796d; line-height: 1.7; margin: 15px 0 0; }
+@media (max-width: 900px) { .login-form { padding: 40px 32px; } }
+@media (max-width: 650px) {
+  .login-dialog { width: calc(100% - 30px); max-width: 390px; }
+  .login-dialog[open] { grid-template-columns: 1fr; }
+  .login-art { display: none; }
+  .login-form { padding: 31px 27px; }
+  .login-logo { margin-bottom: 20px; }
+  .login-form h2 { font-size: 32px; }
+  .login-form h2 br { display: none; }
+  .auth-switch { margin-top: 23px; }
+  .auth-switch button { min-height: 44px; }
+  .login-form label { margin-top: 18px; }
+  .dialog-close { right: 10px; top: 7px; }
+}

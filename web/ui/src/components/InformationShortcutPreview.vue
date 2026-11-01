@@ -1,0 +1,38 @@
+<script setup lang="ts">
+import { computed, onBeforeUnmount, provide, ref, watch } from "vue";
+import { useI18n } from "vue-i18n";
+import { Download } from "@element-plus/icons-vue";
+import { Icon } from "@iconify/vue";
+import { informationApi, type InformationEntry } from "@/api/information";
+import type { MessageInputPart } from "@/api/types";
+import { workspaceFileNavigationKey } from "@/agent/workspaceFileNavigation";
+import ShortcutDetails from "./ShortcutDetails.vue";
+import CodeBlock from "./CodeBlock.vue";
+import { fileIcon } from "./fileIcons";
+import { informationFileLanguage, informationFilePreview } from "./informationFilePreview";
+const props = defineProps<{ entry: InformationEntry }>();
+const { t } = useI18n();
+// The information namespace never inherits a conversation's file or Office rights.
+provide(workspaceFileNavigationKey, { scope: () => null, open: () => {} });
+const assets = computed(() => { const result = new Set<string>(); const visit = (parts: MessageInputPart[]) => { for (const part of parts) if (part.type === "file" && /^information-assets\/[a-f0-9]{64}\/[^/\\\u0000]+$/.test(part.path)) result.add(part.path); else if (part.type === "shortcut" && part.parts) visit(part.parts); }; visit(props.entry.shortcut?.parts || []); return [...result]; });
+const open = ref(false), selected = ref(""), loading = ref(false), downloading = ref(false), error = ref(""), url = ref(""), text = ref(""), kind = ref("");
+const language = computed(() => informationFileLanguage(name(selected.value)));
+let controller: AbortController | undefined, downloadController: AbortController | undefined, sequence = 0, disposed = false;
+const downloadURLs = new Set<string>();
+function clear() { if (url.value) URL.revokeObjectURL(url.value); url.value = ""; text.value = ""; kind.value = ""; }
+function name(path: string) { return path.split("/").pop() || path; }
+async function preview(asset: string) {
+  const id = props.entry.id, version = props.entry.version, ticket = ++sequence; controller?.abort(); downloadController?.abort(); downloading.value = false; clear(); selected.value = asset; open.value = true; loading.value = true; error.value = ""; const current = new AbortController(); controller = current;
+  const valid = () => !disposed && sequence === ticket && props.entry.id === id && props.entry.version === version && open.value;
+  try { const blob = await informationApi.assetContent(id, version, asset, false, current.signal); if (!valid()) return; const format = informationFilePreview(name(asset), blob.type, blob.size); if (format === "image" || format === "pdf") { url.value = URL.createObjectURL(format === "pdf" ? new Blob([blob], { type: "application/pdf" }) : blob); kind.value = format; } else if (format === "text") { const content = await blob.text(); if (valid()) { text.value = content; kind.value = "text"; } } else kind.value = format; }
+  catch (value) { if (valid() && !current.signal.aborted) error.value = value instanceof Error ? value.message : String(value); }
+  finally { if (!disposed && ticket === sequence) loading.value = false; }
+}
+async function download() { const asset = selected.value, id = props.entry.id, version = props.entry.version, ticket = sequence; if (!asset || loading.value || downloading.value) return; downloading.value = true; error.value = ""; const current = new AbortController(); downloadController = current; const valid = () => !disposed && ticket === sequence && props.entry.id === id && props.entry.version === version && open.value; try { const blob = await informationApi.assetContent(id, version, asset, true, current.signal); if (!valid()) return; const href = URL.createObjectURL(blob), link = document.createElement("a"); downloadURLs.add(href); link.href = href; link.download = name(asset); link.click(); setTimeout(() => { if (downloadURLs.delete(href)) URL.revokeObjectURL(href); }, 1000); } catch (value) { if (valid() && !current.signal.aborted) error.value = value instanceof Error ? value.message : String(value); } finally { if (valid()) downloading.value = false; } }
+watch(() => [props.entry.id, props.entry.version], () => { sequence++; controller?.abort(); downloadController?.abort(); loading.value = false; downloading.value = false; clear(); open.value = false; });
+watch(open, value => { if (!value) { sequence++; controller?.abort(); downloadController?.abort(); loading.value = false; downloading.value = false; clear(); } });
+onBeforeUnmount(() => { disposed = true; sequence++; controller?.abort(); downloadController?.abort(); clear(); for (const href of downloadURLs) URL.revokeObjectURL(href); downloadURLs.clear(); });
+</script>
+<template><div class="information-shortcut-preview"><ShortcutDetails v-if="entry.shortcut" :title="entry.shortcut.title" :content="entry.shortcut.content" :parts="entry.shortcut.parts" :language="entry.shortcut.language" :icon="entry.shortcut.icon" /><div v-if="assets.length" class="library-attachments"><small>{{ t('information.attachments') }}</small><button v-for="asset in assets" :key="asset" type="button" @click="preview(asset)"><Icon :icon="fileIcon(name(asset))" aria-hidden="true" />{{ name(asset) }}</button></div></div><el-dialog v-model="open" :title="name(selected)" width="min(1120px, calc(100vw - 32px))" class="information-asset-dialog" append-to-body :close-on-click-modal="false"><template #header><div class="asset-title"><Icon :icon="fileIcon(name(selected))" aria-hidden="true" /><span>{{ name(selected) }}</span></div></template><p v-if="loading" role="status">{{ t('information.loading') }}</p><p v-if="error" class="asset-error" role="alert">{{ error }}</p><div class="asset-preview"><img v-if="kind === 'image' && url" :src="url" :alt="name(selected)" /><iframe v-else-if="kind === 'pdf' && url" :src="url" :title="t('information.pdfPreview')" /><CodeBlock v-else-if="kind === 'text'" :code="text" :lang="language" line-numbers uncollapsed preserve-trailing-line /><p v-else-if="kind === 'large'">{{ t('information.previewTooLarge') }}</p><p v-else-if="kind === 'unsupported'">{{ t('information.fileUnsupported') }}</p></div><template #footer><el-button :disabled="loading" :loading="downloading" @click="download"><el-icon><Download /></el-icon>{{ t('information.download') }}</el-button><el-button @click="open = false">{{ t('information.close') }}</el-button></template></el-dialog></template>
+<style scoped>.library-attachments{display:flex;flex-direction:column;gap:7px;margin-top:16px;padding-top:12px;border-top:1px solid var(--el-border-color-lighter)}.library-attachments>small{color:var(--el-text-color-secondary);font-size:11px}.library-attachments>button{display:flex;align-items:center;gap:7px;align-self:flex-start;border:1px solid var(--el-border-color-light);padding:5px 9px;border-radius:7px;background:var(--el-fill-color-lighter);font:inherit;font-size:12px;color:var(--el-text-color-primary);cursor:pointer;overflow-wrap:anywhere;text-align:left}.library-attachments>button>svg{width:19px;height:19px;flex:none}.library-attachments>button:hover{border-color:var(--el-color-primary);color:var(--el-color-primary)}.asset-title{display:flex;align-items:center;gap:10px;padding-right:24px;font-size:17px;font-weight:600;min-width:0;line-height:1.5}.asset-title>svg{width:26px;height:26px;flex:none}.asset-title>span{overflow-wrap:anywhere;min-width:0}.asset-preview{max-height:68dvh;overflow:auto;font-size:13px;line-height:1.8}.asset-preview>img{max-width:100%;height:auto}.asset-preview>iframe{width:100%;height:67dvh;border:0}.asset-error{font-size:12px;color:var(--el-color-danger)}</style>
+<style>.information-asset-dialog{margin-top:5dvh;max-height:90dvh}.information-asset-dialog .el-dialog__body{min-height:0;overflow:auto}</style>

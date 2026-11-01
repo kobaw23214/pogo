@@ -1,0 +1,69 @@
+# pogo 基座独立编排(独立仓库布局,构建上下文即仓库根)。
+#   docker compose up -d --build
+#   http://127.0.0.1:19777/
+#
+# 加固结论(实测过的组合):自定义 seccomp
+# profile 放行 userns(否则 bwrap 起不来)、cap_drop、只读根文件系统、
+# named volume 承载 $HOME/.pogo 状态。POGO_MCP 不开——基座部署先只跑
+# agent 本体,要 MCP 在 environment 里加 POGO_MCP=1。
+name: pogo
+
+services:
+  pogo:
+    image: pogo:describe-args-20260930
+    build:
+      context: .
+      dockerfile: Dockerfile
+    platform: ${POGO_PLATFORM:-linux/amd64}
+    container_name: pogo-base
+    # Reap cancelled subprocess descendants in the container as well as on a host.
+    init: true
+    security_opt:
+      - no-new-privileges:true
+      # 与 seccomp-bwrap.json 同源(Docker 默认 + unshare/clone/clone3/
+      # mount/umount2/pivot_root 六个 syscall),bubblewrap 的 user namespace 需要。
+      - seccomp=./seccomp-bwrap.json
+    cap_drop: [ALL]
+    read_only: true
+    # Container-wide hard limits; individual runtimeSkill calls use process supervision.
+    mem_limit: ${POGO_MEMORY_LIMIT:-4g}
+    cpus: ${POGO_CPUS:-4}
+    pids_limit: 768
+    stop_grace_period: 30s
+    tmpfs:
+      - /tmp:size=1g,exec
+    volumes:
+      - pogo-home:/home/pogo
+      # Keep the administrator's runtimeSkill warehouse outside Agent workspaces.
+      - pogo-skills:/var/lib/pogo-skills
+      # 模型目录(providers.json,运行时准备的本地文件);deploy.env 单独生成、只含
+      # API key,不入库。
+      - ./providers.json:/home/pogo/.pogo/providers.json:ro
+      # 账号库(users.json):可写挂载——UI 改密直接落盘,宿主机编辑可加账号/
+      # 发个人固定 token(-gen-token 生成)。配合下方 POGO_USERS_FILE。
+      - ./users.json:/home/pogo/.pogo/users.json
+    env_file:
+      - ./deploy.env
+    environment:
+      # 与镜像构建/选择使用同一声明;运行器仍核验实际架构和 Skill 包平台。
+      - POGO_PLATFORM=${POGO_PLATFORM:-linux/amd64}
+      # 默认 token = 默认 admin:这把环境钥匙绑定 admin 账号的空间与运维
+      # 权限,无过期。其他账号走 users.json 的个人 "token" 或账号密码。
+      - POGO_WEB_TOKEN=pogo-dev-token
+      - POGO_SANDBOX=enforce
+      # Ordinary shell commands keep the OS sandbox and use container networking.
+      # Independent Skill Runtime permissions remain network:none.
+      - POGO_SANDBOX_NET=${POGO_SANDBOX_NET:-1}
+      - POGO_USERS_FILE=/home/pogo/.pogo/users.json
+      # SkillRuntime run as sandboxed child processes in this container.
+      - POGO_SKILL_RUNTIME_STORE=/var/lib/pogo-skills
+      - POGO_SKILL_RUNTIME_EXECUTOR=local
+    ports:
+      - "127.0.0.1:19777:7777"
+    command: ["-web", "-listen", "0.0.0.0:7777"]
+    restart: unless-stopped
+
+volumes:
+  pogo-home:
+  pogo-skills:
+    name: ${POGO_SKILL_RUNTIME_VOLUME:-pogo_pogo-skills}

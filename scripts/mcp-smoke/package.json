@@ -1,0 +1,9 @@
+{
+  "name": "pogo-mcp-smoke",
+  "private": true,
+  "type": "module",
+  "description": "Cross-SDK smoke test for pogo's MCP server using the official TypeScript SDK",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  }
+}

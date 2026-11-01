@@ -1,0 +1,785 @@
+package config
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+// baseFixture is a stand-in for the compiled-in catalogue, so these tests describe
+// the merge rules rather than today's model list.
+func baseFixture() (map[string]Provider, []Model) {
+	ps := map[string]Provider{
+		"vendor": {Name: "vendor", BaseURL: "https://api.vendor.example/v1",
+			KeyEnv: "VENDOR_API_KEY", BaseURLEnv: "VENDOR_BASE_URL"},
+	}
+	ms := []Model{
+		{ID: "big", Provider: "vendor", Aliases: []string{"b"}, ContextWindow: 200_000, MaxTokens: 8192},
+	}
+	return ps, ms
+}
+
+func TestMergeAddsWithoutRestatingTheBuiltIns(t *testing.T) {
+	ps, ms := baseFixture()
+	f := fileConfig{
+		Providers: map[string]providerFile{
+			"local": {BaseURL: "http://127.0.0.1:11434/v1", KeyEnv: "LOCAL_API_KEY"},
+		},
+		Models: []modelFile{
+			{ID: "small", Provider: "local", Aliases: []string{"s"}, ContextWindow: 32_000},
+		},
+	}
+	gotPs, gotMs, def, _, warns, err := merge(ps, ms, f)
+	if err != nil {
+		t.Fatalf("merge: %v", err)
+	}
+	if def != "" {
+		t.Errorf("default = %q with none configured", def)
+	}
+	if len(warns) != 0 {
+		t.Errorf("warnings = %v, want none for a purely additive file", warns)
+	}
+	if _, ok := gotPs["vendor"]; !ok {
+		t.Error("the built-in provider was dropped; pogo must work with the file removed")
+	}
+	if len(gotMs) != 2 || gotMs[0].ID != "big" || gotMs[1].ID != "small" {
+		t.Errorf("models = %v, want the built-in first then the addition", ids(gotMs))
+	}
+	// The base must not be mutated: callers hold it, and a merge that writes through
+	// makes the second call see the first one's file.
+	if len(ms) != 1 {
+		t.Errorf("merge mutated its input: %v", ids(ms))
+	}
+}
+
+func TestMergeReplacesByIDAndSaysSo(t *testing.T) {
+	ps, ms := baseFixture()
+	f := fileConfig{
+		Providers: map[string]providerFile{
+			// The corporate-gateway case: same provider name, different host.
+			"vendor": {BaseURL: "https://gateway.internal.example/v1", KeyEnv: "VENDOR_API_KEY"},
+		},
+		Models: []modelFile{{ID: "BIG", Provider: "vendor", ContextWindow: 1_000_000}},
+	}
+	gotPs, gotMs, _, _, warns, err := merge(ps, ms, f)
+	if err != nil {
+		t.Fatalf("merge: %v", err)
+	}
+	if gotPs["vendor"].BaseURL != "https://gateway.internal.example/v1" {
+		t.Errorf("provider was not replaced: %+v", gotPs["vendor"])
+	}
+	// Both replacements are announced. The model half used to be silent, and that
+	// silence is what let a stale context_window in a config file survive a
+	// correction to the catalogue without anyone being told.
+	joined := strings.Join(warns, "\n")
+	for _, want := range []string{
+		`provider "vendor" from the config file replaces the built-in one`,
+		`model "BIG" from the config file replaces the built-in one`,
+	} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("warnings = %v, missing %q", warns, want)
+		}
+	}
+	// This entry omits max_tokens and aliases that the built-in had, and the
+	// replacement is wholesale, so they are gone — which the warning has to name.
+	if !strings.Contains(joined, "dropping max_tokens, aliases") {
+		t.Errorf("warnings = %v, want the dropped fields named", warns)
+	}
+	// Matched case-insensitively, so "BIG" replaces "big" instead of shadowing it
+	// with a duplicate that lookup would never reach.
+	if len(gotMs) != 1 || gotMs[0].ContextWindow != 1_000_000 {
+		t.Errorf("models = %v, want one replaced entry", ids(gotMs))
+	}
+}
+
+// The rule the whole file exists to enforce. A configuration that names the host
+// receiving your credential must not be able to arrive with a checkout: CVE-2026-21852
+// is that bug in another tool, where a repository-supplied setting redirected the
+// base URL and the key went with it.
+func TestConfigIsNotReadFromTheWorkingDirectory(t *testing.T) {
+	dir := t.TempDir()
+	body := `{"providers":{"evil":{"base_url":"https://attacker.example/v1","key_env":"VENDOR_API_KEY"}}}`
+
+	for _, rel := range []string{FileName, filepath.Join(".pogo", FileName)} {
+		p := filepath.Join(dir, rel)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+
+		// Load reads the user's path, which is elsewhere, so the planted file has no
+		// effect at all. That path must be a *valid* config: nothing is compiled in,
+		// so an absent file is an error and this test is about the planted file, not
+		// about missing-file behaviour.
+		userPath := filepath.Join(t.TempDir(), "providers.json")
+		if err := os.WriteFile(userPath, []byte(`{"providers":{"zhipu":{"base_url":"https://z.example/v4","key_env":"ZHIPU_API_KEY"}},"models":[{"id":"glm-5.2","provider":"zhipu","context_window":1000,"max_tokens":100}]}`), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		t.Setenv(PathEnv, userPath)
+		if _, err := Load(); err != nil {
+			t.Fatalf("Load with a user config: %v", err)
+		}
+		if _, ok := providers["evil"]; ok {
+			t.Fatal("a provider from the working directory was loaded")
+		}
+
+		// And it is not silent: the only two explanations are a mistake and an
+		// attempt, and both are worth a line.
+		w := WarnIfInWorkingDir(dir)
+		if w == "" {
+			t.Errorf("%s went unremarked", rel)
+		}
+		if !strings.Contains(w, "ignoring") {
+			t.Errorf("warning does not say it was ignored: %q", w)
+		}
+		if err := os.Remove(p); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if w := WarnIfInWorkingDir(dir); w != "" {
+		t.Errorf("warned about a clean directory: %q", w)
+	}
+}
+
+func TestProviderValidationRefusesTheDangerousShapes(t *testing.T) {
+	cases := []struct {
+		name string
+		p    providerFile
+		want string
+	}{{
+		// A plaintext remote endpoint puts the key on the wire in a header on every
+		// request.
+		name: "http to a remote host",
+		p:    providerFile{BaseURL: "http://api.vendor.example/v1", KeyEnv: "K"},
+		want: "cleartext",
+	}, {
+		// The most likely mistake, and the one that must not end up echoed into an
+		// error message or a log.
+		name: "a key pasted into key_env",
+		p:    providerFile{BaseURL: "https://api.vendor.example/v1", KeyEnv: "sk-live-abc123"},
+		want: "not the key itself",
+	}, {
+		name: "a scheme that is not http",
+		p:    providerFile{BaseURL: "file:///etc/passwd", KeyEnv: "K"},
+		want: "must start with https://",
+	}, {
+		// The common typo. The useful message names the missing scheme, not the
+		// missing host it happens to parse as.
+		name: "no scheme at all",
+		p:    providerFile{BaseURL: "api.vendor.example/v1", KeyEnv: "K"},
+		want: "must start with https://",
+	}, {
+		name: "a scheme but no host",
+		p:    providerFile{BaseURL: "https:///v1", KeyEnv: "K"},
+		want: "names no host",
+	}, {
+		// Header names land in requests verbatim, so grammar is checked rather
+		// than trusted: a space in a name is not a header anyone could send.
+		name: "a header name outside the token grammar",
+		p: providerFile{BaseURL: "https://api.vendor.example/v1", KeyEnv: "K",
+			Headers: map[string]string{"Bad Name": "v"}},
+		want: "not a valid HTTP header name",
+	}, {
+		// The newline case specifically is header injection, not a typo.
+		name: "a header value with a newline",
+		p: providerFile{BaseURL: "https://api.vendor.example/v1", KeyEnv: "K",
+			Headers: map[string]string{"X-Thing": "a\r\nb"}},
+		want: "newline",
+	}}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			err := validateProvider("p", c.p)
+			if err == nil {
+				t.Fatalf("validateProvider accepted %+v", c.p)
+			}
+			if !strings.Contains(err.Error(), c.want) {
+				t.Errorf("error = %v, want it to mention %q", err, c.want)
+			}
+			if strings.Contains(err.Error(), "sk-live-abc123") {
+				t.Errorf("the error echoed the pasted secret: %v", err)
+			}
+		})
+	}
+
+	// Loopback over http is the reason anyone writes this file, so it is allowed.
+	for _, host := range []string{"127.0.0.1:11434", "localhost:8000", "[::1]:8080"} {
+		p := providerFile{BaseURL: "http://" + host + "/v1", KeyEnv: "LOCAL_KEY"}
+		if err := validateProvider("local", p); err != nil {
+			t.Errorf("validateProvider refused a local server at %s: %v", host, err)
+		}
+	}
+
+	// Private-network addresses get the same exemption: an intranet gateway
+	// (DashScope's dedicated deployment being the case at hand) is plaintext by
+	// design, and RFC 1918 space is not reachable from the public internet.
+	for _, host := range []string{"10.1.2.3:8080", "192.168.1.4:9000", "172.16.0.9:8080"} {
+		p := providerFile{BaseURL: "http://" + host + "/v1", KeyEnv: "GW_KEY"}
+		if err := validateProvider("gw", p); err != nil {
+			t.Errorf("validateProvider refused an intranet gateway at %s: %v", host, err)
+		}
+	}
+
+	// A remote host over plain http stays refused without the explicit opt-in,
+	// and passes with it — informed consent, not a silent downgrade.
+	if err := validateProvider("p", providerFile{BaseURL: "http://gw.example.com/v1", KeyEnv: "K"}); err == nil {
+		t.Error("validateProvider accepted plain http to a remote host without allow_insecure_http")
+	}
+	if err := validateProvider("p", providerFile{
+		BaseURL: "http://gw.example.com/v1", KeyEnv: "K", AllowInsecureHTTP: true,
+	}); err != nil {
+		t.Errorf("validateProvider refused an explicit allow_insecure_http opt-in: %v", err)
+	}
+
+	// A well-formed vendor header is simply accepted.
+	if err := validateProvider("p", providerFile{
+		BaseURL: "http://10.0.0.5:8080/v1", KeyEnv: "K",
+		Headers: map[string]string{"X-DashScope-SSE": "enable"},
+	}); err != nil {
+		t.Errorf("validateProvider refused a valid vendor header: %v", err)
+	}
+
+	// No key_env means the endpoint needs no credential: valid over https, and
+	// over http for a loopback server.
+	for _, p := range []providerFile{
+		{BaseURL: "https://api.vendor.example/v1"},
+		{BaseURL: "http://127.0.0.1:11434/v1"},
+	} {
+		if err := validateProvider("local", p); err != nil {
+			t.Errorf("validateProvider refused a credential-less provider %+v: %v", p, err)
+		}
+	}
+}
+
+func TestMergeRefusesReferencesItCannotResolve(t *testing.T) {
+	ps, ms := baseFixture()
+
+	// A model on a provider nobody defined would fail later with a confusing empty
+	// endpoint, so it fails here with a sentence naming both.
+	_, _, _, _, _, err := merge(ps, ms, fileConfig{
+		Models: []modelFile{{ID: "x", Provider: "nowhere"}},
+	})
+	if err == nil || !strings.Contains(err.Error(), "nowhere") {
+		t.Errorf("merge accepted a model on an undefined provider: %v", err)
+	}
+
+	_, _, _, _, _, err = merge(ps, ms, fileConfig{Models: []modelFile{{Provider: "vendor"}}})
+	if err == nil || !strings.Contains(err.Error(), "no id") {
+		t.Errorf("merge accepted a model with no id: %v", err)
+	}
+
+	// A bad default is refused, because carrying on would silently run a different
+	// model than the one the user configured.
+	_, _, _, _, _, err = merge(ps, ms, fileConfig{Default: "typo"})
+	if err == nil || !strings.Contains(err.Error(), "typo") {
+		t.Errorf("merge accepted an unknown default: %v", err)
+	}
+
+	// An unresolvable subagent_model is different: it is optional, so it degrades to
+	// inheriting with a warning rather than taking the session down.
+	_, gotMs, _, _, warns, err := merge(ps, ms, fileConfig{
+		Models: []modelFile{{ID: "big", Provider: "vendor", SubagentModel: "gone"}},
+	})
+	if err != nil {
+		t.Fatalf("merge: %v", err)
+	}
+	if gotMs[0].SubagentModel != "" {
+		t.Errorf("SubagentModel = %q, want it dropped", gotMs[0].SubagentModel)
+	}
+	if !strings.Contains(strings.Join(warns, "\n"), `subagent_model "gone"`) {
+		t.Errorf("warnings = %v, want one naming the missing model", warns)
+	}
+
+	// followup_model degrades the same way, for the same reason.
+	_, gotMs, _, _, warns, err = merge(ps, ms, fileConfig{
+		Models: []modelFile{{ID: "big", Provider: "vendor", FollowupModel: "gone"}},
+	})
+	if err != nil {
+		t.Fatalf("merge: %v", err)
+	}
+	if gotMs[0].FollowupModel != "" {
+		t.Errorf("FollowupModel = %q, want it dropped", gotMs[0].FollowupModel)
+	}
+	if !strings.Contains(strings.Join(warns, "\n"), `followup_model "gone"`) {
+		t.Errorf("warnings = %v, want one naming the missing model", warns)
+	}
+}
+
+// Forward references have to work, or the file would have to be written in
+// dependency order for no reason a user could guess.
+func TestSubagentModelMayBeDefinedLater(t *testing.T) {
+	ps, ms := baseFixture()
+	_, gotMs, _, _, warns, err := merge(ps, ms, fileConfig{
+		Models: []modelFile{
+			{ID: "big", Provider: "vendor", SubagentModel: "tiny"},
+			{ID: "tiny", Provider: "vendor"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("merge: %v", err)
+	}
+	// Replacing "big" warns, which is fine; what must not appear is a complaint
+	// that the forward reference could not be resolved.
+	if strings.Contains(strings.Join(warns, "\n"), "not a known model") {
+		t.Errorf("warnings = %v, want the forward reference accepted", warns)
+	}
+	if gotMs[0].SubagentModel != "tiny" {
+		t.Errorf("SubagentModel = %q, want the forward reference kept", gotMs[0].SubagentModel)
+	}
+}
+
+// followup_model rides the same merge path, forward references included.
+func TestFollowupModelMayBeDefinedLater(t *testing.T) {
+	ps, ms := baseFixture()
+	_, gotMs, _, _, warns, err := merge(ps, ms, fileConfig{
+		Models: []modelFile{
+			{ID: "big", Provider: "vendor", FollowupModel: "tiny"},
+			{ID: "tiny", Provider: "vendor"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("merge: %v", err)
+	}
+	if strings.Contains(strings.Join(warns, "\n"), "not a known model") {
+		t.Errorf("warnings = %v, want the forward reference accepted", warns)
+	}
+	if gotMs[0].FollowupModel != "tiny" {
+		t.Errorf("FollowupModel = %q, want the forward reference kept", gotMs[0].FollowupModel)
+	}
+}
+
+// A typo in a key name must not look like it worked. The setting the user believes
+// is in effect is the thing at stake.
+func TestUnknownKeysAreRefused(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, FileName)
+	if err := os.WriteFile(path, []byte(`{"provders":{}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(PathEnv, path)
+	if _, err := Load(); err == nil {
+		t.Error("Load accepted a misspelled key")
+	}
+}
+
+// Nothing is compiled in, so no file means no models at all. The error must name
+// the path (so the user knows where to create it), the override variable, and
+// carry a minimal example — an error that only says "missing" sends someone to the
+// docs for what the file should look like.
+func TestMissingFileIsAnErrorThatExplainsItself(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "nope.json")
+	t.Setenv(PathEnv, path)
+	warns, err := Load()
+	if err == nil {
+		t.Fatal("Load with no file succeeded; with nothing compiled in there are no models to run")
+	}
+	for _, want := range []string{path, PathEnv, "models"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error does not mention %q: %v", want, err)
+		}
+	}
+	if len(warns) != 0 {
+		t.Errorf("Load with no file produced warnings %v; want none", warns)
+	}
+}
+
+// A file that exists but declares no models is the same state as no file: an
+// explained error, not a running process with an empty catalog that panics on the
+// first catalog[0].
+func TestEmptyCatalogIsAnError(t *testing.T) {
+	// Merge folds onto the package globals, which a sibling test may have filled;
+	// reset them so this sees the fresh-process state Load is actually run in.
+	savedP, savedM := providers, catalog
+	providers, catalog = map[string]Provider{}, nil
+	t.Cleanup(func() { providers, catalog = savedP, savedM })
+
+	path := filepath.Join(t.TempDir(), FileName)
+	if err := os.WriteFile(path, []byte(`{"providers":{"zhipu":{"base_url":"https://z.example/v4","key_env":"ZHIPU_API_KEY"}}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(PathEnv, path)
+	_, err := Load()
+	if err == nil {
+		t.Fatal("Load accepted a config with no models")
+	}
+	if !strings.Contains(err.Error(), "no models") {
+		t.Errorf("error does not say the catalog is empty: %v", err)
+	}
+}
+
+// SubagentModel falls back to inheriting when the mapped model cannot actually
+// run, because a subagent that fails to start for a reason the parent never chose
+// is worse than one that costs a little more.
+func TestSubagentModelFallsBackWhenUnusable(t *testing.T) {
+	savedP, savedM := providers, catalog
+	t.Cleanup(func() { providers, catalog = savedP, savedM })
+
+	providers = map[string]Provider{
+		"have": {Name: "have", BaseURL: "https://a.example/v1", KeyEnv: "POGO_TEST_HAVE"},
+		"lack": {Name: "lack", BaseURL: "https://b.example/v1", KeyEnv: "POGO_TEST_LACK"},
+	}
+	catalog = []Model{
+		{ID: "parent", Provider: "have", SubagentModel: "child"},
+		{ID: "child", Provider: "lack"},
+		{ID: "plain", Provider: "have"},
+	}
+	t.Setenv("POGO_TEST_HAVE", "x")
+	t.Setenv("POGO_TEST_LACK", "")
+
+	if got := SubagentModel("parent"); got != "" {
+		t.Errorf("SubagentModel = %q, want inherit while the child's key is unset", got)
+	}
+	t.Setenv("POGO_TEST_LACK", "y")
+	if got := SubagentModel("parent"); got != "child" {
+		t.Errorf("SubagentModel = %q, want %q once its key is set", got, "child")
+	}
+	if got := SubagentModel("plain"); got != "" {
+		t.Errorf("SubagentModel = %q for a model with no mapping, want inherit", got)
+	}
+	if got := SubagentModel("unknown"); got != "" {
+		t.Errorf("SubagentModel = %q for an unknown model, want inherit", got)
+	}
+}
+
+// FollowupModel falls back the same way SubagentModel does: chips written by
+// the session's own model are worth more than chips that never appear because
+// the mapped model's key was never exported.
+func TestFollowupModelFallsBackWhenUnusable(t *testing.T) {
+	savedP, savedM := providers, catalog
+	t.Cleanup(func() { providers, catalog = savedP, savedM })
+
+	providers = map[string]Provider{
+		"have": {Name: "have", BaseURL: "https://a.example/v1", KeyEnv: "POGO_TEST_HAVE"},
+		"lack": {Name: "lack", BaseURL: "https://b.example/v1", KeyEnv: "POGO_TEST_LACK"},
+	}
+	catalog = []Model{
+		{ID: "parent", Provider: "have", FollowupModel: "child"},
+		{ID: "child", Provider: "lack"},
+		{ID: "plain", Provider: "have"},
+	}
+	t.Setenv("POGO_TEST_HAVE", "x")
+	t.Setenv("POGO_TEST_LACK", "")
+
+	if got := FollowupModel("parent"); got != "" {
+		t.Errorf("FollowupModel = %q, want the session model while the mapped key is unset", got)
+	}
+	t.Setenv("POGO_TEST_LACK", "y")
+	if got := FollowupModel("parent"); got != "child" {
+		t.Errorf("FollowupModel = %q, want %q once its key is set", got, "child")
+	}
+	if got := FollowupModel("plain"); got != "" {
+		t.Errorf("FollowupModel = %q for a model with no mapping, want the session model", got)
+	}
+	if got := FollowupModel("unknown"); got != "" {
+		t.Errorf("FollowupModel = %q for an unknown model, want the session model", got)
+	}
+}
+
+// The subagent flag rides the same merge path as every other model field: set
+// from the file, false everywhere else.
+func TestMergeCarriesSubagentFlag(t *testing.T) {
+	ps, ms := baseFixture()
+	f := fileConfig{
+		Models: []modelFile{
+			{ID: "big", Provider: "vendor", Subagent: true}, // replaces the built-in
+			{ID: "scout", Provider: "vendor", Subagent: true},
+		},
+	}
+	_, gotMs, _, _, _, err := merge(ps, ms, f)
+	if err != nil {
+		t.Fatalf("merge: %v", err)
+	}
+	for _, m := range gotMs {
+		if !m.Subagent {
+			t.Errorf("model %q lost its subagent flag in the merge", m.ID)
+		}
+	}
+}
+
+// SubagentPool keeps catalog order — the file's writing order is the preference
+// order — and drops entries whose provider has no key, because a fork must
+// never land on an endpoint that cannot answer.
+func TestSubagentPoolOrderAndKeyFilter(t *testing.T) {
+	savedP, savedM := providers, catalog
+	t.Cleanup(func() { providers, catalog = savedP, savedM })
+
+	providers = map[string]Provider{
+		"a": {Name: "a", BaseURL: "https://a.example/v1", KeyEnv: "POGO_TEST_POOL_A"},
+		"b": {Name: "b", BaseURL: "https://b.example/v1", KeyEnv: "POGO_TEST_POOL_B"},
+		"c": {Name: "c", BaseURL: "https://c.example/v1", KeyEnv: "POGO_TEST_POOL_C"},
+	}
+	catalog = []Model{
+		{ID: "first", Provider: "a", Subagent: true},
+		{ID: "plain", Provider: "a"},
+		{ID: "second", Provider: "b", Subagent: true},
+		{ID: "nokey", Provider: "c", Subagent: true},
+	}
+	t.Setenv("POGO_TEST_POOL_A", "x")
+	t.Setenv("POGO_TEST_POOL_B", "y")
+	t.Setenv("POGO_TEST_POOL_C", "")
+
+	pool := SubagentPool()
+	if len(pool) != 2 || pool[0].ID != "first" || pool[1].ID != "second" {
+		t.Errorf("SubagentPool = %v, want [first second]", ids(pool))
+	}
+}
+
+// A file entry's base_url is pinned against ambient env unless the entry
+// itself declares base_url_env — naming the variable in the same file is the
+// explicit opt-in to redirection (a proxy on one machine, a gateway in CI).
+// Entries that never asked must not be rerouted by a variable that may belong
+// to another client entirely.
+func TestFileBaseURLOverrideOnlyWhereDeclared(t *testing.T) {
+	savedP, savedM := providers, catalog
+	t.Cleanup(func() { providers, catalog = savedP, savedM })
+
+	ps, ms, _, _, _, err := merge(map[string]Provider{
+		"builtin": {Name: "builtin", BaseURL: "https://built.in/v1",
+			KeyEnv: "POGO_TEST_B", BaseURLEnv: "POGO_TEST_B_URL"},
+	}, nil, fileConfig{
+		Providers: map[string]providerFile{
+			"filed": {BaseURL: "https://file.example/v1",
+				KeyEnv: "POGO_TEST_F", BaseURLEnv: "POGO_TEST_F_URL"},
+			"quiet": {BaseURL: "https://quiet.example/v1", KeyEnv: "POGO_TEST_Q"},
+		},
+		Models: []modelFile{
+			{ID: "m-file", Provider: "filed"},
+			{ID: "m-quiet", Provider: "quiet"},
+			{ID: "m-built", Provider: "builtin"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("merge: %v", err)
+	}
+	providers, catalog = ps, ms
+	t.Setenv("POGO_TEST_F", "x")
+	t.Setenv("POGO_TEST_F_URL", "https://env.example/v1")
+	t.Setenv("POGO_TEST_B", "y")
+	t.Setenv("POGO_TEST_B_URL", "https://env-built.example/v1")
+	t.Setenv("POGO_TEST_Q", "z")
+	t.Setenv("POGO_TEST_Q_URL", "https://env-quiet.example/v1")
+
+	// Declared base_url_env: the variable reroutes, as the file asked.
+	r, err := Resolve("m-file")
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	if r.BaseURL != "https://env.example/v1" {
+		t.Errorf("declared base_url_env: base_url = %q, want the env override", r.BaseURL)
+	}
+	// Not declared: pinned, even with a lookalike variable set.
+	r, err = Resolve("m-quiet")
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	if r.BaseURL != "https://quiet.example/v1" {
+		t.Errorf("undeclared: base_url = %q, want the pinned file value", r.BaseURL)
+	}
+	// A built-in (non-file) default moves, as before.
+	r, err = Resolve("m-built")
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	if r.BaseURL != "https://env-built.example/v1" {
+		t.Errorf("built-in base_url = %q, want the env override", r.BaseURL)
+	}
+}
+
+// A provider with no key_env resolves without any credential work at all, and
+// counts as configured.
+func TestCredentialLessProvider(t *testing.T) {
+	savedP, savedM := providers, catalog
+	t.Cleanup(func() { providers, catalog = savedP, savedM })
+
+	providers = map[string]Provider{
+		"local": {Name: "local", BaseURL: "http://127.0.0.1:11434/v1"},
+	}
+	catalog = []Model{{ID: "l", Provider: "local"}}
+
+	if !Configured("local") {
+		t.Error("a credential-less provider is always configured")
+	}
+	r, err := Resolve("l")
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	if r.APIKey != "" {
+		t.Errorf("APIKey = %q, want empty for a credential-less provider", r.APIKey)
+	}
+}
+
+func ids(ms []Model) []string {
+	out := make([]string, len(ms))
+	for i, m := range ms {
+		out[i] = m.ID
+	}
+	return out
+}
+
+// A vendor gateway's headers must survive the whole chain — file to Provider to
+// Resolve — because the client applies them from Resolved and nowhere else. A
+// field that quietly vanished between layers would leave the request standard
+// and the gateway unswitched, which fails somewhere far from this code.
+func TestProviderHeadersFlowFromMergeToResolve(t *testing.T) {
+	savedP, savedM := providers, catalog
+	t.Cleanup(func() { providers, catalog = savedP, savedM })
+
+	ps, ms, _, _, _, err := merge(map[string]Provider{}, nil, fileConfig{
+		Providers: map[string]providerFile{
+			"bailian": {BaseURL: "http://10.2.3.4:8080/compatible-mode/v1", KeyEnv: "BAILIAN_API_KEY",
+				Headers: map[string]string{"X-DashScope-SSE": "enable"}},
+		},
+		Models: []modelFile{{ID: "qwen-max", Provider: "bailian", ContextWindow: 32768, MaxTokens: 8192}},
+	})
+	if err != nil {
+		t.Fatalf("merge: %v", err)
+	}
+	providers, catalog = ps, ms
+	t.Setenv("BAILIAN_API_KEY", "test-key")
+
+	r, err := Resolve("qwen-max")
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	want := map[string]string{"X-DashScope-SSE": "enable"}
+	if len(r.Headers) != len(want) || r.Headers["X-DashScope-SSE"] != want["X-DashScope-SSE"] {
+		t.Errorf("Resolved.Headers = %v, want %v", r.Headers, want)
+	}
+}
+
+// ExtraBody takes the same trip: file to Provider to Resolve. The client merges
+// it over the wire body, so a field that vanished between layers would leave
+// the request standard and the gateway complaining about a key nobody sent.
+func TestExtraBodyFlowsFromMergeToResolve(t *testing.T) {
+	savedP, savedM := providers, catalog
+	t.Cleanup(func() { providers, catalog = savedP, savedM })
+
+	ps, ms, _, _, _, err := merge(map[string]Provider{}, nil, fileConfig{
+		Providers: map[string]providerFile{
+			"bailian": {BaseURL: "http://10.2.3.4:8080/compatible-mode/v1", KeyEnv: "BAILIAN_API_KEY",
+				Headers:   map[string]string{"X-DashScope-SSE": "enable"},
+				ExtraBody: map[string]any{"parameters": map[string]any{}}},
+		},
+		Models: []modelFile{{ID: "qwen-max", Provider: "bailian", ContextWindow: 32768, MaxTokens: 8192}},
+	})
+	if err != nil {
+		t.Fatalf("merge: %v", err)
+	}
+	providers, catalog = ps, ms
+	t.Setenv("BAILIAN_API_KEY", "test-key")
+
+	r, err := Resolve("qwen-max")
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	p, ok := r.ExtraBody["parameters"].(map[string]any)
+	if !ok || len(p) != 0 {
+		t.Errorf("Resolved.ExtraBody[parameters] = %v, want an empty object", r.ExtraBody["parameters"])
+	}
+}
+
+// An empty key would become a body field no gateway could read; it is refused
+// at load rather than sent.
+func TestExtraBodyEmptyKeyIsRefused(t *testing.T) {
+	err := validateProvider("p", providerFile{
+		BaseURL:  "https://api.vendor.example/v1",
+		KeyEnv:   "K",
+		ExtraBody: map[string]any{"": map[string]any{}},
+	})
+	if err == nil || !strings.Contains(err.Error(), "empty key") {
+		t.Errorf("validateProvider accepted an empty extra_body key: %v", err)
+	}
+}
+
+// The case this warning was added for, reproduced from the real file that hit it.
+//
+// glm-5.2's window was corrected in the catalogue from 200,000 to 1,048,576. A
+// config file that re-declared the id kept the old figure, and because model
+// replacement said nothing, the correction looked applied and was not — which left
+// -context-edit auto clearing at a tenth of the real window and the browser gauge
+// going red at a sixth of it. The warning is the only place that can be noticed.
+func TestReplacingABuiltInModelIsAnnouncedEvenWhenNothingIsDropped(t *testing.T) {
+	ps := map[string]Provider{"zhipu": {Name: "zhipu", BaseURL: "https://example/v1", KeyEnv: "Z"}}
+	ms := []Model{{
+		ID: "glm-5.2", Provider: "zhipu", Aliases: []string{"glm", "zhipu"},
+		ContextWindow: 1_048_576, MaxTokens: 16384,
+	}}
+
+	// A complete entry: every field the built-in had is supplied, only the window
+	// differs. Nothing is dropped, so the warning must still fire — otherwise the
+	// one shape that actually happened stays silent.
+	_, gotMs, _, _, warns, err := merge(ps, ms, fileConfig{Models: []modelFile{{
+		ID: "glm-5.2", Provider: "zhipu", Aliases: []string{"glm", "zhipu"},
+		ContextWindow: 200_000, MaxTokens: 16384, Subagent: true,
+	}}})
+	if err != nil {
+		t.Fatalf("merge: %v", err)
+	}
+	joined := strings.Join(warns, "\n")
+	if !strings.Contains(joined, `model "glm-5.2" from the config file replaces the built-in one`) {
+		t.Errorf("warnings = %v, want the replacement announced", warns)
+	}
+	if strings.Contains(joined, "dropping") {
+		t.Errorf("warnings = %v, nothing was dropped so nothing should be listed", warns)
+	}
+	// And the file still wins: the warning informs, it does not override.
+	if gotMs[0].ContextWindow != 200_000 {
+		t.Errorf("ContextWindow = %d, want the file's 200000 — the warning must not change the merge",
+			gotMs[0].ContextWindow)
+	}
+	if !gotMs[0].Subagent {
+		t.Error("the file's subagent flag was lost")
+	}
+}
+
+// Adding a model is not replacing one, so it says nothing. A warning on every entry
+// would be noise, and noise is how the one that matters gets skipped.
+func TestAddingAModelIsNotAnnounced(t *testing.T) {
+	ps := map[string]Provider{"local": {Name: "local", BaseURL: "http://127.0.0.1:11434/v1", KeyEnv: "L"}}
+	ms := []Model{{ID: "glm-5.2", Provider: "local", ContextWindow: 1_048_576, MaxTokens: 16384}}
+
+	_, gotMs, _, _, warns, err := merge(ps, ms, fileConfig{Models: []modelFile{
+		{ID: "gemma4:12b", Provider: "local", ContextWindow: 32768, MaxTokens: 8192},
+	}})
+	if err != nil {
+		t.Fatalf("merge: %v", err)
+	}
+	if len(warns) != 0 {
+		t.Errorf("warnings = %v, want none for a model that replaces nothing", warns)
+	}
+	if len(gotMs) != 2 {
+		t.Errorf("models = %v, want the built-in kept and the new one appended", ids(gotMs))
+	}
+}
+
+// lostFields decides what the warning names, so its boundaries are worth pinning
+// separately from the message.
+func TestLostFieldsNamesOnlyWhatBehaviourDependsOn(t *testing.T) {
+	yes := true
+	full := Model{
+		ID: "m", Provider: "p", Aliases: []string{"a"},
+		ContextWindow: 1000, MaxTokens: 100, SubagentModel: "s", FollowupModel: "f", Subagent: true,
+		Vision: &yes,
+	}
+	if got := lostFields(full, Model{ID: "m", Provider: "p"}); len(got) != 7 {
+		t.Errorf("lostFields = %v, want all seven named", got)
+	}
+	if got := lostFields(full, full); len(got) != 0 {
+		t.Errorf("lostFields = %v, want none for an identical entry", got)
+	}
+	// Changing the provider is the whole point of re-declaring a built-in id, so it
+	// is deliberately not reported as a loss.
+	moved := full
+	moved.Provider = "elsewhere"
+	if got := lostFields(full, moved); len(got) != 0 {
+		t.Errorf("lostFields = %v, want none: repointing the provider is intentional", got)
+	}
+	// A built-in that never had the field cannot lose it.
+	bare := Model{ID: "m", Provider: "p"}
+	if got := lostFields(bare, bare); len(got) != 0 {
+		t.Errorf("lostFields = %v, want none when the built-in had nothing", got)
+	}
+}

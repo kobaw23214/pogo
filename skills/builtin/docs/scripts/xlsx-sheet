@@ -1,0 +1,165 @@
+#!/opt/venv/bin/python3
+"""Read a bounded .xlsx range; named flags are independent of manifest ordering.
+
+Legacy CLI: xlsx-sheet <xlsx> <sheet name|index> [first_row last_row].
+The registered tool uses --file/--sheet and optional row/column bounds.
+"""
+
+import re
+import sys
+
+try:
+    from openpyxl import load_workbook
+    from openpyxl.utils import get_column_letter
+except ImportError:
+    print("xlsx-sheet: 需要 openpyxl（/opt/venv/bin/pip install openpyxl）", file=sys.stderr)
+    sys.exit(3)
+
+BUDGET = 120_000
+DEFAULT_ROWS = 100
+DEFAULT_COLUMNS = 30
+MAX_ROWS = 1000
+MAX_COLUMNS = 100
+MAX_CELL_CHARS = 200
+USAGE = ("usage: xlsx-sheet --file <xlsx> --sheet <名称或1起序号> "
+         "[--first-row N] [--last-row N] [--first-column N] [--last-column N]\n"
+         "兼容: xlsx-sheet <xlsx> <sheet名称或序号> [起行 止行]")
+
+
+def parse_args(argv):
+    fields = ("file", "sheet", "first_row", "last_row", "first_column", "last_column")
+    flags = {"--" + key.replace("_", "-"): key for key in fields}
+    args = {}
+    if argv and argv[0].startswith("--"):
+        # Consume exactly one value for each known flag, even when a real sheet
+        # name begins with '-'. No shell or inference from argument positions.
+        i = 0
+        while i < len(argv):
+            flag, separator, value = argv[i].partition("=")
+            if flag not in flags:
+                raise ValueError(f"未知参数 {flag!r}；请使用命名参数，不要混用位置参数")
+            key = flags[flag]
+            if key in args:
+                raise ValueError(f"参数 {flag} 重复")
+            if not separator:
+                i += 1
+                if i == len(argv):
+                    raise ValueError(f"参数 {flag} 缺少值")
+                value = argv[i]
+            args[key] = value
+            i += 1
+    else:
+        if not 2 <= len(argv) <= 4:
+            raise ValueError("需要文件和工作表；可选参数顺序为起行、止行")
+        args = dict(zip(fields[:4], argv))
+    for key in ("file", "sheet"):
+        if not args.get(key):
+            raise ValueError(f"参数 --{key} 不能为空")
+    for key in fields[2:]:
+        if key not in args:
+            continue
+        raw = args[key]
+        maximum = 16_384 if "column" in key else 1_048_576
+        if not re.fullmatch(r"[0-9]+", raw) or not 1 <= int(raw) <= maximum:
+            raise ValueError(f"参数 --{key.replace('_', '-')} 必须为 1–{maximum} 的整数，收到 {raw!r}")
+        args[key] = int(raw)
+    for dimension in ("row", "column"):
+        first = args.get("first_" + dimension, 1)
+        last = args.get("last_" + dimension)
+        if last is not None and last < first:
+            raise ValueError(f"{dimension} 范围无效：结束位置 {last} 小于起始位置 {first}")
+    return args
+
+
+def cell(value):
+    text = "" if value is None else str(value)
+    truncated = len(text) > MAX_CELL_CHARS
+    if truncated:
+        text = text[:MAX_CELL_CHARS] + "…[单元格已截断]"
+    return text.replace("|", "\\|").replace("\r", " ").replace("\n", " "), truncated
+
+
+def read_range(wb, args):
+    which = args["sheet"]
+    # A literal title wins over a numeric index: a workbook may have a sheet
+    # actually named "2", and xlsx-info gives that exact title to the model.
+    if which in wb.sheetnames:
+        ws = wb[which]
+    elif re.fullmatch(r"[0-9]+", which) and 1 <= int(which) <= len(wb.worksheets):
+        ws = wb.worksheets[int(which) - 1]
+    else:
+        raise ValueError(f"没有 sheet {which!r}（可用: {', '.join(wb.sheetnames)}）；请先调用 docs.xlsx-info 核对名称")
+
+    lo, col = args.get("first_row", 1), args.get("first_column", 1)
+    rows, columns = ws.max_row, ws.max_column
+    if rows is not None and lo > rows:
+        raise ValueError(f"起始行 {lo} 超出工作表范围（共 {rows} 行）")
+    if columns is not None and col > columns:
+        raise ValueError(f"起始列 {col} 超出工作表范围（共 {columns} 列）")
+    requested_hi = args.get("last_row", lo + DEFAULT_ROWS - 1)
+    requested_right = args.get("last_column", col + DEFAULT_COLUMNS - 1)
+    hi = min(requested_hi, lo + MAX_ROWS - 1, rows or 1_048_576)
+    right = min(requested_right, col + MAX_COLUMNS - 1, columns or 16_384)
+    selected = f"行 {lo}–{hi}，列 {get_column_letter(col)}–{get_column_letter(right)}（{col}–{right}）"
+    out = [f"# {ws.title} · {selected}"]
+    total, last, clipped_cells, budget_hit = len(out[0]) + 1, None, False, False
+    # The reader stays lazy. Only this rectangle is formatted; no sheet values
+    # are collected in a list, and output including row anchors stays bounded.
+    for number, row in enumerate(ws.iter_rows(min_row=lo, max_row=hi, min_col=col, max_col=right, values_only=True), lo):
+        cells = [cell(value) for value in row]
+        clipped_cells |= any(clipped for _, clipped in cells)
+        line = "| " + " | ".join(value for value, _ in cells) + " |"
+        block = f"<!--行{number}-->\n{line}"
+        if last is None:
+            block += "\n| " + " | ".join("---" for _ in cells) + " |"
+        if total + len(block) + 1 > BUDGET - 2048:
+            budget_hit = True
+            break
+        out.append(block)
+        total += len(block) + 1
+        last = number
+    if last is None:
+        out.append("(空范围)")
+    more_rows = (rows is None or (last is not None and last < rows)) if "last_row" not in args else (last is not None and last < min(requested_hi, rows or requested_hi))
+    if budget_hit or more_rows:
+        following = (last + 1) if last is not None else lo
+        reason = "字符预算用尽" if budget_hit else "本次行数上限"
+        out.append(f"[已截断：{reason}；下一批从行 {following} 取，请设置 first_row={following}，按需设置 last_row。]")
+    more_columns = (columns is None or right < columns) if "last_column" not in args else right < min(requested_right, columns or requested_right)
+    if more_columns:
+        out.append(f"[列已截断：本次只读列 {col}–{right}；其余列从 first_column={right + 1} 取，按需设置 last_column。]")
+    if clipped_cells:
+        out.append(f"[单元格已截断：超过 {MAX_CELL_CHARS} 字符的单元格带明确标记；本结果不代表这些单元格的完整内容。]")
+    return "\n".join(out)
+
+
+def main():
+    if sys.argv[1:] == ["--help"]:
+        print(USAGE)
+        return 0
+    try:
+        args = parse_args(sys.argv[1:])
+    except ValueError as e:
+        print(f"xlsx-sheet: 参数错误: {e}\n{USAGE}", file=sys.stderr)
+        return 2
+    try:
+        wb = load_workbook(args["file"], read_only=True, data_only=True)
+    except Exception as e:
+        print(f"xlsx-sheet: 打不开（文件不存在、损坏或不是 xlsx）: {e}", file=sys.stderr)
+        return 1
+    try:
+        output = read_range(wb, args)
+    except ValueError as e:
+        print(f"xlsx-sheet: 参数或工作表数据错误: {e}", file=sys.stderr)
+        return 2
+    except Exception as e:
+        print(f"xlsx-sheet: 读取失败: {e}", file=sys.stderr)
+        return 1
+    finally:
+        wb.close()
+    print(output)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

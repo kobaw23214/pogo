@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>pogo 引用悬浮卡片 · 本地回归样例</title>
+    <style>
+      body.fixture-page { margin: 0; min-width: 320px; background: #f6f5f2; }
+      .fixture-page main { max-width: 1060px; padding: 26px 24px 80px; margin: auto; }
+      .fixture-page h1 { font-size: 24px; margin: 0 0 8px; }
+      .fixture-page h2 { font-size: 16px; margin: 0 0 14px; }
+      .fixture-intro, .fixture-hint { color: #655e55; line-height: 1.6; font-size: 13px; }
+      .fixture-controls { padding: 16px; margin: 20px 0; border: 1px solid #ded8ce; border-radius: 12px; background: white; }
+      .fixture-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; align-items: center; }
+      .fixture-page button { padding: 7px 11px; border: 1px solid #d6cec0; background: #fff; border-radius: 7px; color: #28241f; font: inherit; font-size: 13px; cursor: pointer; }
+      .fixture-page button:hover { background: #f1ede6; }
+      .fixture-page button:focus-visible { outline: 2px solid #bd5f3c; outline-offset: 3px; }
+      .fixture-page button[aria-pressed="true"] { background: #f5e8df; border-color: #bd5f3c; }
+      .fixture-page button:disabled { opacity: .45; cursor: default; }
+      #fixture-status { min-height: 24px; display: block; font-size: 13px; color: #655e55; }
+      .fixture-page .fixture-viewport { max-height: 640px; overflow: auto; padding: 20px 24px; background: white; border: 1px solid #ded8ce; border-radius: 12px; }
+      .fixture-answer + .fixture-answer { border-top: 1px solid #ded8ce; margin-top: 26px; padding-top: 26px; }
+      .fixture-answer h3 { font-size: 14px; color: #655e55; margin: 0 0 12px; }
+      .fixture-records { margin-top: 40px; padding-top: 16px; border-top: 1px solid #ded8ce; }
+      .fixture-records summary { cursor: pointer; font-size: 13px; color: #655e55; }
+      .fixture-records .call { margin: 10px 0; padding: 10px; border: 1px solid #e3ddd4; border-radius: 8px; font-size: 12px; white-space: pre-wrap; }
+      .fixture-records .call.cite-focused { outline: 2px solid #bd5f3c; background: #fff5e9; }
+      .fixture-guide { padding-left: 20px; color: #655e55; font-size: 13px; line-height: 1.8; }
+      #fixture-diagnostics { position: fixed; bottom: 0; inset-inline: 0; padding: 8px 16px; background: #29251f; color: #f8f3eb; font: 12px/1.5 ui-monospace, monospace; z-index: 2500; }
+      @media (max-width: 600px) { .fixture-page main { padding: 18px 12px 80px; } .fixture-page .fixture-viewport { padding: 14px; } }
+    </style>
+  </head>
+  <body class="fixture-page">
+    <main>
+      <h1>引用悬浮卡片 · 本地回归样例</h1>
+      <p class="fixture-intro">使用真实 AnswerText、MarkdownView 和 CiteCard。全部内容均为虚构测试数据；本页不调用 API、模型或外部站点。仅由 Vite 提供，不属于生产构建入口。</p>
+      <section class="fixture-controls" aria-label="回归场景和流式控制">
+        <div class="fixture-row" aria-label="切换场景">
+          <button data-scene="normal">正常分组与表格</button>
+          <button data-scene="pending">等待来源元数据</button>
+          <button data-scene="stream">流式追加与分组合并</button>
+          <button data-scene="two">两个独立回答</button>
+          <button data-scene="focus">短悬浮与键盘焦点</button>
+          <button data-scene="lazy">折叠执行记录定位</button>
+        </div>
+        <div class="fixture-row" aria-label="控制来源和回答更新">
+          <button id="append-chunk">追加一个片段</button>
+          <button id="start-stream">开始慢速流式（每 2 秒）</button>
+          <button id="stop-stream">停止并结束流式</button>
+          <button id="resolve-metadata">立即补齐来源</button>
+          <button id="resolve-later">3 秒后补齐来源</button>
+          <button id="reset-scene">重置当前场景</button>
+          <button id="run-interaction-check">运行交互自检</button>
+        </div>
+        <output id="fixture-status" role="status" aria-live="polite"></output>
+        <ol id="interaction-check-results" class="fixture-guide" aria-label="交互自检结果" aria-live="polite"></ol>
+      </section>
+      <div id="fixture-app"></div>
+      <section aria-labelledby="checks-heading">
+        <h2 id="checks-heading" style="margin-top:24px">建议检查</h2>
+        <ol class="fixture-guide">
+          <li>正常场景：悬浮分组、翻页、展开长片段；表格中地址引用应匹配第 6 页，而非首页简介。</li>
+          <li>等待来源：点击“3 秒后补齐来源”，再悬浮第二个引用；来源补齐并分组后卡片应继续显示。</li>
+          <li>流式场景：先开始慢速流式，再悬浮并翻到第二条来源；首个片段新增相邻引用，后续片段追加表格。</li>
+          <li>两个回答：分别悬浮同名 S1 引用；第二个回答有不同的演示材料，且页面同时只出现一张卡片。</li>
+          <li>焦点场景：在标签上快速经过，应不留下卡片；用“焦点起点”后按 Tab 聚焦引用，用 Enter 进入卡片、Esc 返回。</li>
+          <li>焦点加流式：开始慢速流式后聚焦引用，更新后焦点应保留；鼠标移走不应关闭仍持有键盘焦点的卡片。</li>
+          <li>缩小窗口并滚动回答区域，检查卡片边界、卡片内部滚动和从标签移入卡片的稳定性。</li>
+        </ol>
+      </section>
+    </main>
+    <output id="fixture-diagnostics" aria-label="调试状态"></output>
+    <script type="module" src="./citation-hover.ts"></script>
+  </body>
+</html>

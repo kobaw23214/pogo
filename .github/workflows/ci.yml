@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: web/ui/package-lock.json
+
+      - name: Install UI dependencies
+        working-directory: web/ui
+        run: npm ci
+
+      - name: Check and test UI
+        working-directory: web/ui
+        run: |
+          npm run check
+          npm test
+
+      # Go embeds this build, so the tested source and shipped UI cannot drift.
+      - name: Build UI for embedding
+        working-directory: web/ui
+        run: npm run build
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Build
+        run: go build ./...
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test -race -count=1 ./...

@@ -1,0 +1,16 @@
+{
+  "protocolVersion": "pogo.tool/1",
+  "callId": "call:fixture-001",
+  "type": "result",
+  "output": {
+    "functionsRecovered": 42,
+    "language": "x86:LE:64:default"
+  },
+  "artifacts": [
+    {
+      "name": "decompiled-c",
+      "path": "./decompiled.c",
+      "mediaType": "text/x-c"
+    }
+  ]
+}

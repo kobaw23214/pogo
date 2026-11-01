@@ -1,0 +1,248 @@
+name: Release
+
+# A tag push releases that tag, which is the version the wheels carry: a
+# pre-release such as 2.1.0rc1 is released as one. A manual run releases the tag
+# it names and decides the "Latest" badge: held off a fix to an older series, or
+# given to a pre-release, which is then released as a release since GitHub gives
+# the badge to no pre-release.
+#
+# The wheels go to PyPI as well when the release is designated as the latest and
+# is not a pre-release, or when a manual run says so, through the trusted
+# publisher registered there for this workflow file and the `pypi` environment.
+# PyPI keeps the first upload of a version, so a re-release of one it holds
+# fails there and changes the GitHub release alone.
+
+on:
+  push:
+    tags:
+      - '[0-9]+.[0-9]+.[0-9]*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to build and publish, tagging this run's commit when it is new (e.g. 2.1.0 or 2.1.0rc1)
+        type: string
+        required: true
+      latest:
+        description: Designate this release as the latest; auto does so for a release and not for a pre-release
+        type: choice
+        options:
+          - auto
+          - always
+          - never
+        default: auto
+      pypi:
+        description: Publish the wheels to PyPI; auto does so for a release designated as the latest and not for a pre-release
+        type: choice
+        options:
+          - auto
+          - always
+          - never
+        default: auto
+
+permissions:
+  contents: read
+
+env:
+  # The tag this run releases: the pushed one, or the one a manual run names
+  RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      notes: ${{ steps.notes.outputs.path }}
+    steps:
+      - name: Check the tag is a version pip keeps
+        # The tag is what the wheels are versioned as, so it has to be a PEP 440
+        # version spelled the way pip normalizes it, and it is checked before
+        # anything is created under that name
+        run: |
+          echo "${RELEASE_TAG}" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+((a|b|rc)[0-9]+|\.post[0-9]+|\.dev[0-9]+)?$' \
+            || { echo "::error::${RELEASE_TAG} is not a PEP 440 version (2.1.0, 2.1.0rc1)"; exit 1; }
+
+      - name: Tag the commit this run started from
+        # A manual run names the release, so a tag it does not find yet is
+        # created here on the commit the run was started from; an existing one
+        # is left pointing where it does, which is what re-releases a tag.
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${RELEASE_TAG}" > /dev/null 2>&1; then
+            echo "${RELEASE_TAG} is already tagged"
+          else
+            [ "${GITHUB_REF}" = refs/heads/main ] || { echo "::error::a new tag is cut from main; this run started from ${GITHUB_REF_NAME}"; exit 1; }
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" \
+              -f ref="refs/tags/${RELEASE_TAG}" -f sha="${GITHUB_SHA}"
+            echo "${RELEASE_TAG} now tags ${GITHUB_SHA}"
+          fi
+
+      - name: Check the tag is on main
+        # A release is cut from main and its tags alone: a tag on any other
+        # commit is refused before anything is built or created under it
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          status="$(gh api "repos/${GITHUB_REPOSITORY}/compare/main...${RELEASE_TAG}" --jq .status)"
+          case "${status}" in
+            identical|behind) ;;
+            *) echo "::error::${RELEASE_TAG} points at a commit that is not on main (${status:-unknown})"; exit 1 ;;
+          esac
+
+      - uses: actions/checkout@v7
+        with:
+          ref: refs/tags/${{ env.RELEASE_TAG }}
+
+      - name: Resolve the release notes
+        id: notes
+        run: |
+          # A pre-release carries the notes of the release it leads to unless it
+          # was given its own
+          path="release-notes/${RELEASE_TAG}.md"
+          if [ ! -f "${path}" ]; then
+            path="release-notes/$(echo "${RELEASE_TAG}" | sed -E 's/((a|b|rc)[0-9]+|\.post[0-9]+|\.dev[0-9]+)$//').md"
+          fi
+          if [ ! -f "${path}" ]; then
+            echo "::error::no release notes for ${RELEASE_TAG}"
+            exit 1
+          fi
+          echo "path=${path}" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: check
+    strategy:
+      fail-fast: false
+      # One job per (arch, libc): an extra interpreter rebuilds only the PyO3
+      # layer and the extension, so splitting them would duplicate before-all
+      # for far less than it costs.
+      matrix:
+        platform: [manylinux, musllinux]
+        target:
+          - arch: x86_64
+            runner: ubuntu-latest
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.target.runner }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: refs/tags/${{ env.RELEASE_TAG }}
+
+      - name: Version the crate as the tag
+        # The wheel takes its version from the crate, whose manifest spells a
+        # pre-release the semver way; the lock names the crate's own version
+        # too, and the build runs --locked.
+        run: |
+          crate="$(echo "${RELEASE_TAG}" | sed -E 's/rc([0-9]+)$/-rc.\1/; s/a([0-9]+)$/-alpha.\1/; s/b([0-9]+)$/-beta.\1/; s/\.post([0-9]+)$/-post.\1/; s/\.dev([0-9]+)$/-dev.\1/')"
+          sed -i "0,/^version = /s|^version = .*|version = \"${crate}\"|" pixelflux/Cargo.toml
+          sed -i "/^name = \"pixelflux\"$/{n;s|^version = .*|version = \"${crate}\"|}" pixelflux/Cargo.lock
+          grep -q "^version = \"${crate}\"$" pixelflux/Cargo.toml
+          grep -A1 "^name = \"pixelflux\"$" pixelflux/Cargo.lock | grep -q "^version = \"${crate}\"$"
+
+      - name: Build wheels (${{ matrix.platform }}_${{ matrix.target.arch }})
+        uses: pypa/cibuildwheel@e090b81e30c4d855ea63bf4b6e59204c09a101ae # v4.2.1
+        env:
+          # Every interpreter cibuildwheel offers, floored by python_requires.
+          CIBW_BUILD: "*-${{ matrix.platform }}_${{ matrix.target.arch }}"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: wheels-${{ matrix.target.arch }}-${{ matrix.platform }}
+          path: wheelhouse/*.whl
+          # A wheel is a deflated zip already, so the archive this is wrapped in
+          # cannot compress it further: leveling off spends no CPU re-deflating
+          # it for a size that does not move.
+          compression-level: 0
+
+  release:
+    needs: [check, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      pypi: ${{ steps.kind.outputs.pypi }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: refs/tags/${{ env.RELEASE_TAG }}
+
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: wheels-*
+          path: wheelhouse
+          merge-multiple: true
+
+      - name: Get release notes
+        id: notes
+        env:
+          NOTES: ${{ needs.check.outputs.notes }}
+        run: |
+          {
+            echo "content<<EOF"
+            cat "${NOTES}"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Classify the tag
+        id: kind
+        env:
+          LATEST: ${{ inputs.latest }}
+          PYPI: ${{ inputs.pypi }}
+        run: |
+          # A release takes the "Latest release" badge and a pre-release does
+          # not, unless a manual run says otherwise; GitHub gives the badge to
+          # no pre-release, so one designated takes it marked as a release.
+          # The wheels go to PyPI for a designated release that is no
+          # pre-release, again unless the run says otherwise.
+          is_prerelease() { echo "$1" | grep -qE '((a|b|rc)|\.dev)[0-9]+$'; }
+          case "${LATEST:-auto}" in
+            always) latest=true ;;
+            never) latest=false ;;
+            *) if is_prerelease "${RELEASE_TAG}"; then latest=false; else latest=true; fi ;;
+          esac
+          prerelease=false
+          if [ "${latest}" = false ] && is_prerelease "${RELEASE_TAG}"; then prerelease=true; fi
+          case "${PYPI:-auto}" in
+            always) pypi=true ;;
+            never) pypi=false ;;
+            *) if [ "${latest}" = true ] && ! is_prerelease "${RELEASE_TAG}"; then pypi=true; else pypi=false; fi ;;
+          esac
+          {
+            echo "prerelease=${prerelease}"
+            echo "make_latest=${latest}"
+            echo "pypi=${pypi}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create release
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: ${{ env.RELEASE_TAG }}
+          # A new tag is created at this commit rather than at the default branch's head by the
+          # time the wheels have built.
+          target_commitish: ${{ github.sha }}
+          body: ${{ steps.notes.outputs.content }}
+          prerelease: ${{ steps.kind.outputs.prerelease == 'true' }}
+          make_latest: ${{ steps.kind.outputs.make_latest }}
+          files: wheelhouse/*.whl
+
+  publish:
+    needs: release
+    if: needs.release.outputs.pypi == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/pixelflux/${{ env.RELEASE_TAG }}/
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: wheels-*
+          path: dist
+          merge-multiple: true
+
+      - name: Publish the wheels to PyPI
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2

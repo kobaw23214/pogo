@@ -1,0 +1,319 @@
+{
+  "schema_version": 1,
+  "source": "pogo/browser-runtime/eval/runs/general-web-glm-5.3-20261003-v1/summary.json",
+  "source_snapshot_sha256": "49876c0dd2b42d56c72e8c136ea608c9ec5cf05ac2af004a12a54329e6a3f20e",
+  "scope": "checker_regression_original_scores_preserved",
+  "cases": [
+    {
+      "id": "catalog-fit",
+      "seed": 20261004,
+      "startURL": "http://127.0.0.1:64767/cases/catalog-fit/",
+      "answer": "已核对全部 8 款预算内阅读器的详情页参数，结论如下：\n\n## 筛选结果（预算 ≤350 元 · 300 PPI · 防水 · 重量 ≤450 克）\n\n在 8 款预算内阅读器中，只有两款同时满足全部条件：\n\n| 条件 | 川行 阅读器 8 | 云桥 阅读器 8 |\n|---|---|---|\n| **价格** | ¥264 | ¥312 |\n| **重量** | 313 克 | 403 克 |\n| **防水** | 支持 | 支持 |\n| **清晰度** | 300 PPI | 300 PPI |\n| 详情链接 | http://127.0.0.1:64767/cases/catalog-fit/products/P558 | http://127.0.0.1:64767/cases/catalog-fit/products/P560 |\n\n**推荐：川行 阅读器 8**（¥264）——价格较低，且两款清晰度与防水相同，它还更轻（313 克 vs 403 克）。其余 6 款（海岬 6、暮山 7、原野 2、雾松 8、流萤 8、青屿 3）清晰度均为 212 PPI 且不支持防水，不符合要求；其中海岬 6（699 克）、青屿 3（557 克）、流萤 8（500 克）还超重。\n\n数据来源：山海器物商品目录（http://127.0.0.1:64767/cases/catalog-fit/，筛选条件\"预算 350 + 品类阅读器\"）及上述两款商品的详情页；两款候选商品均为库存可用。页面底部标注该站点为\"演示业务空间 · 本机数据\"。",
+      "actions": [
+        {
+          "action": "snapshot",
+          "ok": true,
+          "result": {
+            "ok": true,
+            "url": "http://127.0.0.1:64767/cases/catalog-fit/",
+            "text": "山海器物\n让信息清楚，让选择简单\n装备好每一段旅途\n\n商品目录 · 价格与供货情况在此查看，完整参数见商品详情。\n\n预算上限（元）\n关键词\n供应状态\n全部商品\n库存可用\n品类\n全部品类\n阅读器\n筛选结果\n\n共 9 款商品\n\n阅读器\n海岬 阅读器 6\n适合日常出行与轻装使用的阅读器，规格以详情页为准。\n\n¥205 · 库存可用\n\n查看海岬 阅读器 6详情\n阅读器\n暮山 阅读器 7\n适合日常出行与轻装使用的阅读器，规格以详情页为准。\n\n¥180 · 库存可用\n\n查看暮山 阅读器 7详情\n阅读器\n原野 阅读器 2\n适合日常出行与轻装使用的阅读器，规格以详情页为准。\n\n¥228 · 库存可用\n\n查看原野 阅读器 2详情\n阅读器\n雾松 阅读器 8\n适合日常出行与轻装使用的阅读器，规格以详情页为准。\n\n¥261 · 库存可用\n\n查看雾松 阅读器 8详情\n显示下一组\n山海器物 · 演示业务空间 · 本机数据\n\n[e1] textbox \"预算上限（元）\"\n[e2] textbox \"关键词\"\n[e3] combobox \"供应状态全部商品库存可用\" options=[{\"value\":\"\",\"label\":\"全部商品\"},{\"value\":\"yes\",\"label\":\"库存可用\"}]\n[e4] combobox \"品类全部品类阅读器\" options=[{\"value\":\"\",\"label\":\"全部品类\"},{\"value\":\"阅读器\",\"label\":\"阅读器\"}]\n[e5] button \"筛选结果\"\n[e6] link \"海岬 阅读器 6\" href=http://127.0.0.1:64767/cases/catalog-fit/products/P554\n[e7] link \"查看海岬 阅读器 6详情\" href=http://127.0.0.1:64767/cases/catalog-fit/products/P554\n[e8] link \"暮山 阅读器 7\" href=http://127.0.0.1:64767/cases/catalog-fit/products/P555\n[e9] link \"查看暮山 阅读器 7详情\" href=http://127.0.0.1:64767/cases/catalog-fit/products/P555\n[e10] link \"原野 阅读器 2\" href=http://127.0.0.1:64767/cases/catalog-fit/products/P556\n[e11] link \"查看原野 阅读器 2详情\" href=http://127.0.0.1:64767/cases/catalog-fit/products/P556\n[e12] link \"雾松 阅读器 8\" href=http://127.0.0.1:64767/cases/catalog-fit/products/P557\n[e13] link \"查看雾松 阅读器 8详情\" href=http://127.0.0.1:64767/cases/catalog-fit/products/P557\n[e14] button \"显示下一组\""
+          }
+        },
+        {
+          "action": "type",
+          "ok": true,
+          "result": {
+            "ok": true
+          }
+        },
+        {
+          "action": "select",
+          "ok": true,
+          "result": {
+            "ok": true
+          }
+        },
+        {
+          "action": "click",
+          "ok": true,
+          "result": {
+            "ok": true,
+            "url": "http://127.0.0.1:64767/cases/catalog-fit/?max=350&q=&available=&category=%E9%98%85%E8%AF%BB%E5%99%A8",
+            "text": "山海器物\n让信息清楚，让选择简单\n装备好每一段旅途\n\n商品目录 · 价格与供货情况在此查看，完整参数见商品详情。\n\n预算上限（元）\n关键词\n供应状态\n全部商品\n库存可用\n品类\n全部品类\n阅读器\n筛选结果\n\n共 8 款商品\n\n阅读器\n海岬 阅读器 6\n适合日常出行与轻装使用的阅读器，规格以详情页为准。\n\n¥205 · 库存可用\n\n查看海岬 阅读器 6详情\n阅读器\n暮山 阅读器 7\n适合日常出行与轻装使用的阅读器，规格以详情页为准。\n\n¥180 · 库存可用\n\n查看暮山 阅读器 7详情\n阅读器\n原野 阅读器 2\n适合日常出行与轻装使用的阅读器，规格以详情页为准。\n\n¥228 · 库存可用\n\n查看原野 阅读器 2详情\n阅读器\n雾松 阅读器 8\n适合日常出行与轻装使用的阅读器，规格以详情页为准。\n\n¥261 · 库存可用\n\n查看雾松 阅读器 8详情\n显示下一组\n山海器物 · 演示业务空间 · 本机数据\n\n[e15] textbox \"预算上限（元）\" value=\"350\"\n[e16] textbox \"关键词\"\n[e17] combobox \"供应状态全部商品库存可用\" options=[{\"value\":\"\",\"label\":\"全部商品\"},{\"value\":\"yes\",\"label\":\"库存可用\"}]\n[e18] combobox \"品类全部品类阅读器\" value=\"阅读器\" options=[{\"value\":\"\",\"label\":\"全部品类\"},{\"value\":\"阅读器\",\"label\":\"阅读器\"}]\n[e19] button \"筛选结果\"\n[e20] link \"海岬 阅读器 6\" href=http://127.0.0.1:64767/cases/catalog-fit/products/P554\n[e21] link \"查看海岬 阅读器 6详情\" href=http://127.0.0.1:64767/cases/catalog-fit/products/P554\n[e22] link \"暮山 阅读器 7\" href=http://127.0.0.1:64767/cases/catalog-fit/products/P555\n[e23] link \"查看暮山 阅读器 7详情\" href=http://127.0.0.1:64767/cases/catalog-fit/products/P555\n[e24] link \"原野 阅读器 2\" href=http://127.0.0.1:64767/cases/catalog-fit/products/P556\n[e25] link \"查看原野 阅读器 2详情\" href=http://127.0.0.1:64767/cases/catalog-fit/products/P556\n[e26] link \"雾松 阅读器 8\" href=http://127.0.0.1:64767/cases/catalog-fit/products/P557\n[e27] link \"查看雾松 阅读器 8详情\" href=http://127.0.0.1:64767/cases/catalog-fit/products/P557\n[e28] button \"显示下一组\"\nBatch stopped after navigation/tab change; inspect the current page before continuing."
+          }
+        },
+        {
+          "action": "click",
+          "ok": true,
+          "result": {
+            "ok": true,
+            "url": "http://127.0.0.1:64767/cases/catalog-fit/?max=350&q=&available=&category=%E9%98%85%E8%AF%BB%E5%99%A8",
+            "text": "山海器物\n让信息清楚，让选择简单\n装备好每一段旅途\n\n商品目录 · 价格与供货情况在此查看，完整参数见商品详情。\n\n预算上限（元）\n关键词\n供应状态\n全部商品\n库存可用\n品类\n全部品类\n阅读器\n筛选结果\n\n共 8 款商品\n\n阅读器\n海岬 阅读器 6\n适合日常出行与轻装使用的阅读器，规格以详情页为准。\n\n¥205 · 库存可用\n\n查看海岬 阅读器 6详情\n阅读器\n暮山 阅读器 7\n适合日常出行与轻装使用的阅读器，规格以详情页为准。\n\n¥180 · 库存可用\n\n查看暮山 阅读器 7详情\n阅读器\n原野 阅读器 2\n适合日常出行与轻装使用的阅读器，规格以详情页为准。\n\n¥228 · 库存可用\n\n查看原野 阅读器 2详情\n阅读器\n雾松 阅读器 8\n适合日常出行与轻装使用的阅读器，规格以详情页为准。\n\n¥261 · 库存可用\n\n查看雾松 阅读器 8详情\n阅读器\n川行 阅读器 8\n适合日常出行与轻装使用的阅读器，规格以详情页为准。\n\n¥264 · 库存可用\n\n查看川行 阅读器 8详情\n阅读器\n云桥 阅读器 8\n适合日常出行与轻装使用的阅读器，规格以详情页为准。\n\n¥312 · 库存可用\n\n查看云桥 阅读器 8详情\n阅读器\n流萤 阅读器 8\n适合日常出行与轻装使用的阅读器，规格以详情页为准。\n\n¥212 · 库存可用\n\n查看流萤 阅读器 8详情\n阅读器\n青屿 阅读器 3\n适合日常出行与轻装使用的阅读器，规格以详情页为准。\n\n¥214 · 库存可用\n\n查看青屿 阅读器 3详情\n山海器物 · 演示业务空间 · 本机数据\n\n[e15] textbox \"预算上限（元）\" value=\"350\"\n[e16] textbox \"关键词\"\n[e17] combobox \"供应状态全部商品库存可用\" options=[{\"value\":\"\",\"label\":\"全部商品\"},{\"value\":\"yes\",\"label\":\"库存可用\"}]\n[e18] combobox \"品类全部品类阅读器\" value=\"阅读器\" options=[{\"value\":\"\",\"label\":\"全部品类\"},{\"value\":\"阅读器\",\"label\":\"阅读器\"}]\n[e19] button \"筛选结果\"\n[e20] link \"海岬 阅读器 6\" href=http://127.0.0.1:64767/cases/catalog-fit/products/P554\n[e21] link \"查看海岬 阅读器 6详情\" href=http://127.0.0.1:64767/cases/catalog-fit/products/P554\n[e22] link \"暮山 阅读器 7\" href=http://127.0.0.1:64767/cases/catalog-fit/products/P555\n[e23] link \"查看暮山 阅读器 7详情\" href=http://127.0.0.1:64767/cases/catalog-fit/products/P555\n[e24] link \"原野 阅读器 2\" href=http://127.0.0.1:64767/cases/catalog-fit/products/P556\n[e25] link \"查看原野 阅读器 2详情\" href=http://127.0.0.1:64767/cases/catalog-fit/products/P556\n[e26] link \"雾松 阅读器 8\" href=http://127.0.0.1:64767/cases/catalog-fit/products/P557\n[e27] link \"查看雾松 阅读器 8详情\" href=http://127.0.0.1:64767/cases/catalog-fit/products/P557\n[e29] link \"川行 阅读器 8\" href=http://127.0.0.1:64767/cases/catalog-fit/products/P558\n[e30] link \"查看川行 阅读器 8详情\" href=http://127.0.0.1:64767/cases/catalog-fit/products/P558\n[e31] link \"云桥 阅读器 8\" href=http://127.0.0.1:64767/cases/catalog-fit/products/P560\n[e32] link \"查看云桥 阅读器 8详情\" href=http://127.0.0.1:64767/cases/catalog-fit/products/P560\n[e33] link \"流萤 阅读器 8\" href=http://127.0.0.1:64767/cases/catalog-fit/products/P561\n[e34] link \"查看流萤 阅读器 8详情\" href=http://127.0.0.1:64767/cases/catalog-fit/products/P561\n[e35] link \"青屿 阅读器 3\" href=http://127.0.0.1:64767/cases/catalog-fit/products/P562\n[e36] link \"查看青屿 阅读器 3详情\" href=http://127.0.0.1:64767/cases/catalog-fit/products/P562"
+          }
+        },
+        {
+          "action": "navigate",
+          "ok": true,
+          "result": {
+            "ok": true,
+            "url": "http://127.0.0.1:64767/cases/catalog-fit/products/P555",
+            "text": "山海器物\n让信息清楚，让选择简单\n返回商品目录\n阅读器\n暮山 阅读器 7\n\n适合日常出行与轻装使用的阅读器，规格以详情页为准。\n\n充满用时\n5 小时\n清晰度\n212 PPI\n防水\n不支持\n供货\n库存可用\n续航\n18 小时\n重量\n447 克\n价格\n¥180\n山海器物 · 演示业务空间 · 本机数据\n\n[e37] link \"返回商品目录\" href=http://127.0.0.1:64767/cases/catalog-fit/"
+          }
+        },
+        {
+          "action": "navigate",
+          "ok": true,
+          "result": {
+            "ok": true,
+            "url": "http://127.0.0.1:64767/cases/catalog-fit/products/P554",
+            "text": "山海器物\n让信息清楚，让选择简单\n返回商品目录\n阅读器\n海岬 阅读器 6\n\n适合日常出行与轻装使用的阅读器，规格以详情页为准。\n\n充满用时\n3 小时\n清晰度\n212 PPI\n防水\n不支持\n供货\n库存可用\n续航\n15 小时\n重量\n699 克\n价格\n¥205\n山海器物 · 演示业务空间 · 本机数据\n\n[e38] link \"返回商品目录\" href=http://127.0.0.1:64767/cases/catalog-fit/"
+          }
+        },
+        {
+          "action": "navigate",
+          "ok": true,
+          "result": {
+            "ok": true,
+            "url": "http://127.0.0.1:64767/cases/catalog-fit/products/P562",
+            "text": "山海器物\n让信息清楚，让选择简单\n返回商品目录\n阅读器\n青屿 阅读器 3\n\n适合日常出行与轻装使用的阅读器，规格以详情页为准。\n\n充满用时\n3 小时\n清晰度\n212 PPI\n防水\n不支持\n供货\n库存可用\n续航\n9 小时\n重量\n557 克\n价格\n¥214\n山海器物 · 演示业务空间 · 本机数据\n\n[e39] link \"返回商品目录\" href=http://127.0.0.1:64767/cases/catalog-fit/"
+          }
+        },
+        {
+          "action": "navigate",
+          "ok": true,
+          "result": {
+            "ok": true,
+            "url": "http://127.0.0.1:64767/cases/catalog-fit/products/P561",
+            "text": "山海器物\n让信息清楚，让选择简单\n返回商品目录\n阅读器\n流萤 阅读器 8\n\n适合日常出行与轻装使用的阅读器，规格以详情页为准。\n\n充满用时\n5 小时\n清晰度\n212 PPI\n防水\n不支持\n供货\n库存可用\n续航\n17 小时\n重量\n500 克\n价格\n¥212\n山海器物 · 演示业务空间 · 本机数据\n\n[e40] link \"返回商品目录\" href=http://127.0.0.1:64767/cases/catalog-fit/"
+          }
+        },
+        {
+          "action": "navigate",
+          "ok": true,
+          "result": {
+            "ok": true,
+            "url": "http://127.0.0.1:64767/cases/catalog-fit/products/P556",
+            "text": "山海器物\n让信息清楚，让选择简单\n返回商品目录\n阅读器\n原野 阅读器 2\n\n适合日常出行与轻装使用的阅读器，规格以详情页为准。\n\n充满用时\n3 小时\n清晰度\n212 PPI\n防水\n不支持\n供货\n库存可用\n续航\n9 小时\n重量\n330 克\n价格\n¥228\n山海器物 · 演示业务空间 · 本机数据\n\n[e41] link \"返回商品目录\" href=http://127.0.0.1:64767/cases/catalog-fit/"
+          }
+        },
+        {
+          "action": "navigate",
+          "ok": true,
+          "result": {
+            "ok": true,
+            "url": "http://127.0.0.1:64767/cases/catalog-fit/products/P557",
+            "text": "山海器物\n让信息清楚，让选择简单\n返回商品目录\n阅读器\n雾松 阅读器 8\n\n适合日常出行与轻装使用的阅读器，规格以详情页为准。\n\n充满用时\n5 小时\n清晰度\n212 PPI\n防水\n不支持\n供货\n库存可用\n续航\n18 小时\n重量\n348 克\n价格\n¥261\n山海器物 · 演示业务空间 · 本机数据\n\n[e42] link \"返回商品目录\" href=http://127.0.0.1:64767/cases/catalog-fit/"
+          }
+        },
+        {
+          "action": "navigate",
+          "ok": true,
+          "result": {
+            "ok": true,
+            "url": "http://127.0.0.1:64767/cases/catalog-fit/products/P558",
+            "text": "山海器物\n让信息清楚，让选择简单\n返回商品目录\n阅读器\n川行 阅读器 8\n\n适合日常出行与轻装使用的阅读器，规格以详情页为准。\n\n充满用时\n3 小时\n清晰度\n300 PPI\n防水\n支持\n供货\n库存可用\n续航\n20 小时\n重量\n313 克\n价格\n¥264\n山海器物 · 演示业务空间 · 本机数据\n\n[e43] link \"返回商品目录\" href=http://127.0.0.1:64767/cases/catalog-fit/"
+          }
+        },
+        {
+          "action": "navigate",
+          "ok": true,
+          "result": {
+            "ok": true,
+            "url": "http://127.0.0.1:64767/cases/catalog-fit/products/P560",
+            "text": "山海器物\n让信息清楚，让选择简单\n返回商品目录\n阅读器\n云桥 阅读器 8\n\n适合日常出行与轻装使用的阅读器，规格以详情页为准。\n\n充满用时\n3 小时\n清晰度\n300 PPI\n防水\n支持\n供货\n库存可用\n续航\n20 小时\n重量\n403 克\n价格\n¥312\n山海器物 · 演示业务空间 · 本机数据\n\n[e44] link \"返回商品目录\" href=http://127.0.0.1:64767/cases/catalog-fit/"
+          }
+        }
+      ],
+      "server_state": {
+        "caseID": "catalog-fit",
+        "family": "catalog",
+        "seed": 20261004,
+        "layout_variant": 5,
+        "audit": [
+          {
+            "method": "GET",
+            "path": "/",
+            "query": {},
+            "at": 1791004500940,
+            "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+            "fetch_dest": "document",
+            "fetch_mode": "navigate",
+            "browser": true
+          },
+          {
+            "method": "GET",
+            "path": "/",
+            "query": {
+              "max": "350",
+              "q": "",
+              "available": "",
+              "category": "阅读器"
+            },
+            "at": 1791004509196,
+            "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+            "fetch_dest": "document",
+            "fetch_mode": "navigate",
+            "browser": true
+          },
+          {
+            "method": "GET",
+            "path": "/catalog",
+            "query": {
+              "max": "350",
+              "q": "",
+              "available": "",
+              "category": "阅读器",
+              "page": "2"
+            },
+            "at": 1791004513938,
+            "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+            "fetch_dest": "empty",
+            "fetch_mode": "cors",
+            "browser": true
+          },
+          {
+            "method": "GET",
+            "path": "/products/P555",
+            "query": {},
+            "at": 1791004521936,
+            "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+            "fetch_dest": "document",
+            "fetch_mode": "navigate",
+            "browser": true
+          },
+          {
+            "method": "GET",
+            "path": "/products/P554",
+            "query": {},
+            "at": 1791004527167,
+            "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+            "fetch_dest": "document",
+            "fetch_mode": "navigate",
+            "browser": true
+          },
+          {
+            "method": "GET",
+            "path": "/products/P562",
+            "query": {},
+            "at": 1791004532004,
+            "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+            "fetch_dest": "document",
+            "fetch_mode": "navigate",
+            "browser": true
+          },
+          {
+            "method": "GET",
+            "path": "/products/P561",
+            "query": {},
+            "at": 1791004569713,
+            "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+            "fetch_dest": "document",
+            "fetch_mode": "navigate",
+            "browser": true
+          },
+          {
+            "method": "GET",
+            "path": "/products/P556",
+            "query": {},
+            "at": 1791004581876,
+            "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+            "fetch_dest": "document",
+            "fetch_mode": "navigate",
+            "browser": true
+          },
+          {
+            "method": "GET",
+            "path": "/products/P557",
+            "query": {},
+            "at": 1791004592097,
+            "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+            "fetch_dest": "document",
+            "fetch_mode": "navigate",
+            "browser": true
+          },
+          {
+            "method": "GET",
+            "path": "/products/P558",
+            "query": {},
+            "at": 1791004597176,
+            "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+            "fetch_dest": "document",
+            "fetch_mode": "navigate",
+            "browser": true
+          },
+          {
+            "method": "GET",
+            "path": "/products/P560",
+            "query": {},
+            "at": 1791004602725,
+            "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+            "fetch_dest": "document",
+            "fetch_mode": "navigate",
+            "browser": true
+          }
+        ],
+        "catalogRequests": [
+          {
+            "method": "GET",
+            "path": "/",
+            "query": {},
+            "at": 1791004500940,
+            "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+            "fetch_dest": "document",
+            "fetch_mode": "navigate",
+            "browser": true,
+            "page": 1
+          },
+          {
+            "method": "GET",
+            "path": "/",
+            "query": {
+              "max": "350",
+              "q": "",
+              "available": "",
+              "category": "阅读器"
+            },
+            "at": 1791004509196,
+            "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+            "fetch_dest": "document",
+            "fetch_mode": "navigate",
+            "browser": true,
+            "page": 1
+          },
+          {
+            "method": "GET",
+            "path": "/catalog",
+            "query": {
+              "max": "350",
+              "q": "",
+              "available": "",
+              "category": "阅读器",
+              "page": "2"
+            },
+            "at": 1791004513938,
+            "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+            "fetch_dest": "empty",
+            "fetch_mode": "cors",
+            "browser": true,
+            "page": 2
+          }
+        ],
+        "documentVisits": [],
+        "records": [],
+        "mutations": [],
+        "validationErrors": [],
+        "submissions": 0,
+        "successfulSubmissions": 0,
+        "duplicateSubmissions": 0
+      },
+      "original_status": "failed",
+      "original_failures": [
+        "product_facts_missing_or_wrong",
+        "reader_facts_missing_or_wrong",
+        "contradictory_product_price",
+        "contradictory_product_weight",
+        "visible_product_evidence_missing"
+      ]
+    }
+  ]
+}

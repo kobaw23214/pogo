@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:pogo:skill:1:capability-contract",
+  "title": "Pogo capability-contract v0.1 (draft)",
+  "type": "object",
+  "properties": {
+    "apiVersion": {
+      "const": "pogo.skill/v1"
+    },
+    "kind": {
+      "const": "CapabilityContract"
+    },
+    "id": {
+      "$ref": "urn:pogo:skill:1:common#/$defs/id"
+    },
+    "version": {
+      "$ref": "urn:pogo:skill:1:common#/$defs/version"
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096
+    },
+    "inputSchema": {
+      "$ref": "urn:pogo:skill:1:common#/$defs/schemaObject"
+    },
+    "outputSchema": {
+      "$ref": "urn:pogo:skill:1:common#/$defs/schemaObject"
+    },
+    "fileInputs": {
+      "type": "array",
+      "items": {
+        "$ref": "urn:pogo:skill:1:common#/$defs/jsonPointer"
+      },
+      "minItems": 0,
+      "uniqueItems": true
+    },
+    "effects": {
+      "type": "object",
+      "properties": {
+        "readsUserFiles": {
+          "type": "boolean"
+        },
+        "writesArtifacts": {
+          "type": "boolean"
+        },
+        "mutatesExternalState": {
+          "const": false
+        }
+      },
+      "required": [
+        "readsUserFiles",
+        "writesArtifacts",
+        "mutatesExternalState"
+      ],
+      "additionalProperties": false
+    },
+    "retry": {
+      "const": "never-automatic"
+    }
+  },
+  "required": [
+    "apiVersion",
+    "kind",
+    "id",
+    "version",
+    "description",
+    "inputSchema",
+    "outputSchema",
+    "fileInputs",
+    "effects",
+    "retry"
+  ],
+  "additionalProperties": false
+}

@@ -1,0 +1,39 @@
+{
+  "protocolVersion": "pogo.tool/1",
+  "callId": "call:describe-fixture",
+  "type": "describe",
+  "operations": [
+    {
+      "operation": "sample.search",
+      "contract": {
+        "id": "malware.sample.search",
+        "version": "1.0.0",
+        "digest": "sha256:0f5c3611681549149ee31e17c95f5e67d080184132feec071d18ec302ca047f4"
+      }
+    },
+    {
+      "operation": "file.capabilities",
+      "contract": {
+        "id": "malware.file.capabilities",
+        "version": "1.0.0",
+        "digest": "sha256:f83945fd19f8ea5e71e6678d4ed76b416a860b23fc0a6ec4b030fa12976fca6f"
+      }
+    },
+    {
+      "operation": "file.yara.scan",
+      "contract": {
+        "id": "malware.file.yara.scan",
+        "version": "1.0.0",
+        "digest": "sha256:8661589e241b70ccb7eae8f58c393fccc64e9c826ba53eb8073f0efdca81a552"
+      }
+    },
+    {
+      "operation": "file.decompile",
+      "contract": {
+        "id": "malware.file.decompile",
+        "version": "1.0.0",
+        "digest": "sha256:a621f8166aa55329b6c6f6ca3f7993f3879c7d680d5caa38fb559c29e95366b7"
+      }
+    }
+  ]
+}

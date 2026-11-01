@@ -1,0 +1,197 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:pogo:skill:1:common",
+  "title": "Pogo common v0.1 (draft)",
+  "$defs": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$",
+      "maxLength": 128
+    },
+    "version": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+    },
+    "digest": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "relativePath": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^\\./(?:[A-Za-z0-9_-][A-Za-z0-9_.-]*/)*[A-Za-z0-9_-][A-Za-z0-9_.-]*$"
+    },
+    "opaqueRef": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[A-Za-z][A-Za-z0-9_.:-]{0,191}$"
+    },
+    "contractRef": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "urn:pogo:skill:1:common#/$defs/id"
+        },
+        "version": {
+          "$ref": "urn:pogo:skill:1:common#/$defs/version"
+        },
+        "digest": {
+          "$ref": "urn:pogo:skill:1:common#/$defs/digest"
+        }
+      },
+      "required": [
+        "id",
+        "version",
+        "digest"
+      ],
+      "additionalProperties": false
+    },
+    "pkgRef": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "urn:pogo:skill:1:common#/$defs/id"
+        },
+        "version": {
+          "$ref": "urn:pogo:skill:1:common#/$defs/version"
+        },
+        "manifestDigest": {
+          "$ref": "urn:pogo:skill:1:common#/$defs/digest"
+        },
+        "packageDigest": {
+          "$ref": "urn:pogo:skill:1:common#/$defs/digest"
+        }
+      },
+      "required": [
+        "id",
+        "version",
+        "manifestDigest",
+        "packageDigest"
+      ],
+      "additionalProperties": false
+    },
+    "artifact": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "$ref": "urn:pogo:skill:1:common#/$defs/relativePath"
+        },
+        "digest": {
+          "$ref": "urn:pogo:skill:1:common#/$defs/digest"
+        },
+        "sizeBytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "format": {
+          "enum": [
+            "tar.zst",
+            "zip"
+          ]
+        }
+      },
+      "required": [
+        "path",
+        "digest",
+        "sizeBytes",
+        "format"
+      ],
+      "additionalProperties": false
+    },
+    "limits": {
+      "type": "object",
+      "properties": {
+        "timeoutSeconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3600
+        },
+        "memoryMiB": {
+          "type": "integer",
+          "minimum": 16,
+          "maximum": 65536
+        },
+        "cpuMilliCores": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 64000
+        },
+        "maxOutputBytes": {
+          "type": "integer",
+          "minimum": 1024,
+          "maximum": 67108864
+        }
+      },
+      "required": [
+        "timeoutSeconds",
+        "memoryMiB",
+        "cpuMilliCores",
+        "maxOutputBytes"
+      ],
+      "additionalProperties": false
+    },
+    "permissions": {
+      "type": "object",
+      "properties": {
+        "network": {
+          "const": "none"
+        },
+        "limits": {
+          "$ref": "urn:pogo:skill:1:common#/$defs/limits"
+        }
+      },
+      "required": [
+        "network",
+        "limits"
+      ],
+      "additionalProperties": false
+    },
+    "providerRef": {
+      "type": "object",
+      "properties": {
+        "packageId": {
+          "$ref": "urn:pogo:skill:1:common#/$defs/id"
+        },
+        "providerId": {
+          "$ref": "urn:pogo:skill:1:common#/$defs/id"
+        }
+      },
+      "required": [
+        "packageId",
+        "providerId"
+      ],
+      "additionalProperties": false
+    },
+    "skillRef": {
+      "type": "object",
+      "properties": {
+        "packageId": {
+          "$ref": "urn:pogo:skill:1:common#/$defs/id"
+        },
+        "skillId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+        }
+      },
+      "required": [
+        "packageId",
+        "skillId"
+      ],
+      "additionalProperties": false
+    },
+    "jsonPointer": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?:/(?:[^~/]|~[01])*)+$"
+    },
+    "schemaObject": {
+      "type": "object",
+      "description": "MUST additionally pass Draft 2020-12 metaschema and Pogo schema-profile checks; this structural shape alone is insufficient."
+    }
+  }
+}

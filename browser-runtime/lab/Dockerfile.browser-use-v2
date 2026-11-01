@@ -1,0 +1,9 @@
+ARG BASE_IMAGE=pogo-browser:settle-20261001-arm64
+FROM ${BASE_IMAGE}
+ARG SOURCE_REVISION
+ARG BASE_IMAGE_ID
+LABEL org.opencontainers.image.revision=$SOURCE_REVISION \
+      io.pogo.lab="browser-use-v2-candidate" io.pogo.lab.base-image-id=$BASE_IMAGE_ID
+COPY src /app/src
+COPY eval /app/eval
+COPY lab /app/lab

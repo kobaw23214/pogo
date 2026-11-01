@@ -1,0 +1,42 @@
+{
+  "reason": "Integrated Wayland/WebRTC candidate passed 67 correctness checks before source retirement; final suite/release still pending",
+  "production_default": "WaylandRuntime",
+  "runtime_fallback": false,
+  "files": [
+    {
+      "path": "src/media.js",
+      "archive": "lab/legacy-tabcapture/src/media.js",
+      "sha256": "4e6e673ce4013feb4cdf4844da158dc7656b190320988589693c64a577cb2651"
+    },
+    {
+      "path": "src/media-policy.js",
+      "archive": "lab/legacy-tabcapture/src/media-policy.js",
+      "sha256": "ef6c6511fd5361624837cc235048d5f843d300a05166d47ae6b6b23b2633735e"
+    },
+    {
+      "path": "src/media-extension/broker.html",
+      "archive": "lab/legacy-tabcapture/src/media-extension/broker.html",
+      "sha256": "5903bbca396995a8566071521d8fe31f750b3a4e333ee4d7dd8600643ab6cfdd"
+    },
+    {
+      "path": "src/media-extension/broker.js",
+      "archive": "lab/legacy-tabcapture/src/media-extension/broker.js",
+      "sha256": "67ed1c1f4e6a7e72cdf8e668bb0d4c0b90da8ea448da8d24d372e888e858ca9e"
+    },
+    {
+      "path": "src/media-extension/capture.html",
+      "archive": "lab/legacy-tabcapture/src/media-extension/capture.html",
+      "sha256": "79a1258e9f0b8fb0a46c069d4333ac1a3567fd86572a5382b555d10346c36028"
+    },
+    {
+      "path": "src/media-extension/capture.js",
+      "archive": "lab/legacy-tabcapture/src/media-extension/capture.js",
+      "sha256": "7aef41b7968c7d7f89d9447dba8a0558bc861361d3ff5cff45783de53b1d0fab"
+    },
+    {
+      "path": "src/media-extension/manifest.json",
+      "archive": "lab/legacy-tabcapture/src/media-extension/manifest.json",
+      "sha256": "1fbac87d9d5e63091e7125f2c7e74aadb26dfa776c15ea6a16d61c7f8569e4b5"
+    }
+  ]
+}

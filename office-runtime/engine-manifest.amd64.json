@@ -1,0 +1,106 @@
+{
+  "adapterId": "pogo-office-history",
+  "adapterVersion": 1,
+  "engineVersion": "9.4.0 (build:129)",
+  "upstreamImageDigest": "onlyoffice/documentserver@sha256:8c114db7648a1654828d33e1f9f3b18e97c4caae6707d34bf04d793d260f7e67",
+  "upstreamSDKTag": "v9.4.0.129",
+  "upstreamSDKCommit": "75b53d504bfd81bfa35d59bb57dd9e56f7c9235d",
+  "vendorVersion": "9.4.0-739a98bdfa295b1044f778b58b61df76",
+  "pluginSDK": {
+    "url": "https://onlyoffice.github.io/sdkjs-plugins/v1/plugins.js",
+    "sourceCommit": "c2d42ebc6ef4b454246a6c87e21630bc33440ae9",
+    "sourceURL": "https://raw.githubusercontent.com/ONLYOFFICE/onlyoffice.github.io/c2d42ebc6ef4b454246a6c87e21630bc33440ae9/sdkjs-plugins/v1/plugins.js",
+    "sha256": "1bc0bd71eebcb477ceaaee3ab00ed1a10ce7eae117ec68ae8024645c435f524e"
+  },
+  "loaderAssets": [
+    {
+      "path": "/web-apps/apps/api/documents/api.js",
+      "sha256": "7899c15b12e36872886627e2c797dbbb17dc8405127bd06c5a4efcb5a5e9d47d",
+      "transform": "api-version",
+      "contentType": "text/javascript; charset=utf-8"
+    },
+    {
+      "path": "/document_editor_service_worker.js",
+      "sha256": "8299ca5e5d27df5c16da9a88361c2fa2831ff491ea92f35eabab8877ea34b9e6",
+      "transform": "cache-namespace",
+      "contentType": "text/javascript; charset=utf-8"
+    },
+    {
+      "path": "/web-apps/apps/common/main/lib/util/docserviceworker.js",
+      "sha256": "e5d2941d5fa4f51b6cfe6620ee749bb189e747420c200fac3d0a8d5c4a072b9c",
+      "transform": "registration-scope",
+      "contentType": "text/javascript; charset=utf-8"
+    },
+    {
+      "path": "/web-apps/apps/documenteditor/main/index.html",
+      "sha256": "beaf979b90b0c1f0760dffdc52429918aed8a701444603e245bf30de3c745ab1",
+      "transform": "registration-scope",
+      "contentType": "text/html; charset=utf-8"
+    },
+    {
+      "path": "/web-apps/apps/spreadsheeteditor/main/index.html",
+      "sha256": "32ed7d5d3e45c829e6a96d47099dc80d7686ed19668f4c7d8ed7cadfe297e724",
+      "transform": "registration-scope",
+      "contentType": "text/html; charset=utf-8"
+    }
+  ],
+  "assets": [
+    {
+      "path": "/sdkjs/word/sdk-all-min.js",
+      "sha256": "2b39e2ae8ec8632cea2f06ce3bf5a903caaeceddb49f88db0edd6fc5e2dec412",
+      "appendExtension": false
+    },
+    {
+      "path": "/sdkjs/word/sdk-all.js",
+      "sha256": "e595cc55835f489dfbb7005f57620a89f1eed2bb376ac7834631da3fc4009ed8",
+      "appendExtension": true
+    },
+    {
+      "path": "/sdkjs/cell/sdk-all-min.js",
+      "sha256": "6c967c91570e7ab5b6b0b19d5ea0862f1df1ac3d425eaccecc5c2e1087c38412",
+      "appendExtension": false
+    },
+    {
+      "path": "/sdkjs/cell/sdk-all.js",
+      "sha256": "247131a6025698d8eddf60c744ca2f66bc14c28168a34089177ba8f2e18a7b43",
+      "appendExtension": true
+    }
+  ],
+  "selectionRead": {
+    "operation": "selection.read",
+    "pluginMethod": "PogoOfficeSelection",
+    "maxCells": 400,
+    "maxTextUnits": 32000,
+    "preservesHistory": true,
+    "preservesSelection": true,
+    "sourceGetters": [
+      "asc_GetSelectedText",
+      "GetActiveSheet",
+      "GetSelection",
+      "GetAreas",
+      "GetAddress",
+      "GetCells",
+      "GetValue",
+      "GetFormula",
+      "GetText"
+    ],
+    "sourceFiles": [
+      {
+        "path": "word/api.js",
+        "commit": "75b53d504bfd81bfa35d59bb57dd9e56f7c9235d",
+        "sha256": "629dcf89c1650972ff01fd0d68284dcfa4cacd71589f93076df24576acade817"
+      },
+      {
+        "path": "word/apiBuilder.js",
+        "commit": "75b53d504bfd81bfa35d59bb57dd9e56f7c9235d",
+        "sha256": "2c12d9c080c749cd211ef05503cb716221ff70c510dcecd4e3d95cf2266a1b2e"
+      },
+      {
+        "path": "cell/apiBuilder.js",
+        "commit": "75b53d504bfd81bfa35d59bb57dd9e56f7c9235d",
+        "sha256": "ded18e8bc1e4f18c70d144d535822e3a646a8be2d9c1adb78652cab6ade01d05"
+      }
+    ]
+  },
+  "platform": "linux/amd64"
+}

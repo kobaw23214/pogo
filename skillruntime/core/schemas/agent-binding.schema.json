@@ -1,0 +1,147 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:pogo:skill:1:agent-binding",
+  "title": "Pogo agent-binding v0.1 (draft)",
+  "type": "object",
+  "properties": {
+    "apiVersion": {
+      "const": "pogo.skill/v1"
+    },
+    "kind": {
+      "const": "AgentBinding"
+    },
+    "agentId": {
+      "$ref": "urn:pogo:skill:1:common#/$defs/opaqueRef"
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "packages": {
+      "type": "array",
+      "items": {
+        "$ref": "urn:pogo:skill:1:common#/$defs/pkgRef"
+      },
+      "minItems": 1
+    },
+    "skills": {
+      "type": "array",
+      "items": {
+        "$ref": "urn:pogo:skill:1:common#/$defs/skillRef"
+      },
+      "minItems": 0
+    },
+    "capabilities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "contract": {
+            "$ref": "urn:pogo:skill:1:common#/$defs/contractRef"
+          },
+          "provider": {
+            "$ref": "urn:pogo:skill:1:common#/$defs/providerRef"
+          }
+        },
+        "required": [
+          "contract",
+          "provider"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 1
+    },
+    "resources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "packageId": {
+            "$ref": "urn:pogo:skill:1:common#/$defs/id"
+          },
+          "slotId": {
+            "$ref": "urn:pogo:skill:1:common#/$defs/id"
+          },
+          "resourceRef": {
+            "$ref": "urn:pogo:skill:1:common#/$defs/opaqueRef"
+          }
+        },
+        "required": [
+          "packageId",
+          "slotId",
+          "resourceRef"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 0
+    },
+    "grants": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "mode": {
+                "const": "sandbox"
+              },
+              "provider": {
+                "$ref": "urn:pogo:skill:1:common#/$defs/providerRef"
+              },
+              "isolationProfileRef": {
+                "$ref": "urn:pogo:skill:1:common#/$defs/opaqueRef"
+              },
+              "ceiling": {
+                "$ref": "urn:pogo:skill:1:common#/$defs/permissions"
+              }
+            },
+            "required": [
+              "mode",
+              "provider",
+              "isolationProfileRef",
+              "ceiling"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "mode": {
+                "const": "trusted-remote"
+              },
+              "provider": {
+                "$ref": "urn:pogo:skill:1:common#/$defs/providerRef"
+              },
+              "connectionPolicyRef": {
+                "$ref": "urn:pogo:skill:1:common#/$defs/opaqueRef"
+              }
+            },
+            "required": [
+              "mode",
+              "provider",
+              "connectionPolicyRef"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "minItems": 1
+    },
+    "upgradePolicy": {
+      "const": "new-sessions-only"
+    }
+  },
+  "required": [
+    "apiVersion",
+    "kind",
+    "agentId",
+    "revision",
+    "packages",
+    "skills",
+    "capabilities",
+    "resources",
+    "grants",
+    "upgradePolicy"
+  ],
+  "additionalProperties": false
+}

@@ -1,0 +1,78 @@
+import { ensureUIIcon, uiIconPaths } from '@/agent/uiIcons';
+
+// The closed icon set, shared by StarterCards.vue (rendering), its edit
+// dialog (the visual picker) and the tests. The names are intents, not
+// pictures, so the set can be restyled without every deployment's file going
+// stale. The server validates against the same fifty names
+// (skills.starterIcons in Go); starterIcons.test.ts keeps the two lists from
+// drifting apart. All paths are drawn on the same 16×16 grid with the same
+// stroke, so the picker's tiles and the cards' glyphs stay one visual family.
+
+export const starterIconPaths: Record<string, string> = {
+  search: "M10.5 10.5 14 14M12 7.5a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0Z",
+  filter: "M2.5 3.5h11l-4.2 4.7v4.3l-2.6-1.3V8.2L2.5 3.5Z",
+  eye: "M1.8 8S4.2 3.8 8 3.8 14.2 8 14.2 8 11.8 12.2 8 12.2 1.8 8 1.8 8ZM10 8a2 2 0 1 1-4 0 2 2 0 0 1 4 0Z",
+  target: "M13.5 8a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0ZM10 8a2 2 0 1 1-4 0 2 2 0 0 1 4 0ZM8 1v2M8 13v2M1 8h2M13 8h2",
+  scan: "M2.5 5V2.5H5M11 2.5h2.5V5M13.5 11v2.5H11M5 13.5H2.5V11M4.5 8h7",
+  fingerprint: "M2.3 12.5a6.2 6.2 0 0 1 11.4 0M4.6 12.5a3.9 3.9 0 0 1 6.8 0M8 10.4v.01",
+  compare: "M6.5 2.5h-4v11h4v-11ZM13.5 2.5h-4v11h4v-11Z",
+  graph: "M4 11.5V7m4 4.5v-8m4 8V9M2.5 13.5h11",
+  trend: "M14.5 4.5 9 10 5.7 6.7 2.2 10.2M10.7 4.5h3.8v3.8",
+  clock: "M13.5 8a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0ZM8 5v3l2.4 1.4",
+  list: "M5.5 4h8M5.5 8h8M5.5 12h8M2.6 4h.01M2.6 8h.01M2.6 12h.01",
+  table: "M2.5 3.5h11v9h-11v-9ZM2.5 6.5h11M6.5 6.5v6M10.5 6.5v6",
+  tag: "M2.5 2.5h5.2L13.5 8.3l-5.2 5.2L2.5 7.7v-5.2ZM5.4 5.4h.01",
+  flag: "M3.5 2v12M3.5 3h8l-2 2.5 2 2.5h-8",
+  code: "m5.5 4.5-3 3 3 3m5-6 3 3-3 3",
+  terminal: "m4 6 2 2-2 2m4 0h4M2.5 3.5h10v9h-10v-9Z",
+  bug: "M8 2.7a3.3 3.3 0 0 1 3.3 3.3v2.5a3.3 3.3 0 0 1-6.6 0V6A3.3 3.3 0 0 1 8 2.7ZM8 6v5.5M2.7 6.5h2M11.3 6.5h2M2.7 10.5l2-.8M11.3 9.7l2 .8M3.5 3.8l1.8 1M12.5 3.8l-1.8 1",
+  shield: "M8 2 3 4v4c0 2.5 2 4.3 5 5 3-.7 5-2.5 5-5V4L8 2Z",
+  lock: "M4 7h8v6.5H4V7ZM5.5 7V4.8a2.5 2.5 0 0 1 5 0V7M8 9.8v1.4",
+  key: "M13.5 4.5a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0ZM9.2 6.3 2.5 13M4.5 11l1.2 1.2M6.5 9l1.2 1.2",
+  mask: "M2.5 6h11M4.5 6 5.7 3.2h4.6L11.5 6M6 9.3h.01M10 9.3h.01M5.8 11.8c1.4.8 3 .8 4.4 0",
+  file: "M4 2.5h5l3 3v8H4v-11ZM9 2.5v3h3",
+  folder: "M2.5 3.5h4l1.5 2h5.5v7h-11v-9Z",
+  archive: "M2.5 5.5h11v8h-11v-8ZM3.5 3.5h9l1 2M8 7.5v.01M8 9.5v.01M8 11.5v.01",
+  box: "M8 1.8 13.5 4.6v6.8L8 14.2 2.5 11.4V4.6L8 1.8ZM2.5 4.6 8 7.4l5.5-2.8M8 7.4v6.8",
+  book: "M3 3.5h4.5V13H3v-9.5Zm5.5 0H13V13H8.5v-9.5Z",
+  layers: "M8 2.2 13.8 5 8 7.8 2.2 5 8 2.2ZM2.2 8.2 8 11l5.8-2.8M2.2 11.2 8 14l5.8-2.8",
+  database: "M13 4c0 .9-2.2 1.7-5 1.7S3 4.9 3 4s2.2-1.7 5-1.7S13 3.1 13 4ZM3 4v8c0 .9 2.2 1.7 5 1.7s5-.8 5-1.7V4M3 8c0 .9 2.2 1.7 5 1.7S13 8.9 13 8",
+  "hard-drive": "M2.5 6.5h11v6h-11v-6ZM2.5 6.5 4 3.5h8l1.5 3M5.2 9.5h.01M7.2 9.5h.01",
+  cpu: "M4.5 4.5h7v7h-7v-7ZM6.5 2v2.5M9.5 2v2.5M6.5 11.5V14M9.5 11.5V14M2 6.5h2.5M2 9.5h2.5M11.5 6.5H14M11.5 9.5H14M8 7.5h.01",
+  robot: "M4 6.5h8v6H4v-6ZM8 4v2.5M8 3.2v.01M6.3 9.3h.01M9.7 9.3h.01M2.5 8.5v2M13.5 8.5v2",
+  network: "M9.5 3.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0ZM4.5 12a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0ZM14.5 12a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0ZM7.1 4.7 4.1 10.6M8.9 4.7l3 5.9M4.7 12h6.6",
+  share: "M5.8 4.5a1.8 1.8 0 1 1-3.6 0 1.8 1.8 0 0 1 3.6 0ZM13.8 4.5a1.8 1.8 0 1 1-3.6 0 1.8 1.8 0 0 1 3.6 0ZM9.8 11.5a1.8 1.8 0 1 1-3.6 0 1.8 1.8 0 0 1 3.6 0ZM5.3 5.6l5.4 4.8M10.7 5.6 5.3 10.4",
+  link: "M6.8 9.2 9.2 6.8M7.5 11.3 6 12.8a2.1 2.1 0 0 1-3-3l1.5-1.5M8.5 4.7 10 3.2a2.1 2.1 0 0 1 3 3l-1.5 1.5",
+  globe: "M13.5 8a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0ZM2.5 8h11M8 2.5c-1.9 1.5-2.9 3.4-2.9 5.5s1 4 2.9 5.5c1.9-1.5 2.9-3.4 2.9-5.5s-1-4-2.9-5.5Z",
+  cloud: "M5.2 12.5a2.7 2.7 0 0 1-.3-5.4 3.7 3.7 0 0 1 7.2-.9 2.9 2.9 0 0 1-.7 6.3H5.2Z",
+  mail: "M2.5 4h11v8h-11V4ZM2.5 4.5 8 9l5.5-4.5",
+  message: "M2.5 3.5h11v7H8l-3.5 3v-3h-2v-7Z",
+  bell: "M8 2.5a3.4 3.4 0 0 1 3.4 3.4v2.6c0 1 .4 1.5.9 1.5H3.7c.5 0 .9-.5.9-1.5V5.9A3.4 3.4 0 0 1 8 2.5ZM6.6 12.5a1.4 1.4 0 0 0 2.8 0",
+  user: "M10.5 5.2a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0ZM3 13.5c.8-2.4 2.7-3.6 5-3.6s4.2 1.2 5 3.6",
+  users: "M8.2 5.7a2.2 2.2 0 1 1-4.4 0 2.2 2.2 0 0 1 4.4 0ZM13.7 6.7a1.7 1.7 0 1 1-3.4 0 1.7 1.7 0 0 1 3.4 0ZM1.8 13.5c.6-2.4 2.2-3.8 4.2-3.8 1.5 0 2.8.8 3.6 2.2M10.6 9.9c2 .2 3.3 1.4 3.8 3.6",
+  puzzle: "M3 5.5h3a1.7 1.7 0 0 1 3.4 0h2.6v3a1.7 1.7 0 0 1 0 3.4v1.1H3Z",
+  wand: "M3 13 11 5M12.8 3.2v.01M13.5 7v.01M10 2.5v.01",
+  spark: "M8 2.5l1.3 3.2 3.2 1.3-3.2 1.3L8 11.5 6.7 8.3 3.5 7l3.2-1.3L8 2.5Z",
+  bolt: "M9.2 2 4 8.5h3.3L6.8 14l5.2-6.5H8.7L9.2 2Z",
+  fire: "M8 2.3c1.9 2 3.9 3.9 3.9 6.6a3.9 3.9 0 0 1-7.8 0c0-1 .4-2 1-2.8.2 1 .8 1.8 1.6 1.8-.4-2 .3-4.1 1.3-5.6Z",
+  warn: "M8 2.5 14 13.5H2L8 2.5ZM8 6.2v3.4M8 11.7h.01",
+  refresh: "M14 8a6 6 0 1 1-6-6c1.7 0 3.3.7 4.5 1.8L14 5.3M14 2v3.3h-3.3",
+  history: "M2 8a6 6 0 1 0 6-6c-1.7 0-3.3.7-4.5 1.8L2 3.3M2 2v3.3h3.3M8 4.7V8l2.7 1.3",
+  download: "M8 2.5v7.5M5 7.2 8 10.2l3-3M3 12.8h10",
+};
+
+export const starterIconNames = Object.keys(starterIconPaths);
+
+// Renders one icon name as the inline SVG body the Icon component takes, with
+// the shared stroke the whole set is drawn against. Unknown names draw nothing
+// rather than breaking the row.
+export function starterIconFor(name?: string) {
+  const d = name ? (Object.prototype.hasOwnProperty.call(starterIconPaths, name) ? starterIconPaths[name] : uiIconPaths.value[name]) : undefined;
+  if (!d && name) ensureUIIcon(name);
+  if (typeof d !== "string" || !d) return null;
+  return {
+    body: `<path d="${d}" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>`,
+    width: 16,
+    height: 16,
+  };
+}

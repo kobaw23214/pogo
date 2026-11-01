@@ -1,0 +1,11 @@
+/* Temporary compositor hints; normal chat and remote video never acquire a
+   transform, transition or snapshot layer from this local card animation. */
+.main.floating-chat.chat-animating {
+  will-change: transform, opacity;
+}
+.immersive-chat-restore {
+  -webkit-tap-highlight-color: transparent;
+}
+@media (prefers-reduced-motion: reduce) {
+  .main.floating-chat.chat-animating { will-change: auto; }
+}

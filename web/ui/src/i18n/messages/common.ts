@@ -1,0 +1,41 @@
+// Shared one-word UI labels. Component-specific copy goes in each component's
+// own namespace file, not here.
+export default {
+  namespace: "common",
+  messages: {
+    "zh-CN": {
+      ok: "确定",
+      cancel: "取消",
+      confirm: "确认",
+      delete: "删除",
+      rename: "重命名",
+      copy: "复制",
+      copied: "已复制",
+      close: "关闭",
+      expand: "展开",
+      collapse: "折叠",
+      retry: "重试",
+      loading: "加载中…",
+      send: "发送",
+      save: "保存",
+      create: "新建",
+    },
+    en: {
+      ok: "OK",
+      cancel: "Cancel",
+      confirm: "Confirm",
+      delete: "Delete",
+      rename: "Rename",
+      copy: "Copy",
+      copied: "Copied",
+      close: "Close",
+      expand: "Expand",
+      collapse: "Collapse",
+      retry: "Retry",
+      loading: "Loading…",
+      send: "Send",
+      save: "Save",
+      create: "New",
+    },
+  },
+};

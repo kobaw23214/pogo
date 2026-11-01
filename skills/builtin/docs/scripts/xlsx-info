@@ -1,0 +1,52 @@
+#!/opt/venv/bin/python3
+"""xlsx-info <xlsx> — 首屏导航：sheet 清单/行列规模/表头预览。
+
+openpyxl read_only 流式加载（大表恒定内存），data_only 读公式的缓存
+计算值——没有缓存值（文件从未被 Excel 打开保存过）时该格为空，info 的
+输出不区分这两种空，取数阶段同理。
+
+输出单行紧凑 JSON。
+"""
+
+import json
+import sys
+
+try:
+    from openpyxl import load_workbook
+except ImportError:
+    print("xlsx-info: 需要 openpyxl（/opt/venv/bin/pip install openpyxl）", file=sys.stderr)
+    sys.exit(3)
+
+
+def main():
+    if len(sys.argv) != 2:
+        print("usage: xlsx-info <xlsx>", file=sys.stderr)
+        return 2
+    try:
+        wb = load_workbook(sys.argv[1], read_only=True, data_only=True)
+    except Exception as e:  # openpyxl 的错误种类繁多，统一为可读原因
+        print(f"xlsx-info: 打不开（损坏或不是 xlsx）: {e}", file=sys.stderr)
+        return 1
+    sheets = []
+    try:
+        for ws in wb.worksheets:
+            rows = ws.max_row or 0
+            cols = ws.max_column or 0
+            head = []
+            for row in ws.iter_rows(min_row=1, max_row=1, max_col=min(cols, 30), values_only=True):
+                head = ["" if v is None else str(v)[:60] for v in row]
+                break
+            sheets.append({
+                "name": ws.title,
+                "rows": rows,
+                "cols": cols,
+                "header": head,
+            })
+    finally:
+        wb.close()
+    print(json.dumps({"sheets": sheets}, ensure_ascii=False, separators=(",", ":")))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

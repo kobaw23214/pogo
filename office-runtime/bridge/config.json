@@ -1,0 +1,20 @@
+{
+  "name": "Pogo Office",
+  "guid": "asc.{A6691D12-9A8F-4A33-91D4-548D3BB68D01}",
+  "version": "1.0.0",
+  "baseUrl": "",
+  "variations": [
+    {
+      "description": "Pogo Office",
+      "url": "index.html",
+      "isViewer": false,
+      "EditorsSupport": ["word", "cell"],
+      "isVisual": false,
+      "isModal": false,
+      "isInsideMode": false,
+      "initDataType": "none",
+      "initData": "",
+      "buttons": []
+    }
+  ]
+}

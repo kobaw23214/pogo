@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+    <title>Pogo Office · 隔离验证</title>
+    <link rel="stylesheet" href="/style.css" />
+    <script type="module" src="/app.mjs"></script>
+  </head>
+  <body>
+    <div class="lab-shell">
+      <header class="lab-header">
+        <div class="brand"><span class="brand-mark" aria-hidden="true">P</span><div><h1>Pogo Office</h1><p>浏览器文档工作区 · 隔离原型</p></div></div>
+        <div class="header-meta"><span class="scope-tag">仅人工测试样本</span><span class="engine-status" id="engine-status" role="status"><i aria-hidden="true"></i><span>正在检查编辑引擎</span></span></div>
+      </header>
+
+      <div class="workspace">
+        <section class="document-workspace" aria-label="Office 编辑器">
+          <div class="document-toolbar">
+            <div class="document-tabs" role="group" aria-label="选择测试文档">
+              <button id="tab-word" type="button" data-document="word" aria-pressed="true"><span class="file-icon word-icon" aria-hidden="true">W</span>Word</button>
+              <button id="tab-excel" type="button" data-document="excel" aria-pressed="false"><span class="file-icon excel-icon" aria-hidden="true">X</span>Excel</button>
+            </div>
+            <div class="document-identity"><strong id="document-title">Word 测试文档</strong><span id="document-subtitle">用户与 Agent 修改同一份打开的文档</span></div>
+          </div>
+          <div class="document-state-bar" aria-live="polite">
+            <span id="visible-state"><i aria-hidden="true"></i>画布未连接</span>
+            <span id="persisted-state"><i aria-hidden="true"></i>尚未确认保存</span>
+          </div>
+          <div class="editor-stage">
+            <div id="editor" aria-label="ONLYOFFICE 在线编辑器"></div>
+            <div id="editor-save-overlay" class="editor-save-overlay" role="status" aria-live="polite" hidden>
+              <div class="save-overlay-card"><span class="save-overlay-indicator" aria-hidden="true"></span><strong>正在保存当前文档</strong><p>正在导出并写回文件，完成后即可继续编辑。</p></div>
+            </div>
+            <div class="editor-placeholder" id="editor-placeholder">
+              <div class="placeholder-symbol" aria-hidden="true">▤</div>
+              <h2 id="placeholder-title">连接 ONLYOFFICE 编辑引擎</h2>
+              <p id="placeholder-copy">文档会直接在当前浏览器中编辑，不需要打开电脑上的 Office。</p>
+              <button type="button" class="secondary-button" id="retry-engine">重新检查</button>
+            </div>
+          </div>
+        </section>
+
+        <aside class="validation-panel" aria-label="同文档验证面板">
+          <div class="panel-heading"><span class="eyebrow">SAME DOCUMENT</span><h2>验证当前文档</h2><p>右侧动作与外部 Agent 使用同一个操作队列。这里是受控测试，不是模型对话。</p></div>
+          <ol class="test-guide"><li><b>1</b><span>先在左侧手动修改，保持未保存。</span></li><li><b>2</b><span>读取当前文档，确认包含你的修改。</span></li><li><b>3</b><span>执行测试修改，再检查撤销与保存。</span></li></ol>
+          <div class="action-section"><div class="section-heading"><h3>文档操作</h3><span id="bridge-state">插件尚未连接</span></div>
+            <button id="read-document" type="button" class="action-button" disabled><span aria-hidden="true">⌕</span><span>读取当前文档<small>读取打开的画布，包含未保存内容</small></span></button>
+            <button id="modify-document" type="button" class="action-button accent-button" disabled><span aria-hidden="true">✦</span><span>执行测试修改<small id="modify-copy">替换指定段落，保留其他内容</small></span></button>
+            <div class="undo-actions"><button id="undo-document" type="button" class="secondary-button" disabled>↶ 撤销上一步</button><button id="redo-document" type="button" class="secondary-button" disabled>↷ 重做</button></div>
+            <p id="undo-note" class="help-text">Word 原生撤销可用；当前不提供程序化重做。读取文档可能影响编辑器的重做历史。</p>
+          </div>
+          <div class="action-section"><div class="section-heading"><h3>保存与恢复</h3><span id="revision-label">版本 —</span></div>
+            <div class="save-actions"><button id="save-document" type="button" class="primary-button" disabled>保存到隔离工作区</button><button id="reopen-document" type="button" class="secondary-button" disabled>关闭重开</button></div>
+            <p class="help-text">保存通过当前编辑器导出文件，收到服务写回确认后才算完成。关闭重开核对最后保存的文件；画布可见变化与保存完成分别记录。</p>
+          </div>
+          <div id="action-feedback" class="action-feedback" role="status" aria-live="polite">连接编辑引擎后即可开始验证。</div>
+          <section class="snapshot-section" aria-label="当前文档读取结果"><div class="section-heading"><h3>读取结果</h3><span id="snapshot-label">尚未读取</span></div><pre id="snapshot-output" tabindex="0">读取后会在这里显示真实的文档内容。</pre></section>
+          <details class="event-section"><summary>操作记录 <span id="event-count">0</span></summary><ol id="event-log"></ol></details>
+          <footer class="lab-boundary">独立测试工作区，不连接现有 Pogo 会话或用户文件。ONLYOFFICE 引擎不可用时不会显示模拟编辑结果。</footer>
+        </aside>
+      </div>
+    </div>
+  </body>
+</html>

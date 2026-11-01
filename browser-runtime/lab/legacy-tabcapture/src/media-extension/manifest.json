@@ -1,0 +1,12 @@
+{
+  "manifest_version": 3,
+  "name": "Pogo native media",
+  "version": "1.0.0",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAvu9Xff5hSDMhSau6Q7BJ4ShweEMHwlWD4ppwO7T5EXNpesgIs4HArYYVNUfHaSOCejp2dFjPywqgxEkcxVZie6cVzjmTlHG3QKfcXhtHnu3O7mDaM7uFMqunuKJKn7c4nVclxLgEqBKnb5AXLYN6Q7M4rSvesPras+Drh9Asn/PsGmvoVgJt25pBT1naW93QYoUYO4Vaw2Bo2Jl0uTMMorGvcTwHYum2anIDofELRjvmarGksi6+vEG60ECJ7BYYC0/UcJIogwl7Y+GLzhM7rEKf3QUmsTvOkY6KkJJZ2wVwC90hKqe/fsTX33mcrCBjySpOxVkRQ3Wz5zQ/vq/LOQIDAQAB",
+  "permissions": [
+    "tabCapture",
+    "tabs",
+    "debugger"
+  ],
+  "incognito": "split"
+}

@@ -1,0 +1,137 @@
+name: pogo-browser-v2-lab
+services:
+  bootstrap:
+    image: ${V2_APP_IMAGE:?Run browser-use-v2-lab.py build first}
+    platform: ${V2_PLATFORM:?Run build first}
+    user: root
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER]
+    security_opt: ["no-new-privileges:true"]
+    network_mode: none
+    read_only: true
+    entrypoint: [/bin/sh, -eu, -c]
+    command:
+      - |
+        install -d -m 0700 -o pogo -g pogo /home/pogo/.pogo /var/lib/pogo-skills
+        cp /bootstrap/providers.json /home/pogo/.pogo/providers.json
+        if [ ! -f /home/pogo/.pogo/users.json ]; then cp /bootstrap/users.json /home/pogo/.pogo/users.json; fi
+        chown pogo:pogo /home/pogo/.pogo/providers.json /home/pogo/.pogo/users.json
+        chmod 0600 /home/pogo/.pogo/providers.json /home/pogo/.pogo/users.json
+    volumes:
+      - v2-home:/home/pogo
+      - v2-skills:/var/lib/pogo-skills
+      - ${V2_PRIVATE_DIR:?Set private directory}/providers.json:/bootstrap/providers.json:ro
+      - ${V2_PRIVATE_DIR}/users.json:/bootstrap/users.json:ro
+    restart: "no"
+  app:
+    image: ${V2_APP_IMAGE}
+    platform: ${V2_PLATFORM}
+    init: true
+    security_opt: ["no-new-privileges:true", "seccomp=../../seccomp-bwrap.json"]
+    cap_drop: [ALL]
+    read_only: true
+    mem_limit: 4g
+    cpus: 3
+    pids_limit: 768
+    tmpfs: ["/tmp:size=1g,exec,mode=1777"]
+    env_file:
+      - path: ${V2_PRIVATE_DIR}/runtime.env
+        format: raw
+      - path: ${V2_PRIVATE_DIR}/model.env
+        format: raw
+    environment:
+      POGO_PLATFORM: ${V2_PLATFORM}
+      POGO_SANDBOX: enforce
+      POGO_USERS_FILE: /home/pogo/.pogo/users.json
+      POGO_CONFIG: /home/pogo/.pogo/providers.json
+      POGO_BROWSER_URL: http://recorder:7789
+      POGO_SKILL_RUNTIME_STORE: /var/lib/pogo-skills
+      POGO_SKILL_RUNTIME_EXECUTOR: local
+    volumes: [v2-home:/home/pogo, v2-skills:/var/lib/pogo-skills]
+    ports: ["127.0.0.1:19779:7777"]
+    networks: [browser, model-egress]
+    command: ["-web", "-listen", "0.0.0.0:7777", "-max-turns", "50", "-followups=false"]
+    depends_on:
+      bootstrap: {condition: service_completed_successfully}
+      recorder: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:7777/api/auth/status >/dev/null"]
+      interval: 5s
+      timeout: 4s
+      start_period: 15s
+      retries: 12
+    stop_grace_period: 30s
+    restart: "no"
+  worker:
+    image: ${V2_RUNTIME_IMAGE:?Run build first}
+    platform: ${V2_PLATFORM}
+    init: true
+    security_opt: ["no-new-privileges:true", "seccomp=../seccomp.json"]
+    cap_drop: [ALL]
+    read_only: true
+    tmpfs: ["/tmp:size=1g,exec,mode=1777"]
+    shm_size: 1g
+    mem_limit: 3g
+    cpus: 2
+    pids_limit: 512
+    env_file:
+      - path: ${V2_PRIVATE_DIR}/worker.env
+        format: raw
+    environment:
+      POGO_BROWSER_MAX_SESSIONS: 6
+      POGO_BROWSER_IDLE_MS: 1800000
+      POGO_BROWSER_SETTLE_MS: 200
+    networks: [browser]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:7788/healthz',{headers:{Authorization:'Bearer '+process.env.POGO_BROWSER_TOKEN}}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 4s
+      start_period: 15s
+      retries: 12
+    stop_grace_period: 15s
+    restart: "no"
+  recorder:
+    image: ${V2_RUNTIME_IMAGE}
+    platform: ${V2_PLATFORM}
+    init: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    read_only: true
+    tmpfs: ["/tmp:size=256m,mode=1777"]
+    mem_limit: 512m
+    cpus: 1
+    pids_limit: 128
+    env_file:
+      - path: ${V2_PRIVATE_DIR}/worker.env
+        format: raw
+      - path: ${V2_PRIVATE_DIR}/recorder.env
+        format: raw
+    environment:
+      V2_WORKER_URL: http://worker:7788
+      V2_RECORDER_ADMIN_HOST: 0.0.0.0
+      V2_RECORDER_PROXY_HOST: 0.0.0.0
+      V2_FIXTURE_HOST: 0.0.0.0
+    command: ["node", "lab/browser-use-v2-recorder.mjs"]
+    ports: ["127.0.0.1:19780:7790"]
+    networks:
+      browser:
+        aliases: [fixture-a.test, fixture-b.test]
+      controller-access: {}
+    depends_on:
+      worker: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:7790/healthz',{headers:{Authorization:'Bearer '+process.env.V2_RECORDER_ADMIN_TOKEN}}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 4s
+      start_period: 10s
+      retries: 12
+    stop_grace_period: 15s
+    restart: "no"
+networks:
+  browser:
+    internal: true
+  model-egress: {}
+  controller-access: {}
+volumes:
+  v2-home:
+  v2-skills:

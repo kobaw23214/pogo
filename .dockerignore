@@ -1,0 +1,23 @@
+# Docker 构建上下文瘦身(独立仓库布局,仓库根即上下文)。
+# web/ui/dist 虽入库(go:embed 编译需要),容器内由 npm 重建,不入上下文。
+web/ui/node_modules
+web/ui/node_modules/**
+web/ui/dist
+web/ui/dist/**
+desktop
+desktop/**
+*.exe
+
+# 运行凭据与本地状态不是构建输入。
+.env
+.env.*
+**/.env
+**/.env.*
+.pogo
+.pogo/**
+.git
+.git/**
+.claude
+.claude/**
+.tmp*
+.tmp*/**

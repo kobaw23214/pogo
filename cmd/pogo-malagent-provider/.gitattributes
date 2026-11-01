@@ -1,0 +1,6 @@
+# Contract digests are sha256 over the published file bytes, and the Ghidra
+# post-script is compiled by the runtime from these exact bytes; a CRLF
+# checkout would change digests and break Java single-line comment handling.
+*.json text eol=lf
+*.java text eol=lf
+*.go text eol=lf

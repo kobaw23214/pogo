@@ -1,0 +1,5 @@
+{
+  "protocolVersion": "pogo.tool/1",
+  "callId": "call:describe-fixture",
+  "type": "describe"
+}

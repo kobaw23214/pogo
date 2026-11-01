@@ -1,0 +1,25 @@
+{
+  "scope": "Retired tabCapture test source preserved verbatim; excluded from active test/*.test.js suite. Historical relative imports are unchanged and are not runnable after production legacy source retirement.",
+  "files": {
+    "media.test.js": {
+      "sha256": "9618c66dd7d271e115452f64e3ca73c712b364d1a5551e086fd8433a41abaec6",
+      "original_path": "test/media.test.js"
+    },
+    "media-launch.test.js": {
+      "sha256": "3a951c284ad5db21f5e0efb8794f671b50eb67fe9ee2797ed03b1e877c559ad3",
+      "original_path": "test/media-launch.test.js"
+    },
+    "media-codec.test.js": {
+      "sha256": "e37cc5f49ff6918696ad40140932ee4249c7c2ec1e20d95e93a8fd478f7c9f93",
+      "original_path": "test/media-codec.test.js"
+    },
+    "media-density.test.js": {
+      "sha256": "9487a83c4420706ea7efe6c759cdbeac5f3c515f804488c5aa8122550d59a3a8",
+      "original_path": "test/media-density.test.js"
+    },
+    "media-policy.test.js": {
+      "sha256": "03351b512b74bb297dce2397c97e930dccb78273d9c74e28bb00f59d377d28c0",
+      "original_path": "test/media-policy.test.js"
+    }
+  }
+}

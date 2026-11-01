@@ -1,0 +1,66 @@
+{
+  "apiVersion": "pogo.skill/v1",
+  "kind": "CapabilityContract",
+  "id": "malware.file.yara.scan",
+  "version": "1.1.0",
+  "description": "使用锁定规则集静态扫描指定文件，返回规则命中；不执行样本。文件可来自会话上传（fileId）或样本库内带二进制的样本（sampleSha256），二选一。",
+  "inputSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "fileId": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "^[A-Za-z][A-Za-z0-9_.:-]{0,191}$",
+        "description": "当前会话上传文件的 fileId（随附件上传获得）；与 sampleSha256 二选一"
+      },
+      "sampleSha256": {
+        "type": "string",
+        "pattern": "^[0-9a-f]{64}$",
+        "description": "样本库中带二进制样本的 SHA-256；用于直接分析库内样本，与 fileId 二选一"
+      }
+    },
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "matches": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "rule": {
+              "type": "string",
+              "minLength": 1
+            },
+            "namespace": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "rule",
+            "namespace"
+          ],
+          "additionalProperties": false
+        },
+        "minItems": 0,
+        "maxItems": 10000
+      }
+    },
+    "required": [
+      "matches"
+    ],
+    "additionalProperties": false
+  },
+  "fileInputs": [
+    "/fileId"
+  ],
+  "effects": {
+    "readsUserFiles": true,
+    "writesArtifacts": false,
+    "mutatesExternalState": false
+  },
+  "retry": "never-automatic"
+}

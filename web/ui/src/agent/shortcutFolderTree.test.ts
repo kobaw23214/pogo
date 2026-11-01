@@ -1,0 +1,10 @@
+import { describe, expect, it } from "vitest";
+import type { ShortcutFolder, ShortcutSnapshot } from "@/api/shortcuts";
+import { shortcutFolderChildren, shortcutFolderContains, shortcutFolderNotEmpty, shortcutFolderPath, shortcutParent } from "./shortcutFolderTree";
+const folders: ShortcutFolder[] = [{ id: "a", name: "项目" }, { id: "b", name: "流程", parent_id: "a" }, { id: "c", name: "归档", parent_id: "b" }, { id: "empty", name: "空目录" }];
+describe("Private shortcut folder presentation", () => {
+  it("treats an absent parent as the root without mutating legacy metadata", () => { const value: Readonly<ShortcutSnapshot> = Object.freeze({ id: "legacy", title: "旧资料", content: "内容" }); expect(shortcutParent(value)).toBe(""); expect(value).not.toHaveProperty("parent_id"); expect(shortcutFolderChildren(folders, "").map(v => v.id)).toEqual(["a", "empty"]); });
+  it("builds ordered root-to-current breadcrumbs without changing the saved tree", () => { const before = JSON.stringify(folders); expect(shortcutFolderPath(folders, "c").map(v => v.name)).toEqual(["项目", "流程", "归档"]); expect(shortcutFolderContains(folders, "a", "c")).toBe(true); expect(shortcutFolderContains(folders, "empty", "c")).toBe(false); expect(JSON.stringify(folders)).toBe(before); });
+  it("terminates defensively for incomplete, cyclic or excessively deep stale data", () => { expect(shortcutFolderPath(folders, "missing")).toEqual([]); expect(shortcutFolderPath([{ id: "cycle", name: "循环", parent_id: "cycle" }], "cycle")).toHaveLength(1); const deep = Array.from({ length: 30 }, (_, i) => ({ id: String(i), name: String(i), parent_id: i ? String(i - 1) : "" })); expect(shortcutFolderPath(deep, "29")).toHaveLength(16); });
+  it("prevents nonempty deletion for either a child directory or a saved shortcut", () => { const items: ShortcutSnapshot[] = [{ id: "item", title: "资料", content: "内容", parent_id: "c" }]; expect(shortcutFolderNotEmpty(folders, items, "a")).toBe(true); expect(shortcutFolderNotEmpty(folders, items, "c")).toBe(true); expect(shortcutFolderNotEmpty(folders, items, "empty")).toBe(false); });
+});

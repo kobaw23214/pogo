@@ -1,0 +1,293 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:pogo:skill:1:resolved-lock",
+  "title": "Pogo resolved-lock v0.1 (draft)",
+  "type": "object",
+  "properties": {
+    "apiVersion": {
+      "const": "pogo.skill/v1"
+    },
+    "kind": {
+      "const": "ResolvedLock"
+    },
+    "lockId": {
+      "$ref": "urn:pogo:skill:1:common#/$defs/opaqueRef"
+    },
+    "agentId": {
+      "$ref": "urn:pogo:skill:1:common#/$defs/opaqueRef"
+    },
+    "sessionId": {
+      "$ref": "urn:pogo:skill:1:common#/$defs/opaqueRef"
+    },
+    "bindingRevision": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "bindingDigest": {
+      "$ref": "urn:pogo:skill:1:common#/$defs/digest"
+    },
+    "policyRevision": {
+      "$ref": "urn:pogo:skill:1:common#/$defs/opaqueRef"
+    },
+    "registryRevision": {
+      "$ref": "urn:pogo:skill:1:common#/$defs/opaqueRef"
+    },
+    "drivers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "enum": [
+              "bundle",
+              "process-json",
+              "mcp"
+            ]
+          },
+          "version": {
+            "const": "1"
+          }
+        },
+        "required": [
+          "id",
+          "version"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "packages": {
+      "type": "array",
+      "items": {
+        "$ref": "urn:pogo:skill:1:common#/$defs/pkgRef"
+      },
+      "minItems": 1
+    },
+    "skills": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "skill": {
+            "$ref": "urn:pogo:skill:1:common#/$defs/skillRef"
+          },
+          "entryDigest": {
+            "$ref": "urn:pogo:skill:1:common#/$defs/digest"
+          }
+        },
+        "required": [
+          "skill",
+          "entryDigest"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 0
+    },
+    "capabilities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "contract": {
+            "$ref": "urn:pogo:skill:1:common#/$defs/contractRef"
+          },
+          "provider": {
+            "$ref": "urn:pogo:skill:1:common#/$defs/providerRef"
+          }
+        },
+        "required": [
+          "contract",
+          "provider"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 1
+    },
+    "runtimes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "packageId": {
+            "$ref": "urn:pogo:skill:1:common#/$defs/id"
+          },
+          "runtimeId": {
+            "$ref": "urn:pogo:skill:1:common#/$defs/id"
+          },
+          "artifactDigest": {
+            "$ref": "urn:pogo:skill:1:common#/$defs/digest"
+          }
+        },
+        "required": [
+          "packageId",
+          "runtimeId",
+          "artifactDigest"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 0
+    },
+    "assets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "packageId": {
+            "$ref": "urn:pogo:skill:1:common#/$defs/id"
+          },
+          "assetId": {
+            "$ref": "urn:pogo:skill:1:common#/$defs/id"
+          },
+          "artifactDigest": {
+            "$ref": "urn:pogo:skill:1:common#/$defs/digest"
+          }
+        },
+        "required": [
+          "packageId",
+          "assetId",
+          "artifactDigest"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 0
+    },
+    "resources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "packageId": {
+            "$ref": "urn:pogo:skill:1:common#/$defs/id"
+          },
+          "slotId": {
+            "$ref": "urn:pogo:skill:1:common#/$defs/id"
+          },
+          "resourceRef": {
+            "$ref": "urn:pogo:skill:1:common#/$defs/opaqueRef"
+          },
+          "resourceRevision": {
+            "$ref": "urn:pogo:skill:1:common#/$defs/opaqueRef"
+          },
+          "authorizationRevision": {
+            "$ref": "urn:pogo:skill:1:common#/$defs/opaqueRef"
+          }
+        },
+        "required": [
+          "packageId",
+          "slotId",
+          "resourceRef",
+          "resourceRevision",
+          "authorizationRevision"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 0
+    },
+    "connections": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "provider": {
+            "$ref": "urn:pogo:skill:1:common#/$defs/providerRef"
+          },
+          "connectionRevision": {
+            "$ref": "urn:pogo:skill:1:common#/$defs/opaqueRef"
+          },
+          "connectionPolicyRevision": {
+            "$ref": "urn:pogo:skill:1:common#/$defs/opaqueRef"
+          },
+          "schemaSnapshotDigest": {
+            "$ref": "urn:pogo:skill:1:common#/$defs/digest"
+          }
+        },
+        "required": [
+          "provider",
+          "connectionRevision",
+          "connectionPolicyRevision",
+          "schemaSnapshotDigest"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 0
+    },
+    "effectiveGrants": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "mode": {
+                "const": "sandbox"
+              },
+              "provider": {
+                "$ref": "urn:pogo:skill:1:common#/$defs/providerRef"
+              },
+              "isolationProfileRef": {
+                "$ref": "urn:pogo:skill:1:common#/$defs/opaqueRef"
+              },
+              "ceiling": {
+                "$ref": "urn:pogo:skill:1:common#/$defs/permissions"
+              }
+            },
+            "required": [
+              "mode",
+              "provider",
+              "isolationProfileRef",
+              "ceiling"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "mode": {
+                "const": "trusted-remote"
+              },
+              "provider": {
+                "$ref": "urn:pogo:skill:1:common#/$defs/providerRef"
+              },
+              "connectionPolicyRef": {
+                "$ref": "urn:pogo:skill:1:common#/$defs/opaqueRef"
+              }
+            },
+            "required": [
+              "mode",
+              "provider",
+              "connectionPolicyRef"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "minItems": 1
+    },
+    "createdBy": {
+      "const": "pogo-host"
+    }
+  },
+  "required": [
+    "apiVersion",
+    "kind",
+    "lockId",
+    "agentId",
+    "sessionId",
+    "bindingRevision",
+    "bindingDigest",
+    "policyRevision",
+    "registryRevision",
+    "drivers",
+    "packages",
+    "skills",
+    "capabilities",
+    "runtimes",
+    "assets",
+    "resources",
+    "connections",
+    "effectiveGrants",
+    "createdBy"
+  ],
+  "additionalProperties": false
+}

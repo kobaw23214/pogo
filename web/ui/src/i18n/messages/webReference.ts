@@ -1,0 +1,26 @@
+export default { namespace: "webReference", messages: {
+  "zh-CN": {
+    title: "制作网页引用",
+    subtitle: "打开网页，点击工具栏的「引用元素」，再选择页面中的内容。",
+    browser: "引用浏览器", tabs: "引用浏览器标签页", newTab: "新标签页",
+    isolated: "独立标签页", existing: "复用已选引用（{count}）",
+    steps: "制作网页引用的步骤", stepOpen: "打开目标网页", stepPick: "开启引用元素并点选", stepInsert: "确认卡片后插入",
+    selected: "已选中网页内容", replaceHint: "再次引用可替换当前选择", clear: "清除本次选择",
+    previewHint: "保存选中时的页面、内容与图标。", create: "插入网页引用", cancelled: "取消",
+    starting: "正在准备引用浏览器", startingHint: "会在独立标签页中打开，不改变当前对话的网页。",
+    connecting: "正在连接所选页面…", connectionFailed: "引用浏览器连接失败", retry: "重新连接",
+    invalidSelection: "没有取得有效的网页元素，请重新开启「引用元素」后选择。",
+  },
+  en: {
+    title: "Create a web reference",
+    subtitle: "Open a webpage, choose Reference element in the toolbar, then select content on the page.",
+    browser: "Reference browser", tabs: "Reference browser tabs", newTab: "New tab",
+    isolated: "Separate tab", existing: "Reuse selected references ({count})",
+    steps: "Create a web reference", stepOpen: "Open the webpage", stepPick: "Enable Reference element and select", stepInsert: "Review the card and insert",
+    selected: "Web content selected", replaceHint: "Select another element to replace it", clear: "Clear this selection",
+    previewHint: "Keeps the page, content, and icon captured when selected.", create: "Insert web reference", cancelled: "Cancel",
+    starting: "Preparing the reference browser", startingHint: "Uses a separate tab, leaving the conversation's current page unchanged.",
+    connecting: "Connecting to the selected page…", connectionFailed: "Could not connect to the reference browser", retry: "Reconnect",
+    invalidSelection: "Could not capture a valid page element. Enable Reference element and select it again.",
+  },
+} };

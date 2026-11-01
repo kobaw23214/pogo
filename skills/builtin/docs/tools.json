@@ -1,0 +1,146 @@
+{
+  "tools": [
+    {
+      "name": "docs.pdf-info",
+      "title": "PDF 导航信息",
+      "description": "读取 PDF 的首屏导航信息：页数、元数据、书签目录、每页字符数、是否有文字层。长文档先用它定位，再按页取正文。扫描版（无文字层）此工具会如实报告。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "file": { "type": "string", "minLength": 1, "description": "PDF 文件的工作区相对路径" }
+        },
+        "required": ["file"],
+        "additionalProperties": false
+      },
+      "annotations": { "readOnlyHint": true, "idempotentHint": true },
+      "x-pogo-renderer": "code",
+      "x-pogo-exec": {
+        "argv": ["$SKILL_DIR/scripts/pdf-info"],
+        "map": { "file": "append" }
+      }
+    },
+    {
+      "name": "docs.pdf-text",
+      "title": "PDF 正文取段",
+      "description": "按页提取 PDF 文字层正文，带 ===== Page N ===== 页锚，去页眉页脚、双栏重排。不传页码取全文；长文档先 docs.pdf-info 定位再分段取。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "file": { "type": "string", "minLength": 1, "description": "PDF 文件的工作区相对路径" },
+          "first_page": { "type": "integer", "minimum": 1, "description": "起始页码（1 起）" },
+          "last_page": { "type": "integer", "minimum": 1, "description": "结束页码（含）" }
+        },
+        "required": ["file"],
+        "additionalProperties": false
+      },
+      "annotations": { "readOnlyHint": true, "idempotentHint": true },
+      "x-pogo-renderer": "text",
+      "x-pogo-exec": {
+        "argv": ["$SKILL_DIR/scripts/pdf-text"],
+        "map": { "file": "append", "first_page": "append", "last_page": "append" }
+      }
+    },
+    {
+      "name": "docs.pdf-links",
+      "title": "PDF 链接清单",
+      "description": "列出 PDF 的外部链接（首现页号 + 锚文本）与内部跳转计数。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "file": { "type": "string", "minLength": 1, "description": "PDF 文件的工作区相对路径" }
+        },
+        "required": ["file"],
+        "additionalProperties": false
+      },
+      "annotations": { "readOnlyHint": true, "idempotentHint": true },
+      "x-pogo-renderer": "code",
+      "x-pogo-exec": {
+        "argv": ["$SKILL_DIR/scripts/pdf-links"],
+        "map": { "file": "append" }
+      }
+    },
+    {
+      "name": "docs.docx-info",
+      "title": "Word 导航信息",
+      "description": "读取 .docx 的导航信息（JSON）：段落数、表格数、字数、标题树（级别 + 原文）。老式二进制 .doc 不支持。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "file": { "type": "string", "minLength": 1, "description": ".docx 文件的工作区相对路径" }
+        },
+        "required": ["file"],
+        "additionalProperties": false
+      },
+      "annotations": { "readOnlyHint": true, "idempotentHint": true },
+      "x-pogo-renderer": "code",
+      "x-pogo-exec": {
+        "argv": ["$SKILL_DIR/scripts/docx-info"],
+        "map": { "file": "append" }
+      }
+    },
+    {
+      "name": "docs.docx-text",
+      "title": "Word 正文取段",
+      "description": "按块提取 .docx 正文为 Markdown：标题转 # 层级、表格转管道表；块 = 段落或表格。不传块号取全文；长文档先 docs.docx-info 看标题树再分段取。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "file": { "type": "string", "minLength": 1, "description": ".docx 文件的工作区相对路径" },
+          "first_block": { "type": "integer", "minimum": 1, "description": "起始块号（1 起）" },
+          "last_block": { "type": "integer", "minimum": 1, "description": "结束块号（含）" }
+        },
+        "required": ["file"],
+        "additionalProperties": false
+      },
+      "annotations": { "readOnlyHint": true, "idempotentHint": true },
+      "x-pogo-renderer": "text",
+      "x-pogo-exec": {
+        "argv": ["$SKILL_DIR/scripts/docx-text"],
+        "map": { "file": "append", "first_block": "append", "last_block": "append" }
+      }
+    },
+    {
+      "name": "docs.xlsx-info",
+      "title": "Excel 导航信息",
+      "description": "读取 .xlsx 的导航信息（JSON）：sheet 清单、行列规模、每表表头预览。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "file": { "type": "string", "minLength": 1, "description": ".xlsx 文件的工作区相对路径" }
+        },
+        "required": ["file"],
+        "additionalProperties": false
+      },
+      "annotations": { "readOnlyHint": true, "idempotentHint": true },
+      "x-pogo-renderer": "code",
+      "x-pogo-exec": {
+        "argv": ["$SKILL_DIR/scripts/xlsx-info"],
+        "map": { "file": "append" }
+      }
+    },
+    {
+      "name": "docs.xlsx-sheet",
+      "title": "Excel 取表",
+      "description": "按行列范围读取一个 sheet 为 Markdown 表，定位采用 Excel 的1起行列号。先 docs.xlsx-info 核对表名和规模；默认100行、30列，每次最多1000行、100列且有字符预算，超出会明确标记并给出下一批位置。sheet 优先匹配准确名称，其次匹配1起序号。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "file": { "type": "string", "minLength": 1, "description": ".xlsx 文件的工作区相对路径" },
+          "sheet": { "type": "string", "minLength": 1, "description": "准确sheet名称（优先匹配）或序号（1起）；先用 docs.xlsx-info 获取中文表名" },
+          "first_row": { "type": "integer", "minimum": 1, "maximum": 1048576, "description": "起始行号（1起）；默认1" },
+          "last_row": { "type": "integer", "minimum": 1, "maximum": 1048576, "description": "结束行号（含，不得小于first_row）；默认从起行取100行，单次最多1000行" },
+          "first_column": { "type": "integer", "minimum": 1, "maximum": 16384, "description": "起始列号（1起，A=1）；默认1" },
+          "last_column": { "type": "integer", "minimum": 1, "maximum": 16384, "description": "结束列号（含）；默认从起列取30列，单次最多100列，超出明确提示分页" }
+        },
+        "required": ["file", "sheet"],
+        "additionalProperties": false
+      },
+      "annotations": { "readOnlyHint": true, "idempotentHint": true },
+      "x-pogo-renderer": "table",
+      "x-pogo-exec": {
+        "argv": ["$SKILL_DIR/scripts/xlsx-sheet"],
+        "map": { "file": { "flag": "--file" }, "sheet": { "flag": "--sheet" }, "first_row": { "flag": "--first-row" }, "last_row": { "flag": "--last-row" }, "first_column": { "flag": "--first-column" }, "last_column": { "flag": "--last-column" } }
+      }
+    }
+  ]
+}

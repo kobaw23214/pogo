@@ -1,0 +1,43 @@
+<script setup lang="ts">
+import { computed, onBeforeUnmount, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
+import { agentWorkflowsApi, type AgentWorkflowRepeatItem, type AgentWorkflowRun, type AgentWorkflowStep, type AgentWorkflowStepRun } from '@/api/agentWorkflows';
+import AgentWorkflowCodeResult from './AgentWorkflowCodeResult.vue';
+import TaskSessionResult from '../TaskSessionResult.vue';
+const props=defineProps<{record?:AgentWorkflowStepRun;step:AgentWorkflowStep;run:AgentWorkflowRun;visible?:boolean}>();
+const {t}=useI18n();const tr=(key:string,args?:Record<string,string|number>)=>t(`agentWorkflowCanvas.${key}`,args||{});
+const processOpen=ref(false);
+const selected=ref<number|null>(null),artifact=ref(''),artifactError=ref(''),artifactLoading=ref(false);
+const repeat=computed(()=>props.record?.repeat),items=computed(()=>repeat.value?.items||[]),item=computed(()=>items.value.find(row=>row.index===selected.value));
+function uncertain(row:AgentWorkflowRepeatItem){return row.status==='running'&&(['interrupted','cancelled','failed'].includes(props.run.status)||['interrupted','cancelled','failed'].includes(props.record?.status||''));}
+function itemStatus(row:AgentWorkflowRepeatItem){return uncertain(row)?'interrupted':row.status;}
+const completed=computed(()=>items.value.filter(row=>row.status==='completed').length),failed=computed(()=>items.value.filter(row=>['failed','interrupted','cancelled'].includes(itemStatus(row))).length);
+const body=computed(()=>props.step.iteration?.body||props.step.loop?.body);
+const scope=computed(()=>`${props.run.agent_id}:${props.run.id}:${props.step.id}`);
+const codeRecord=computed<AgentWorkflowStepRun|undefined>(()=>item.value?{step_id:props.step.id,status:itemStatus(item.value),code_inputs:item.value.code_inputs,code_execution:item.value.code_execution,attempts:item.value.attempts,fallback_used:item.value.fallback_used,output:item.value.output as Record<string,unknown>,summary:item.value.summary}:undefined);
+let request=0,controller:AbortController|undefined;
+watch(scope,()=>{selected.value=null;processOpen.value=false;artifactLoading.value=false;artifact.value='';artifactError.value='';++request;controller?.abort();});
+watch(items,rows=>{if(selected.value===null&&rows.length)selected.value=(rows.find(row=>row.status==='running')||rows.find(row=>row.status==='failed')||rows[0])!.index;},{deep:true,immediate:true});
+function choose(value:AgentWorkflowRepeatItem){selected.value=value.index;processOpen.value=false;artifactLoading.value=false;artifact.value='';artifactError.value='';++request;controller?.abort();}
+async function loadArtifact(){const row=item.value;if(!row?.artifact)return;const key=scope.value,ticket=++request,index=row.index;controller?.abort();controller=new AbortController();artifactLoading.value=true;artifactError.value='';try{const result=await agentWorkflowsApi.call(props.run.agent_id,'read',{action:'artifact',workflow_id:props.run.workflow_id,run_id:props.run.id,step_id:props.step.id,item_index:index},controller.signal);if(ticket!==request||key!==scope.value||selected.value!==index)return;if(result.ok===false||typeof result.text!=='string')throw Error();artifact.value=result.text;}catch(error){if(ticket===request&&(error as Error).name!=='AbortError')artifactError.value=tr('repeatArtifactUnavailable');}finally{if(ticket===request)artifactLoading.value=false;}}
+const pretty=(value:unknown)=>JSON.stringify(value,null,2);
+onBeforeUnmount(()=>{++request;controller?.abort();});
+</script>
+<template>
+  <section class="aw-repeat-result" data-testid="workflow-repeat-result">
+    <header><strong>{{tr(step.kind==='loop'?'loopHistory':'iterationHistory')}}</strong><span>{{step.kind==='loop'?t('agentWorkflowGraph.loopProgress',{completed,total:repeat?.total||0,failed}):tr('repeatProgress',{completed,total:repeat?.total||0})}}</span></header>
+    <p v-if="failed" class="aw-repeat-warning">{{tr('repeatFailedItems',{n:failed})}}</p><p v-if="repeat?.limit_reached" class="aw-repeat-error">{{tr('loopLimitReached')}}</p><p v-if="!items.length" class="aw-repeat-hint">{{tr('repeatPending')}}</p>
+    <div v-if="items.length" class="aw-repeat-items" role="group" :aria-label="tr('repeatItems')"><button v-for="row in items" :key="row.index" type="button" :class="{selected:selected===row.index}" :aria-pressed="selected===row.index" :data-item-index="row.index" data-testid="workflow-repeat-item" @click="choose(row)"><span>{{tr(step.kind==='loop'?'repeatRound':'repeatItem',{n:row.index+1})}}</span><small>{{uncertain(row)?tr('repeatResultUnknown'):t(`agentWorkflow.status.${row.status}`)}}</small><span v-if="row.fallback_used" class="aw-repeat-warning">{{tr('codeFallbackShort')}}</span></button></div>
+    <section v-if="item" class="aw-repeat-detail" data-testid="workflow-repeat-item-detail"><h4>{{tr(step.kind==='loop'?'repeatRound':'repeatItem',{n:item.index+1})}}</h4><p v-if="uncertain(item)" class="aw-repeat-warning" data-testid="workflow-repeat-result-unknown">{{tr('repeatResultUnknownHint')}}</p><p v-if="item.error" class="aw-repeat-error">{{item.error}}</p><details><summary>{{tr('repeatItemInput')}}</summary><pre>{{pretty(item.input)}}</pre></details>
+      <AgentWorkflowCodeResult v-if="body?.kind==='code'" :record="codeRecord" :status="itemStatus(item)" />
+      <template v-else><section v-if="item.output!==undefined"><h4>{{tr('codeActualOutputs')}}</h4><pre>{{pretty(item.output)}}</pre></section><p v-if="item.summary" class="aw-repeat-summary">{{item.summary}}</p>
+        <details v-if="item.session_id" class="aw-repeat-process" :open="processOpen" @toggle="processOpen=($event.target as HTMLDetailsElement).open"><summary>{{tr('repeatAgentProcess')}}</summary><TaskSessionResult v-if="processOpen" :key="`${scope}:${item.index}:${item.session_id}`" compact :session-id="item.session_id" :active-run-id="item.active_run_id" :agent-id="run.agent_id" :workflow-id="run.workflow_id" :workflow-run-id="run.id" :visible="visible!==false" :title="tr('repeatItem',{n:item.index+1})" @close="processOpen=false" /></details>
+      </template>
+      <button v-if="item.artifact" type="button" :disabled="artifactLoading" @click="loadArtifact">{{tr(artifactLoading?'repeatArtifactLoading':'artifact')}} · {{item.artifact}}</button><p v-if="artifactError" class="aw-repeat-error" role="alert">{{artifactError}}</p><pre v-if="artifact" data-testid="workflow-repeat-artifact">{{artifact}}</pre>
+    </section>
+    <details v-if="repeat?.state"><summary>{{tr('loopFinalState')}}</summary><pre>{{pretty(repeat.state)}}</pre></details>
+  </section>
+</template>
+<style scoped>
+.aw-repeat-result{display:flex;flex-direction:column;gap:10px;border-top:1px solid var(--el-border-color-lighter);padding-top:12px;min-width:0}.aw-repeat-result>header{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:12px}.aw-repeat-result>header span,.aw-repeat-hint{font-size:11px;color:var(--el-text-color-secondary)}.aw-repeat-items{display:flex;flex-direction:column;gap:5px;max-height:220px;overflow:auto}.aw-repeat-items button{display:flex;align-items:center;justify-content:space-between;gap:7px;font:inherit;font-size:11px;padding:8px;border:1px solid var(--el-border-color-lighter);border-radius:7px;background:var(--el-bg-color);color:var(--el-text-color-primary);cursor:pointer}.aw-repeat-items button.selected{border-color:var(--el-color-primary);background:var(--el-color-primary-light-9)}.aw-repeat-items small{color:var(--el-text-color-secondary)}.aw-repeat-detail{border:1px solid var(--el-border-color-lighter);border-radius:9px;padding:10px;display:flex;flex-direction:column;gap:9px;min-width:0}.aw-repeat-detail h4{font-size:12px;margin:0}.aw-repeat-result pre{margin:7px 0 0;padding:9px;border-radius:7px;background:var(--el-fill-color-light);font:11px/1.65 ui-monospace,monospace;white-space:pre-wrap;overflow-wrap:anywhere;max-height:230px;overflow:auto}.aw-repeat-result details{font-size:11px}.aw-repeat-result summary{cursor:pointer}.aw-repeat-result button:disabled{opacity:.5;cursor:default}.aw-repeat-detail>button{font:inherit;font-size:11px;padding:7px;border:1px solid var(--el-border-color);border-radius:6px;background:var(--el-bg-color);color:var(--el-text-color-regular);overflow-wrap:anywhere;cursor:pointer}.aw-repeat-process{min-width:0}.aw-repeat-process:deep(.task-session-result){max-height:480px;overflow:auto}.aw-repeat-summary{white-space:pre-wrap;font-size:12px;line-height:1.7;margin:0}.aw-repeat-error{font-size:11px;color:var(--el-color-danger);margin:0}.aw-repeat-warning{font-size:11px;color:var(--el-color-warning);margin:0}
+</style>

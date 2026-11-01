@@ -1,0 +1,989 @@
+{
+  "schema_version": 1,
+  "source": "pogo/browser-runtime/eval/runs/general-web-glm-5.3-20261003-v2/summary.json",
+  "source_snapshot_sha256": "f12407984bfcbb58f2b99f79a46ea24e3303aa54f1f26e0261b315f2643439f0",
+  "scope": "checker_regression_original_scores_preserved",
+  "cases": [
+    {
+      "id": "catalog-paged",
+      "seed": 20261005,
+      "startURL": "http://127.0.0.1:52196/cases/catalog-paged/",
+      "answer": "筛选出的 8 款在预算内且有库存的营地灯中，价格最低的是「暮山 营地灯 8」（¥206），其详情页参数已核对通过。\n\n**推荐结果：暮山 营地灯 8**\n\n| 项目 | 数值 | 条件核对 |\n|---|---|---|\n| 价格 | ¥206 | ≤350 ✓（8 款候选中最低） |\n| 重量 | 385 克 | ≤500 克 ✓ |\n| 续航 | 22 小时 | ≥16 小时 ✓ |\n| 供货 | 库存可用 | ✓ |\n\n详情链接：http://127.0.0.1:52196/cases/catalog-paged/products/P779\n\n依据说明：在目录页按「品类=营地灯、预算上限 350 元、供应状态=库存可用」筛选并点「加载更多商品」后共得 8 款（价格 ¥206–¥298），全部加载完毕无遗漏；其中价格最低的 ¥206「暮山 营地灯 8」详情页显示重量 385 克、续航 22 小时，满足全部条件，故无需再比较其余款式。（注：页面标注为演示业务空间、本机数据。）",
+      "actions": [
+        {
+          "action": "snapshot",
+          "ok": true,
+          "result": {
+            "ok": true,
+            "url": "http://127.0.0.1:52196/cases/catalog-paged/",
+            "text": "山海器物\n让信息清楚，让选择简单\n装备好每一段旅途\n\n商品目录 · 价格与供货情况在此查看，完整参数见商品详情。\n\n搜索目录\n品类\n全部品类\n营地灯\n预算上限（元）\n供应状态\n全部商品\n库存可用\n应用条件\n\n共 9 款商品\n\n营地灯\n原野 营地灯 2\n适合日常出行与轻装使用的营地灯，规格以详情页为准。\n\n¥210 · 库存可用\n\n查看原野 营地灯 2详情\n营地灯\n星港 营地灯 5\n适合日常出行与轻装使用的营地灯，规格以详情页为准。\n\n¥221 · 暂时缺货\n\n查看星港 营地灯 5详情\n营地灯\n雾松 营地灯 2\n适合日常出行与轻装使用的营地灯，规格以详情页为准。\n\n¥232 · 库存可用\n\n查看雾松 营地灯 2详情\n营地灯\n流萤 营地灯 4\n适合日常出行与轻装使用的营地灯，规格以详情页为准。\n\n¥243 · 库存可用\n\n查看流萤 营地灯 4详情\n加载更多商品\n山海器物 · 演示业务空间 · 本机数据\n\n[e1] textbox \"搜索目录\"\n[e2] combobox \"品类全部品类营地灯\" options=[{\"value\":\"\",\"label\":\"全部品类\"},{\"value\":\"营地灯\",\"label\":\"营地灯\"}]\n[e3] textbox \"预算上限（元）\"\n[e4] combobox \"供应状态全部商品库存可用\" options=[{\"value\":\"\",\"label\":\"全部商品\"},{\"value\":\"yes\",\"label\":\"库存可用\"}]\n[e5] button \"应用条件\"\n[e6] link \"原野 营地灯 2\" href=http://127.0.0.1:52196/cases/catalog-paged/products/P773\n[e7] link \"查看原野 营地灯 2详情\" href=http://127.0.0.1:52196/cases/catalog-paged/products/P773\n[e8] link \"星港 营地灯 5\" href=http://127.0.0.1:52196/cases/catalog-paged/products/P774\n[e9] link \"查看星港 营地灯 5详情\" href=http://127.0.0.1:52196/cases/catalog-paged/products/P774\n[e10] link \"雾松 营地灯 2\" href=http://127.0.0.1:52196/cases/catalog-paged/products/P775\n[e11] link \"查看雾松 营地灯 2详情\" href=http://127.0.0.1:52196/cases/catalog-paged/products/P775\n[e12] link \"流萤 营地灯 4\" href=http://127.0.0.1:52196/cases/catalog-paged/products/P776\n[e13] link \"查看流萤 营地灯 4详情\" href=http://127.0.0.1:52196/cases/catalog-paged/products/P776\n[e14] button \"加载更多商品\""
+          }
+        },
+        {
+          "action": "select",
+          "ok": true,
+          "result": {
+            "ok": true
+          }
+        },
+        {
+          "action": "type",
+          "ok": true,
+          "result": {
+            "ok": true
+          }
+        },
+        {
+          "action": "select",
+          "ok": true,
+          "result": {
+            "ok": true
+          }
+        },
+        {
+          "action": "click",
+          "ok": true,
+          "result": {
+            "ok": true,
+            "url": "http://127.0.0.1:52196/cases/catalog-paged/?q=&category=%E8%90%A5%E5%9C%B0%E7%81%AF&max=350&available=yes",
+            "text": "山海器物\n让信息清楚，让选择简单\n装备好每一段旅途\n\n商品目录 · 价格与供货情况在此查看，完整参数见商品详情。\n\n搜索目录\n品类\n全部品类\n营地灯\n预算上限（元）\n供应状态\n全部商品\n库存可用\n应用条件\n\n共 8 款商品\n\n营地灯\n原野 营地灯 2\n适合日常出行与轻装使用的营地灯，规格以详情页为准。\n\n¥210 · 库存可用\n\n查看原野 营地灯 2详情\n营地灯\n雾松 营地灯 2\n适合日常出行与轻装使用的营地灯，规格以详情页为准。\n\n¥232 · 库存可用\n\n查看雾松 营地灯 2详情\n营地灯\n流萤 营地灯 4\n适合日常出行与轻装使用的营地灯，规格以详情页为准。\n\n¥243 · 库存可用\n\n查看流萤 营地灯 4详情\n营地灯\n川行 营地灯 8\n适合日常出行与轻装使用的营地灯，规格以详情页为准。\n\n¥254 · 库存可用\n\n查看川行 营地灯 8详情\n加载更多商品\n山海器物 · 演示业务空间 · 本机数据\n\n[e15] textbox \"搜索目录\"\n[e16] combobox \"品类全部品类营地灯\" value=\"营地灯\" options=[{\"value\":\"\",\"label\":\"全部品类\"},{\"value\":\"营地灯\",\"label\":\"营地灯\"}]\n[e17] textbox \"预算上限（元）\" value=\"350\"\n[e18] combobox \"供应状态全部商品库存可用\" value=\"yes\" options=[{\"value\":\"\",\"label\":\"全部商品\"},{\"value\":\"yes\",\"label\":\"库存可用\"}]\n[e19] button \"应用条件\"\n[e20] link \"原野 营地灯 2\" href=http://127.0.0.1:52196/cases/catalog-paged/products/P773\n[e21] link \"查看原野 营地灯 2详情\" href=http://127.0.0.1:52196/cases/catalog-paged/products/P773\n[e22] link \"雾松 营地灯 2\" href=http://127.0.0.1:52196/cases/catalog-paged/products/P775\n[e23] link \"查看雾松 营地灯 2详情\" href=http://127.0.0.1:52196/cases/catalog-paged/products/P775\n[e24] link \"流萤 营地灯 4\" href=http://127.0.0.1:52196/cases/catalog-paged/products/P776\n[e25] link \"查看流萤 营地灯 4详情\" href=http://127.0.0.1:52196/cases/catalog-paged/products/P776\n[e26] link \"川行 营地灯 8\" href=http://127.0.0.1:52196/cases/catalog-paged/products/P777\n[e27] link \"查看川行 营地灯 8详情\" href=http://127.0.0.1:52196/cases/catalog-paged/products/P777\n[e28] button \"加载更多商品\"\nBatch stopped after navigation/tab change; inspect the current page before continuing."
+          }
+        },
+        {
+          "action": "click",
+          "ok": true,
+          "result": {
+            "ok": true,
+            "url": "http://127.0.0.1:52196/cases/catalog-paged/?q=&category=%E8%90%A5%E5%9C%B0%E7%81%AF&max=350&available=yes",
+            "text": "山海器物\n让信息清楚，让选择简单\n装备好每一段旅途\n\n商品目录 · 价格与供货情况在此查看，完整参数见商品详情。\n\n搜索目录\n品类\n全部品类\n营地灯\n预算上限（元）\n供应状态\n全部商品\n库存可用\n应用条件\n\n共 8 款商品\n\n营地灯\n原野 营地灯 2\n适合日常出行与轻装使用的营地灯，规格以详情页为准。\n\n¥210 · 库存可用\n\n查看原野 营地灯 2详情\n营地灯\n雾松 营地灯 2\n适合日常出行与轻装使用的营地灯，规格以详情页为准。\n\n¥232 · 库存可用\n\n查看雾松 营地灯 2详情\n营地灯\n流萤 营地灯 4\n适合日常出行与轻装使用的营地灯，规格以详情页为准。\n\n¥243 · 库存可用\n\n查看流萤 营地灯 4详情\n营地灯\n川行 营地灯 8\n适合日常出行与轻装使用的营地灯，规格以详情页为准。\n\n¥254 · 库存可用\n\n查看川行 营地灯 8详情\n营地灯\n云桥 营地灯 5\n适合日常出行与轻装使用的营地灯，规格以详情页为准。\n\n¥265 · 库存可用\n\n查看云桥 营地灯 5详情\n营地灯\n暮山 营地灯 8\n适合日常出行与轻装使用的营地灯，规格以详情页为准。\n\n¥206 · 库存可用\n\n查看暮山 营地灯 8详情\n营地灯\n海岬 营地灯 4\n适合日常出行与轻装使用的营地灯，规格以详情页为准。\n\n¥287 · 库存可用\n\n查看海岬 营地灯 4详情\n营地灯\n青屿 营地灯 7\n适合日常出行与轻装使用的营地灯，规格以详情页为准。\n\n¥298 · 库存可用\n\n查看青屿 营地灯 7详情\n山海器物 · 演示业务空间 · 本机数据\n\n[e15] textbox \"搜索目录\"\n[e16] combobox \"品类全部品类营地灯\" value=\"营地灯\" options=[{\"value\":\"\",\"label\":\"全部品类\"},{\"value\":\"营地灯\",\"label\":\"营地灯\"}]\n[e17] textbox \"预算上限（元）\" value=\"350\"\n[e18] combobox \"供应状态全部商品库存可用\" value=\"yes\" options=[{\"value\":\"\",\"label\":\"全部商品\"},{\"value\":\"yes\",\"label\":\"库存可用\"}]\n[e19] button \"应用条件\"\n[e20] link \"原野 营地灯 2\" href=http://127.0.0.1:52196/cases/catalog-paged/products/P773\n[e21] link \"查看原野 营地灯 2详情\" href=http://127.0.0.1:52196/cases/catalog-paged/products/P773\n[e22] link \"雾松 营地灯 2\" href=http://127.0.0.1:52196/cases/catalog-paged/products/P775\n[e23] link \"查看雾松 营地灯 2详情\" href=http://127.0.0.1:52196/cases/catalog-paged/products/P775\n[e24] link \"流萤 营地灯 4\" href=http://127.0.0.1:52196/cases/catalog-paged/products/P776\n[e25] link \"查看流萤 营地灯 4详情\" href=http://127.0.0.1:52196/cases/catalog-paged/products/P776\n[e26] link \"川行 营地灯 8\" href=http://127.0.0.1:52196/cases/catalog-paged/products/P777\n[e27] link \"查看川行 营地灯 8详情\" href=http://127.0.0.1:52196/cases/catalog-paged/products/P777\n[e29] link \"云桥 营地灯 5\" href=http://127.0.0.1:52196/cases/catalog-paged/products/P778\n[e30] link \"查看云桥 营地灯 5详情\" href=http://127.0.0.1:52196/cases/catalog-paged/products/P778\n[e31] link \"暮山 营地灯 8\" href=http://127.0.0.1:52196/cases/catalog-paged/products/P779\n[e32] link \"查看暮山 营地灯 8详情\" href=http://127.0.0.1:52196/cases/catalog-paged/products/P779\n[e33] link \"海岬 营地灯 4\" href=http://127.0.0.1:52196/cases/catalog-paged/products/P780\n[e34] link \"查看海岬 营地灯 4详情\" href=http://127.0.0.1:52196/cases/catalog-paged/products/P780\n[e35] link \"青屿 营地灯 7\" href=http://127.0.0.1:52196/cases/catalog-paged/products/P781\n[e36] link \"查看青屿 营地灯 7详情\" href=http://127.0.0.1:52196/cases/catalog-paged/products/P781"
+          }
+        },
+        {
+          "action": "click",
+          "ok": true,
+          "result": {
+            "ok": true,
+            "url": "http://127.0.0.1:52196/cases/catalog-paged/products/P779",
+            "text": "山海器物\n让信息清楚，让选择简单\n返回商品目录\n营地灯\n暮山 营地灯 8\n\n适合日常出行与轻装使用的营地灯，规格以详情页为准。\n\n价格\n¥206\n重量\n385 克\n续航\n22 小时\n供货\n库存可用\n防水\n不支持\n清晰度\n300 PPI\n充满用时\n2 小时\n山海器物 · 演示业务空间 · 本机数据\n\n[e37] link \"返回商品目录\" href=http://127.0.0.1:52196/cases/catalog-paged/"
+          }
+        }
+      ],
+      "server_state": {
+        "caseID": "catalog-paged",
+        "family": "catalog",
+        "seed": 20261005,
+        "layout_variant": 4,
+        "audit": [
+          {
+            "method": "GET",
+            "path": "/",
+            "query": {},
+            "at": 1791005646857,
+            "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+            "fetch_dest": "document",
+            "fetch_mode": "navigate",
+            "browser": true
+          },
+          {
+            "method": "GET",
+            "path": "/",
+            "query": {
+              "q": "",
+              "category": "营地灯",
+              "max": "350",
+              "available": "yes"
+            },
+            "at": 1791005690545,
+            "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+            "fetch_dest": "document",
+            "fetch_mode": "navigate",
+            "browser": true
+          },
+          {
+            "method": "GET",
+            "path": "/catalog",
+            "query": {
+              "q": "",
+              "category": "营地灯",
+              "max": "350",
+              "available": "yes",
+              "page": "2"
+            },
+            "at": 1791005692837,
+            "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+            "fetch_dest": "empty",
+            "fetch_mode": "cors",
+            "browser": true
+          },
+          {
+            "method": "GET",
+            "path": "/products/P779",
+            "query": {},
+            "at": 1791005696105,
+            "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+            "fetch_dest": "document",
+            "fetch_mode": "navigate",
+            "browser": true
+          }
+        ],
+        "catalogRequests": [
+          {
+            "method": "GET",
+            "path": "/",
+            "query": {},
+            "at": 1791005646857,
+            "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+            "fetch_dest": "document",
+            "fetch_mode": "navigate",
+            "browser": true,
+            "page": 1
+          },
+          {
+            "method": "GET",
+            "path": "/",
+            "query": {
+              "q": "",
+              "category": "营地灯",
+              "max": "350",
+              "available": "yes"
+            },
+            "at": 1791005690545,
+            "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+            "fetch_dest": "document",
+            "fetch_mode": "navigate",
+            "browser": true,
+            "page": 1
+          },
+          {
+            "method": "GET",
+            "path": "/catalog",
+            "query": {
+              "q": "",
+              "category": "营地灯",
+              "max": "350",
+              "available": "yes",
+              "page": "2"
+            },
+            "at": 1791005692837,
+            "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+            "fetch_dest": "empty",
+            "fetch_mode": "cors",
+            "browser": true,
+            "page": 2
+          }
+        ],
+        "documentVisits": [],
+        "records": [],
+        "mutations": [],
+        "validationErrors": [],
+        "submissions": 0,
+        "successfulSubmissions": 0,
+        "duplicateSubmissions": 0
+      },
+      "original_status": "failed",
+      "original_failures": [
+        "contradictory_product_price"
+      ]
+    },
+    {
+      "id": "catalog-fit",
+      "seed": 20261005,
+      "startURL": "http://127.0.0.1:52196/cases/catalog-fit/",
+      "answer": "全部 6 款预算内候选已逐个核对完毕。结论如下：\n\n## 筛选结果\n\n预算 ≤350 元的阅读器共 6 款，其中**恰好两款**同时满足 300 PPI、防水、重量 ≤450 克：\n\n| | 川行 阅读器 5 | 云桥 阅读器 2 |\n|---|---|---|\n| 价格 | **¥269** | ¥317 |\n| 重量 | 314 克 | 404 克 |\n| 防水 | 支持 | 支持 |\n| 清晰度 | 300 PPI | 300 PPI |\n\n**推荐：川行 阅读器 5**（价格较低者，¥269，且更轻）。\n\n详情链接：\n- 川行 阅读器 5：http://127.0.0.1:52196/cases/catalog-fit/products/P678\n- 云桥 阅读器 2：http://127.0.0.1:52196/cases/catalog-fit/products/P676\n\n其余 4 款因不满足条件被排除：雾松 8（664 克、不防水、212 PPI）、星港 8（不防水、212 PPI）、青屿 7（563 克、不防水、212 PPI）、流萤 3（547 克、不防水、212 PPI）。\n\n数据来源：目录页筛选（品类=阅读器、预算上限 350 元，共 6 款）及各商品详情页逐项核对；页面注明为演示业务空间数据。",
+      "actions": [
+        {
+          "action": "snapshot",
+          "ok": true,
+          "result": {
+            "ok": true,
+            "url": "http://127.0.0.1:52196/cases/catalog-fit/",
+            "text": "山海器物\n让信息清楚，让选择简单\n装备好每一段旅途\n\n商品目录 · 价格与供货情况在此查看，完整参数见商品详情。\n\n关键词\n品类\n全部品类\n阅读器\n预算上限（元）\n供应状态\n全部商品\n库存可用\n筛选结果\n\n共 9 款商品\n\n阅读器\n雾松 阅读器 8\n适合日常出行与轻装使用的阅读器，规格以详情页为准。\n\n¥262 · 库存可用\n\n查看雾松 阅读器 8详情\n阅读器\n星港 阅读器 8\n适合日常出行与轻装使用的阅读器，规格以详情页为准。\n\n¥331 · 库存可用\n\n查看星港 阅读器 8详情\n阅读器\n海岬 阅读器 6\n适合日常出行与轻装使用的阅读器，规格以详情页为准。\n\n¥369 · 库存可用\n\n查看海岬 阅读器 6详情\n阅读器\n云桥 阅读器 2\n适合日常出行与轻装使用的阅读器，规格以详情页为准。\n\n¥317 · 库存可用\n\n查看云桥 阅读器 2详情\n显示下一组\n山海器物 · 演示业务空间 · 本机数据\n\n[e1] textbox \"关键词\"\n[e2] combobox \"品类全部品类阅读器\" options=[{\"value\":\"\",\"label\":\"全部品类\"},{\"value\":\"阅读器\",\"label\":\"阅读器\"}]\n[e3] textbox \"预算上限（元）\"\n[e4] combobox \"供应状态全部商品库存可用\" options=[{\"value\":\"\",\"label\":\"全部商品\"},{\"value\":\"yes\",\"label\":\"库存可用\"}]\n[e5] button \"筛选结果\"\n[e6] link \"雾松 阅读器 8\" href=http://127.0.0.1:52196/cases/catalog-fit/products/P673\n[e7] link \"查看雾松 阅读器 8详情\" href=http://127.0.0.1:52196/cases/catalog-fit/products/P673\n[e8] link \"星港 阅读器 8\" href=http://127.0.0.1:52196/cases/catalog-fit/products/P674\n[e9] link \"查看星港 阅读器 8详情\" href=http://127.0.0.1:52196/cases/catalog-fit/products/P674\n[e10] link \"海岬 阅读器 6\" href=http://127.0.0.1:52196/cases/catalog-fit/products/P675\n[e11] link \"查看海岬 阅读器 6详情\" href=http://127.0.0.1:52196/cases/catalog-fit/products/P675\n[e12] link \"云桥 阅读器 2\" href=http://127.0.0.1:52196/cases/catalog-fit/products/P676\n[e13] link \"查看云桥 阅读器 2详情\" href=http://127.0.0.1:52196/cases/catalog-fit/products/P676\n[e14] button \"显示下一组\""
+          }
+        },
+        {
+          "action": "select",
+          "ok": true,
+          "result": {
+            "ok": true
+          }
+        },
+        {
+          "action": "type",
+          "ok": true,
+          "result": {
+            "ok": true
+          }
+        },
+        {
+          "action": "click",
+          "ok": true,
+          "result": {
+            "ok": true,
+            "url": "http://127.0.0.1:52196/cases/catalog-fit/?q=&category=%E9%98%85%E8%AF%BB%E5%99%A8&max=350&available=",
+            "text": "山海器物\n让信息清楚，让选择简单\n装备好每一段旅途\n\n商品目录 · 价格与供货情况在此查看，完整参数见商品详情。\n\n关键词\n品类\n全部品类\n阅读器\n预算上限（元）\n供应状态\n全部商品\n库存可用\n筛选结果\n\n共 6 款商品\n\n阅读器\n雾松 阅读器 8\n适合日常出行与轻装使用的阅读器，规格以详情页为准。\n\n¥262 · 库存可用\n\n查看雾松 阅读器 8详情\n阅读器\n星港 阅读器 8\n适合日常出行与轻装使用的阅读器，规格以详情页为准。\n\n¥331 · 库存可用\n\n查看星港 阅读器 8详情\n阅读器\n云桥 阅读器 2\n适合日常出行与轻装使用的阅读器，规格以详情页为准。\n\n¥317 · 库存可用\n\n查看云桥 阅读器 2详情\n阅读器\n青屿 阅读器 7\n适合日常出行与轻装使用的阅读器，规格以详情页为准。\n\n¥182 · 库存可用\n\n查看青屿 阅读器 7详情\n显示下一组\n山海器物 · 演示业务空间 · 本机数据\n\n[e15] textbox \"关键词\"\n[e16] combobox \"品类全部品类阅读器\" value=\"阅读器\" options=[{\"value\":\"\",\"label\":\"全部品类\"},{\"value\":\"阅读器\",\"label\":\"阅读器\"}]\n[e17] textbox \"预算上限（元）\" value=\"350\"\n[e18] combobox \"供应状态全部商品库存可用\" options=[{\"value\":\"\",\"label\":\"全部商品\"},{\"value\":\"yes\",\"label\":\"库存可用\"}]\n[e19] button \"筛选结果\"\n[e20] link \"雾松 阅读器 8\" href=http://127.0.0.1:52196/cases/catalog-fit/products/P673\n[e21] link \"查看雾松 阅读器 8详情\" href=http://127.0.0.1:52196/cases/catalog-fit/products/P673\n[e22] link \"星港 阅读器 8\" href=http://127.0.0.1:52196/cases/catalog-fit/products/P674\n[e23] link \"查看星港 阅读器 8详情\" href=http://127.0.0.1:52196/cases/catalog-fit/products/P674\n[e24] link \"云桥 阅读器 2\" href=http://127.0.0.1:52196/cases/catalog-fit/products/P676\n[e25] link \"查看云桥 阅读器 2详情\" href=http://127.0.0.1:52196/cases/catalog-fit/products/P676\n[e26] link \"青屿 阅读器 7\" href=http://127.0.0.1:52196/cases/catalog-fit/products/P677\n[e27] link \"查看青屿 阅读器 7详情\" href=http://127.0.0.1:52196/cases/catalog-fit/products/P677\n[e28] button \"显示下一组\"\nBatch stopped after navigation/tab change; inspect the current page before continuing."
+          }
+        },
+        {
+          "action": "click",
+          "ok": true,
+          "result": {
+            "ok": true,
+            "url": "http://127.0.0.1:52196/cases/catalog-fit/?q=&category=%E9%98%85%E8%AF%BB%E5%99%A8&max=350&available=",
+            "text": "山海器物\n让信息清楚，让选择简单\n装备好每一段旅途\n\n商品目录 · 价格与供货情况在此查看，完整参数见商品详情。\n\n关键词\n品类\n全部品类\n阅读器\n预算上限（元）\n供应状态\n全部商品\n库存可用\n筛选结果\n\n共 6 款商品\n\n阅读器\n雾松 阅读器 8\n适合日常出行与轻装使用的阅读器，规格以详情页为准。\n\n¥262 · 库存可用\n\n查看雾松 阅读器 8详情\n阅读器\n星港 阅读器 8\n适合日常出行与轻装使用的阅读器，规格以详情页为准。\n\n¥331 · 库存可用\n\n查看星港 阅读器 8详情\n阅读器\n云桥 阅读器 2\n适合日常出行与轻装使用的阅读器，规格以详情页为准。\n\n¥317 · 库存可用\n\n查看云桥 阅读器 2详情\n阅读器\n青屿 阅读器 7\n适合日常出行与轻装使用的阅读器，规格以详情页为准。\n\n¥182 · 库存可用\n\n查看青屿 阅读器 7详情\n阅读器\n川行 阅读器 5\n适合日常出行与轻装使用的阅读器，规格以详情页为准。\n\n¥269 · 库存可用\n\n查看川行 阅读器 5详情\n阅读器\n流萤 阅读器 3\n适合日常出行与轻装使用的阅读器，规格以详情页为准。\n\n¥282 · 库存可用\n\n查看流萤 阅读器 3详情\n山海器物 · 演示业务空间 · 本机数据\n\n[e15] textbox \"关键词\"\n[e16] combobox \"品类全部品类阅读器\" value=\"阅读器\" options=[{\"value\":\"\",\"label\":\"全部品类\"},{\"value\":\"阅读器\",\"label\":\"阅读器\"}]\n[e17] textbox \"预算上限（元）\" value=\"350\"\n[e18] combobox \"供应状态全部商品库存可用\" options=[{\"value\":\"\",\"label\":\"全部商品\"},{\"value\":\"yes\",\"label\":\"库存可用\"}]\n[e19] button \"筛选结果\"\n[e20] link \"雾松 阅读器 8\" href=http://127.0.0.1:52196/cases/catalog-fit/products/P673\n[e21] link \"查看雾松 阅读器 8详情\" href=http://127.0.0.1:52196/cases/catalog-fit/products/P673\n[e22] link \"星港 阅读器 8\" href=http://127.0.0.1:52196/cases/catalog-fit/products/P674\n[e23] link \"查看星港 阅读器 8详情\" href=http://127.0.0.1:52196/cases/catalog-fit/products/P674\n[e24] link \"云桥 阅读器 2\" href=http://127.0.0.1:52196/cases/catalog-fit/products/P676\n[e25] link \"查看云桥 阅读器 2详情\" href=http://127.0.0.1:52196/cases/catalog-fit/products/P676\n[e26] link \"青屿 阅读器 7\" href=http://127.0.0.1:52196/cases/catalog-fit/products/P677\n[e27] link \"查看青屿 阅读器 7详情\" href=http://127.0.0.1:52196/cases/catalog-fit/products/P677\n[e29] link \"川行 阅读器 5\" href=http://127.0.0.1:52196/cases/catalog-fit/products/P678\n[e30] link \"查看川行 阅读器 5详情\" href=http://127.0.0.1:52196/cases/catalog-fit/products/P678\n[e31] link \"流萤 阅读器 3\" href=http://127.0.0.1:52196/cases/catalog-fit/products/P681\n[e32] link \"查看流萤 阅读器 3详情\" href=http://127.0.0.1:52196/cases/catalog-fit/products/P681"
+          }
+        },
+        {
+          "action": "navigate",
+          "ok": true,
+          "result": {
+            "ok": true,
+            "url": "http://127.0.0.1:52196/cases/catalog-fit/products/P673",
+            "text": "山海器物\n让信息清楚，让选择简单\n返回商品目录\n阅读器\n雾松 阅读器 8\n\n适合日常出行与轻装使用的阅读器，规格以详情页为准。\n\n价格\n¥262\n重量\n664 克\n续航\n16 小时\n供货\n库存可用\n防水\n不支持\n清晰度\n212 PPI\n充满用时\n4 小时\n山海器物 · 演示业务空间 · 本机数据\n\n[e33] link \"返回商品目录\" href=http://127.0.0.1:52196/cases/catalog-fit/"
+          }
+        },
+        {
+          "action": "navigate",
+          "ok": true,
+          "result": {
+            "ok": true,
+            "url": "http://127.0.0.1:52196/cases/catalog-fit/products/P674",
+            "text": "山海器物\n让信息清楚，让选择简单\n返回商品目录\n阅读器\n星港 阅读器 8\n\n适合日常出行与轻装使用的阅读器，规格以详情页为准。\n\n价格\n¥331\n重量\n422 克\n续航\n22 小时\n供货\n库存可用\n防水\n不支持\n清晰度\n212 PPI\n充满用时\n2 小时\n山海器物 · 演示业务空间 · 本机数据\n\n[e34] link \"返回商品目录\" href=http://127.0.0.1:52196/cases/catalog-fit/"
+          }
+        },
+        {
+          "action": "navigate",
+          "ok": true,
+          "result": {
+            "ok": true,
+            "url": "http://127.0.0.1:52196/cases/catalog-fit/products/P676",
+            "text": "山海器物\n让信息清楚，让选择简单\n返回商品目录\n阅读器\n云桥 阅读器 2\n\n适合日常出行与轻装使用的阅读器，规格以详情页为准。\n\n价格\n¥317\n重量\n404 克\n续航\n20 小时\n供货\n库存可用\n防水\n支持\n清晰度\n300 PPI\n充满用时\n2 小时\n山海器物 · 演示业务空间 · 本机数据\n\n[e35] link \"返回商品目录\" href=http://127.0.0.1:52196/cases/catalog-fit/"
+          }
+        },
+        {
+          "action": "navigate",
+          "ok": true,
+          "result": {
+            "ok": true,
+            "url": "http://127.0.0.1:52196/cases/catalog-fit/products/P677",
+            "text": "山海器物\n让信息清楚，让选择简单\n返回商品目录\n阅读器\n青屿 阅读器 7\n\n适合日常出行与轻装使用的阅读器，规格以详情页为准。\n\n价格\n¥182\n重量\n563 克\n续航\n21 小时\n供货\n库存可用\n防水\n不支持\n清晰度\n212 PPI\n充满用时\n4 小时\n山海器物 · 演示业务空间 · 本机数据\n\n[e36] link \"返回商品目录\" href=http://127.0.0.1:52196/cases/catalog-fit/"
+          }
+        },
+        {
+          "action": "navigate",
+          "ok": true,
+          "result": {
+            "ok": true,
+            "url": "http://127.0.0.1:52196/cases/catalog-fit/products/P678",
+            "text": "山海器物\n让信息清楚，让选择简单\n返回商品目录\n阅读器\n川行 阅读器 5\n\n适合日常出行与轻装使用的阅读器，规格以详情页为准。\n\n价格\n¥269\n重量\n314 克\n续航\n20 小时\n供货\n库存可用\n防水\n支持\n清晰度\n300 PPI\n充满用时\n2 小时\n山海器物 · 演示业务空间 · 本机数据\n\n[e37] link \"返回商品目录\" href=http://127.0.0.1:52196/cases/catalog-fit/"
+          }
+        },
+        {
+          "action": "navigate",
+          "ok": true,
+          "result": {
+            "ok": true,
+            "url": "http://127.0.0.1:52196/cases/catalog-fit/products/P681",
+            "text": "山海器物\n让信息清楚，让选择简单\n返回商品目录\n阅读器\n流萤 阅读器 3\n\n适合日常出行与轻装使用的阅读器，规格以详情页为准。\n\n价格\n¥282\n重量\n547 克\n续航\n21 小时\n供货\n库存可用\n防水\n不支持\n清晰度\n212 PPI\n充满用时\n4 小时\n山海器物 · 演示业务空间 · 本机数据\n\n[e38] link \"返回商品目录\" href=http://127.0.0.1:52196/cases/catalog-fit/"
+          }
+        }
+      ],
+      "server_state": {
+        "caseID": "catalog-fit",
+        "family": "catalog",
+        "seed": 20261005,
+        "layout_variant": 2,
+        "audit": [
+          {
+            "method": "GET",
+            "path": "/",
+            "query": {},
+            "at": 1791005709205,
+            "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+            "fetch_dest": "document",
+            "fetch_mode": "navigate",
+            "browser": true
+          },
+          {
+            "method": "GET",
+            "path": "/",
+            "query": {
+              "q": "",
+              "category": "阅读器",
+              "max": "350",
+              "available": ""
+            },
+            "at": 1791005739094,
+            "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+            "fetch_dest": "document",
+            "fetch_mode": "navigate",
+            "browser": true
+          },
+          {
+            "method": "GET",
+            "path": "/catalog",
+            "query": {
+              "q": "",
+              "category": "阅读器",
+              "max": "350",
+              "available": "",
+              "page": "2"
+            },
+            "at": 1791005742070,
+            "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+            "fetch_dest": "empty",
+            "fetch_mode": "cors",
+            "browser": true
+          },
+          {
+            "method": "GET",
+            "path": "/products/P673",
+            "query": {},
+            "at": 1791005749056,
+            "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+            "fetch_dest": "document",
+            "fetch_mode": "navigate",
+            "browser": true
+          },
+          {
+            "method": "GET",
+            "path": "/products/P674",
+            "query": {},
+            "at": 1791005754406,
+            "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+            "fetch_dest": "document",
+            "fetch_mode": "navigate",
+            "browser": true
+          },
+          {
+            "method": "GET",
+            "path": "/products/P676",
+            "query": {},
+            "at": 1791005756580,
+            "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+            "fetch_dest": "document",
+            "fetch_mode": "navigate",
+            "browser": true
+          },
+          {
+            "method": "GET",
+            "path": "/products/P677",
+            "query": {},
+            "at": 1791005758838,
+            "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+            "fetch_dest": "document",
+            "fetch_mode": "navigate",
+            "browser": true
+          },
+          {
+            "method": "GET",
+            "path": "/products/P678",
+            "query": {},
+            "at": 1791005764191,
+            "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+            "fetch_dest": "document",
+            "fetch_mode": "navigate",
+            "browser": true
+          },
+          {
+            "method": "GET",
+            "path": "/products/P681",
+            "query": {},
+            "at": 1791005768167,
+            "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+            "fetch_dest": "document",
+            "fetch_mode": "navigate",
+            "browser": true
+          }
+        ],
+        "catalogRequests": [
+          {
+            "method": "GET",
+            "path": "/",
+            "query": {},
+            "at": 1791005709205,
+            "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+            "fetch_dest": "document",
+            "fetch_mode": "navigate",
+            "browser": true,
+            "page": 1
+          },
+          {
+            "method": "GET",
+            "path": "/",
+            "query": {
+              "q": "",
+              "category": "阅读器",
+              "max": "350",
+              "available": ""
+            },
+            "at": 1791005739094,
+            "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+            "fetch_dest": "document",
+            "fetch_mode": "navigate",
+            "browser": true,
+            "page": 1
+          },
+          {
+            "method": "GET",
+            "path": "/catalog",
+            "query": {
+              "q": "",
+              "category": "阅读器",
+              "max": "350",
+              "available": "",
+              "page": "2"
+            },
+            "at": 1791005742070,
+            "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+            "fetch_dest": "empty",
+            "fetch_mode": "cors",
+            "browser": true,
+            "page": 2
+          }
+        ],
+        "documentVisits": [],
+        "records": [],
+        "mutations": [],
+        "validationErrors": [],
+        "submissions": 0,
+        "successfulSubmissions": 0,
+        "duplicateSubmissions": 0
+      },
+      "original_status": "failed",
+      "original_failures": [
+        "product_facts_missing_or_wrong",
+        "reader_facts_missing_or_wrong",
+        "contradictory_product_price",
+        "contradictory_product_weight"
+      ]
+    },
+    {
+      "id": "docs-retention",
+      "seed": 20261005,
+      "startURL": "http://127.0.0.1:52197/cases/docs-retention/",
+      "answer": "两类文档都已读取完毕，依据已足够回答。\n\n## 结论（依据知识库两篇文档）\n\n### 三类数据的保留期限\n\n| 数据类型 | 保留期限 | 后续处理 |\n|---|---|---|\n| 日常操作日志（项目操作日志） | **24 天** | 到期后由定期作业清理 |\n| 已关闭项目的审计归档 | **2 年** | 明确注明日常操作日志**不继承**这一期限 |\n| 服务备份 | **12 天** | 按既定备份窗口自然过期 |\n\n三类期限互不相同：操作日志最短（24 天），审计归档最长（2 年），服务备份居中（12 天）。不要把审计归档的 2 年套用到日志上。\n\n### 项目删除后的处理（两类数据分开处理）\n\n- **活动数据**：删除后**立即不可见**，即刻生效。\n- **备份数据**：**不会同步删除**，而是按既定的备份窗口（12 天）**自然过期**。也就是说，删除操作之后备份内可能仍残留项目数据，最长再留存约 12 天，之后随备份过期自动消失。\n\n### 依据文档链接\n\n- 《项目数据留存规范 509》（知识运营组，团队治理）：\n  - 操作日志一节：http://127.0.0.1:52197/cases/docs-retention/documents/retention-509#logs\n  - 项目归档一节：http://127.0.0.1:52197/cases/docs-retention/documents/retention-509#archive\n- 《备份和删除处理 509》（知识运营组，团队治理）：\n  - 备份窗口一节：http://127.0.0.1:52197/cases/docs-retention/documents/backups-509#backup\n\n说明：以上内容均直接读取自该知识库页面正文；页面底部标注\"拾叶知识库 · 演示业务空间 · 本机数据\"，即这是一个演示数据源。审计归档 2 年到期之后的最终处置方式文档未提及，如需该细节可请文档维护方（知识运营组）补充。",
+      "actions": [
+        {
+          "action": "snapshot",
+          "ok": true,
+          "result": {
+            "ok": true,
+            "url": "http://127.0.0.1:52197/cases/docs-retention/",
+            "text": "拾叶知识库\n让信息清楚，让选择简单\n为每一个问题找到依据\n\n可按关键词检索正文与标题，或从领域目录浏览。\n\n领域目录\n全部文档\n客户服务\n平台运维\n团队治理\n使用指南\n检索文档\n检索文档\n\n7 篇文档\n\n团队治理\n备份和删除处理 509\n\n备份窗口 · 数据 留存 备份 删除\n\n版本 509 · 知识运营组\n平台运维\n发布后核验清单 509\n\n核验项目 · 密钥 轮换 验证 核验\n\n版本 509 · 知识运营组\n客户服务\n配送与异常件处理 509\n\n延误件申报 · 配送 延误 签收 补偿\n\n版本 509 · 知识运营组\n平台运维\n服务密钥轮换手册 509\n\n双密钥过渡期 · 密钥 轮换 旧密钥 回滚\n\n版本 509 · 知识运营组\n使用指南\n知识空间入门 509\n\n使用知识空间 · 搜索 阅读 分类\n\n版本 509 · 知识运营组\n团队治理\n项目数据留存规范 509\n\n操作日志 · 数据 留存 日志 备份\n\n版本 509 · 知识运营组\n客户服务\n退货退款说明 509\n\n退款到账 · 退货 退款 配送 补偿\n\n版本 509 · 知识运营组\n拾叶知识库 · 演示业务空间 · 本机数据\n\n[e1] link \"全部文档\" href=http://127.0.0.1:52197/cases/docs-retention/\n[e2] link \"客户服务\" href=http://127.0.0.1:52197/cases/docs-retention/?topic=%E5%AE%A2%E6%88%B7%E6%9C%8D%E5%8A%A1\n[e3] link \"平台运维\" href=http://127.0.0.1:52197/cases/docs-retention/?topic=%E5%B9%B3%E5%8F%B0%E8%BF%90%E7%BB%B4\n[e4] link \"团队治理\" href=http://127.0.0.1:52197/cases/docs-retention/?topic=%E5%9B%A2%E9%98%9F%E6%B2%BB%E7%90%86\n[e5] link \"使用指南\" href=http://127.0.0.1:52197/cases/docs-retention/?topic=%E4%BD%BF%E7%94%A8%E6%8C%87%E5%8D%97\n[e6] textbox \"检索文档\"\n[e7] button \"检索文档\"\n[e8] link \"备份和删除处理 509\" href=http://127.0.0.1:52197/cases/docs-retention/documents/backups-509\n[e9] link \"发布后核验清单 509\" href=http://127.0.0.1:52197/cases/docs-retention/documents/verification-509\n[e10] link \"配送与异常件处理 509\" href=http://127.0.0.1:52197/cases/docs-retention/documents/delivery-509\n[e11] link \"服务密钥轮换手册 509\" href=http://127.0.0.1:52197/cases/docs-retention/documents/rotation-509\n[e12] link \"知识空间入门 509\" href=http://127.0.0.1:52197/cases/docs-retention/documents/welcome-509\n[e13] link \"项目数据留存规范 509\" href=http://127.0.0.1:52197/cases/docs-retention/documents/retention-509\n[e14] link \"退货退款说明 509\" href=http://127.0.0.1:52197/cases/docs-retention/documents/returns-509"
+          }
+        },
+        {
+          "action": "navigate",
+          "ok": true,
+          "result": {
+            "ok": true,
+            "url": "http://127.0.0.1:52197/cases/docs-retention/documents/retention-509",
+            "text": "拾叶知识库\n让信息清楚，让选择简单\n知识库首页 / 团队治理\n本篇目录\n操作日志\n项目归档\n\n版本 509\n知识运营组维护\n\n团队治理\n项目数据留存规范 509\n请按当前文档内容解释业务规则；不同类型数据或处理结果应分别说明。\n操作日志\n\n项目操作日志留存24天，随后由定期作业清理。\n\n项目归档\n\n已关闭项目的审计归档保留2年。日常操作日志不继承这一期限。\n\n本篇固定链接\n\n拾叶知识库 · 演示业务空间 · 本机数据\n\n[e15] link \"知识库首页\" href=http://127.0.0.1:52197/cases/docs-retention/\n[e16] link \"操作日志\" href=http://127.0.0.1:52197/cases/docs-retention/documents/retention-509#logs\n[e17] link \"项目归档\" href=http://127.0.0.1:52197/cases/docs-retention/documents/retention-509#archive\n[e18] link \"本篇固定链接\" href=http://127.0.0.1:52197/cases/docs-retention/documents/retention-509"
+          }
+        },
+        {
+          "action": "navigate",
+          "ok": true,
+          "result": {
+            "ok": true,
+            "url": "http://127.0.0.1:52197/cases/docs-retention/documents/backups-509",
+            "text": "拾叶知识库\n让信息清楚，让选择简单\n知识库首页 / 团队治理\n本篇目录\n备份窗口\n\n版本 509\n知识运营组维护\n\n团队治理\n备份和删除处理 509\n请按当前文档内容解释业务规则；不同类型数据或处理结果应分别说明。\n备份窗口\n\n服务备份保留12天。项目删除后，活动数据立即不可见，备份数据按既定窗口自然过期。\n\n本篇固定链接\n\n拾叶知识库 · 演示业务空间 · 本机数据\n\n[e19] link \"知识库首页\" href=http://127.0.0.1:52197/cases/docs-retention/\n[e20] link \"备份窗口\" href=http://127.0.0.1:52197/cases/docs-retention/documents/backups-509#backup\n[e21] link \"本篇固定链接\" href=http://127.0.0.1:52197/cases/docs-retention/documents/backups-509"
+          }
+        }
+      ],
+      "server_state": {
+        "caseID": "docs-retention",
+        "family": "docs",
+        "seed": 20261005,
+        "layout_variant": 1,
+        "audit": [
+          {
+            "method": "GET",
+            "path": "/",
+            "query": {},
+            "at": 1791005884764,
+            "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+            "fetch_dest": "document",
+            "fetch_mode": "navigate",
+            "browser": true
+          },
+          {
+            "method": "GET",
+            "path": "/documents/retention-509",
+            "query": {},
+            "at": 1791005922707,
+            "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+            "fetch_dest": "document",
+            "fetch_mode": "navigate",
+            "browser": true
+          },
+          {
+            "method": "GET",
+            "path": "/documents/backups-509",
+            "query": {},
+            "at": 1791005927323,
+            "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+            "fetch_dest": "document",
+            "fetch_mode": "navigate",
+            "browser": true
+          }
+        ],
+        "catalogRequests": [],
+        "documentVisits": [
+          {
+            "method": "GET",
+            "path": "/documents/retention-509",
+            "query": {},
+            "at": 1791005922707,
+            "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+            "fetch_dest": "document",
+            "fetch_mode": "navigate",
+            "browser": true
+          },
+          {
+            "method": "GET",
+            "path": "/documents/backups-509",
+            "query": {},
+            "at": 1791005927323,
+            "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+            "fetch_dest": "document",
+            "fetch_mode": "navigate",
+            "browser": true
+          }
+        ],
+        "records": [],
+        "mutations": [],
+        "validationErrors": [],
+        "submissions": 0,
+        "successfulSubmissions": 0,
+        "duplicateSubmissions": 0
+      },
+      "original_status": "failed",
+      "original_failures": [
+        "contradictory_semantic_fact"
+      ]
+    },
+    {
+      "id": "workbench-recover",
+      "seed": 20261005,
+      "startURL": "http://127.0.0.1:52198/cases/workbench-recover/",
+      "answer": "任务已成功创建，仅生成一条，未重复提交。\n\n**核验结果**（来源：任务详情页 `http://127.0.0.1:52198/cases/workbench-recover/tasks/T-553?saved=1` 及团队任务列表页）：\n\n- **任务编号：T-553**\n- 任务名称：排期复核 543\n- 负责人：赵宁\n- 优先级：高\n- **最终截止日期：2026-11-20**\n- 状态：待处理（版本号 1）\n- 备注：核对清单与负责人，编号 543。\n\n**日期调整说明**：首次提交时系统提示\"排期容量已满：2026-11-18 不可用，最近可用日期为 2026-11-20\"，按授权改用系统给出的最近可用日期 2026-11-20 后保存成功。原日期那次提交被系统拒绝、未创建记录；列表页仅新增\"排期复核 543（T-553）\"一条，原有三条任务（T-543、T-544、T-545）保持不变。",
+      "actions": [
+        {
+          "action": "snapshot",
+          "ok": true,
+          "result": {
+            "ok": true,
+            "url": "http://127.0.0.1:52198/cases/workbench-recover/",
+            "text": "栖木工作台\n让信息清楚，让选择简单\n团队任务\n\n让每一项安排有负责人、有进度、有确认。\n\n新建任务\n待处理\n季度指标复核 543\n\n周溪 · 普通优先级 · 截止 2026-11-18\n\n编辑季度指标复核 543\n待处理\n渠道反馈归档 543\n\n林遥 · 低优先级 · 截止 2026-11-18\n\n编辑渠道反馈归档 543\n进行中\n产品目录整理 543\n\n陈舟 · 普通优先级 · 截止 2026-11-18\n\n编辑产品目录整理 543\n栖木工作台 · 演示业务空间 · 本机数据\n\n[e1] link \"新建任务\" href=http://127.0.0.1:52198/cases/workbench-recover/new\n[e2] link \"季度指标复核 543\" href=http://127.0.0.1:52198/cases/workbench-recover/tasks/T-543\n[e3] link \"编辑季度指标复核 543\" href=http://127.0.0.1:52198/cases/workbench-recover/tasks/T-543/edit\n[e4] link \"渠道反馈归档 543\" href=http://127.0.0.1:52198/cases/workbench-recover/tasks/T-545\n[e5] link \"编辑渠道反馈归档 543\" href=http://127.0.0.1:52198/cases/workbench-recover/tasks/T-545/edit\n[e6] link \"产品目录整理 543\" href=http://127.0.0.1:52198/cases/workbench-recover/tasks/T-544\n[e7] link \"编辑产品目录整理 543\" href=http://127.0.0.1:52198/cases/workbench-recover/tasks/T-544/edit"
+          }
+        },
+        {
+          "action": "click",
+          "ok": true,
+          "result": {
+            "ok": true,
+            "url": "http://127.0.0.1:52198/cases/workbench-recover/new",
+            "text": "栖木工作台\n让信息清楚，让选择简单\n任务列表\n新建任务\n\n保存后可在任务详情核对编号与版本。\n\n任务名称\n截止日期\n负责人\n请选择负责人\n赵宁\n周溪\n陈舟\n林遥\n优先级\n普通\n高\n低\n备注\n提交安排\n栖木工作台 · 演示业务空间 · 本机数据\n\n[e8] link \"任务列表\" href=http://127.0.0.1:52198/cases/workbench-recover/\n[e9] textbox \"任务名称\"\n[e10] textbox \"截止日期\"\n[e11] combobox \"负责人请选择负责人赵宁周溪陈舟林遥\" options=[{\"value\":\"\",\"label\":\"请选择负责人\"},{\"value\":\"赵宁\",\"label\":\"赵宁\"},{\"value\":\"周溪\",\"label\":\"周溪\"},{\"value\":\"陈舟\",\"label\":\"陈舟\"},{\"value\":\"林遥\",\"label\":\"林遥\"}]\n[e12] radio \"普通\" value=\"普通\" checked=true\n[e13] radio \"高\" value=\"高\" checked=false\n[e14] radio \"低\" value=\"低\" checked=false\n[e15] textbox \"备注\"\n[e16] button \"提交安排\""
+          }
+        },
+        {
+          "action": "type",
+          "ok": true,
+          "result": {
+            "ok": true
+          }
+        },
+        {
+          "action": "type",
+          "ok": true,
+          "result": {
+            "ok": true
+          }
+        },
+        {
+          "action": "select",
+          "ok": true,
+          "result": {
+            "ok": true
+          }
+        },
+        {
+          "action": "click",
+          "ok": true,
+          "result": {
+            "ok": true
+          }
+        },
+        {
+          "action": "type",
+          "ok": true,
+          "result": {
+            "ok": true,
+            "url": "http://127.0.0.1:52198/cases/workbench-recover/new",
+            "text": "栖木工作台\n让信息清楚，让选择简单\n任务列表\n新建任务\n\n保存后可在任务详情核对编号与版本。\n\n任务名称\n截止日期\n负责人\n请选择负责人\n赵宁\n周溪\n陈舟\n林遥\n优先级\n普通\n高\n低\n备注\n提交安排\n栖木工作台 · 演示业务空间 · 本机数据\n\n[e8] link \"任务列表\" href=http://127.0.0.1:52198/cases/workbench-recover/\n[e9] textbox \"任务名称\" value=\"排期复核 543\"\n[e10] textbox \"截止日期\" value=\"2026-11-18\"\n[e11] combobox \"负责人请选择负责人赵宁周溪陈舟林遥\" value=\"赵宁\" options=[{\"value\":\"\",\"label\":\"请选择负责人\"},{\"value\":\"赵宁\",\"label\":\"赵宁\"},{\"value\":\"周溪\",\"label\":\"周溪\"},{\"value\":\"陈舟\",\"label\":\"陈舟\"},{\"value\":\"林遥\",\"label\":\"林遥\"}]\n[e12] radio \"普通\" value=\"普通\" checked=false\n[e13] radio \"高\" value=\"高\" checked=true\n[e14] radio \"低\" value=\"低\" checked=false\n[e15] textbox \"备注\" value=\"核对清单与负责人，编号 543。\"\n[e16] button \"提交安排\""
+          }
+        },
+        {
+          "action": "click",
+          "ok": true,
+          "result": {
+            "ok": true,
+            "url": "http://127.0.0.1:52198/cases/workbench-recover/new",
+            "text": "栖木工作台\n让信息清楚，让选择简单\n任务列表\n新建任务\n\n保存后可在任务详情核对编号与版本。\n\n排期容量已满：2026-11-18不可用。最近可用日期为2026-11-20，请调整截止日期后保存。\n任务名称\n截止日期\n负责人\n请选择负责人\n赵宁\n周溪\n陈舟\n林遥\n优先级\n普通\n高\n低\n备注\n提交安排\n栖木工作台 · 演示业务空间 · 本机数据\n\n[e17] link \"任务列表\" href=http://127.0.0.1:52198/cases/workbench-recover/\n[e18] alert \"排期容量已满：2026-11-18不可用。最近可用日期为2026-11-20，请调整截止日期后保存。\"\n[e19] textbox \"任务名称\" value=\"排期复核 543\"\n[e20] textbox \"截止日期\" value=\"2026-11-18\"\n[e21] combobox \"负责人请选择负责人赵宁周溪陈舟林遥\" value=\"赵宁\" options=[{\"value\":\"\",\"label\":\"请选择负责人\"},{\"value\":\"赵宁\",\"label\":\"赵宁\"},{\"value\":\"周溪\",\"label\":\"周溪\"},{\"value\":\"陈舟\",\"label\":\"陈舟\"},{\"value\":\"林遥\",\"label\":\"林遥\"}]\n[e22] radio \"普通\" value=\"普通\" checked=false\n[e23] radio \"高\" value=\"高\" checked=true\n[e24] radio \"低\" value=\"低\" checked=false\n[e25] textbox \"备注核对清单与负责人，编号 543。\" value=\"核对清单与负责人，编号 543。\"\n[e26] button \"提交安排\""
+          }
+        },
+        {
+          "action": "type",
+          "ok": true,
+          "result": {
+            "ok": true,
+            "url": "http://127.0.0.1:52198/cases/workbench-recover/new",
+            "text": "栖木工作台\n让信息清楚，让选择简单\n任务列表\n新建任务\n\n保存后可在任务详情核对编号与版本。\n\n排期容量已满：2026-11-18不可用。最近可用日期为2026-11-20，请调整截止日期后保存。\n任务名称\n截止日期\n负责人\n请选择负责人\n赵宁\n周溪\n陈舟\n林遥\n优先级\n普通\n高\n低\n备注\n提交安排\n栖木工作台 · 演示业务空间 · 本机数据\n\n[e17] link \"任务列表\" href=http://127.0.0.1:52198/cases/workbench-recover/\n[e18] alert \"排期容量已满：2026-11-18不可用。最近可用日期为2026-11-20，请调整截止日期后保存。\"\n[e19] textbox \"任务名称\" value=\"排期复核 543\"\n[e20] textbox \"截止日期\" value=\"2026-11-20\"\n[e21] combobox \"负责人请选择负责人赵宁周溪陈舟林遥\" value=\"赵宁\" options=[{\"value\":\"\",\"label\":\"请选择负责人\"},{\"value\":\"赵宁\",\"label\":\"赵宁\"},{\"value\":\"周溪\",\"label\":\"周溪\"},{\"value\":\"陈舟\",\"label\":\"陈舟\"},{\"value\":\"林遥\",\"label\":\"林遥\"}]\n[e22] radio \"普通\" value=\"普通\" checked=false\n[e23] radio \"高\" value=\"高\" checked=true\n[e24] radio \"低\" value=\"低\" checked=false\n[e25] textbox \"备注核对清单与负责人，编号 543。\" value=\"核对清单与负责人，编号 543。\"\n[e26] button \"提交安排\""
+          }
+        },
+        {
+          "action": "click",
+          "ok": true,
+          "result": {
+            "ok": true,
+            "url": "http://127.0.0.1:52198/cases/workbench-recover/tasks/T-553?saved=1",
+            "text": "栖木工作台\n让信息清楚，让选择简单\n任务列表\n任务已保存。以下为当前记录，请核对安排。\n待处理\n排期复核 543\n任务编号\nT-553\n负责人\n赵宁\n优先级\n高\n截止日期\n2026-11-20\n状态\n待处理\n版本号\n1\n备注\n核对清单与负责人，编号 543。\n编辑任务\n栖木工作台 · 演示业务空间 · 本机数据\n\n[e27] link \"任务列表\" href=http://127.0.0.1:52198/cases/workbench-recover/\n[e28] status \"任务已保存。以下为当前记录，请核对安排。\"\n[e29] link \"编辑任务\" href=http://127.0.0.1:52198/cases/workbench-recover/tasks/T-553/edit"
+          }
+        },
+        {
+          "action": "click",
+          "ok": true,
+          "result": {
+            "ok": true,
+            "url": "http://127.0.0.1:52198/cases/workbench-recover/",
+            "text": "栖木工作台\n让信息清楚，让选择简单\n团队任务\n\n让每一项安排有负责人、有进度、有确认。\n\n新建任务\n待处理\n季度指标复核 543\n\n周溪 · 普通优先级 · 截止 2026-11-18\n\n编辑季度指标复核 543\n待处理\n渠道反馈归档 543\n\n林遥 · 低优先级 · 截止 2026-11-18\n\n编辑渠道反馈归档 543\n进行中\n产品目录整理 543\n\n陈舟 · 普通优先级 · 截止 2026-11-18\n\n编辑产品目录整理 543\n待处理\n排期复核 543\n\n赵宁 · 高优先级 · 截止 2026-11-20\n\n编辑排期复核 543\n栖木工作台 · 演示业务空间 · 本机数据\n\n[e30] link \"新建任务\" href=http://127.0.0.1:52198/cases/workbench-recover/new\n[e31] link \"季度指标复核 543\" href=http://127.0.0.1:52198/cases/workbench-recover/tasks/T-543\n[e32] link \"编辑季度指标复核 543\" href=http://127.0.0.1:52198/cases/workbench-recover/tasks/T-543/edit\n[e33] link \"渠道反馈归档 543\" href=http://127.0.0.1:52198/cases/workbench-recover/tasks/T-545\n[e34] link \"编辑渠道反馈归档 543\" href=http://127.0.0.1:52198/cases/workbench-recover/tasks/T-545/edit\n[e35] link \"产品目录整理 543\" href=http://127.0.0.1:52198/cases/workbench-recover/tasks/T-544\n[e36] link \"编辑产品目录整理 543\" href=http://127.0.0.1:52198/cases/workbench-recover/tasks/T-544/edit\n[e37] link \"排期复核 543\" href=http://127.0.0.1:52198/cases/workbench-recover/tasks/T-553\n[e38] link \"编辑排期复核 543\" href=http://127.0.0.1:52198/cases/workbench-recover/tasks/T-553/edit"
+          }
+        }
+      ],
+      "server_state": {
+        "caseID": "workbench-recover",
+        "family": "workbench",
+        "seed": 20261005,
+        "layout_variant": 5,
+        "audit": [
+          {
+            "method": "GET",
+            "path": "/",
+            "query": {},
+            "at": 1791005958150,
+            "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+            "fetch_dest": "document",
+            "fetch_mode": "navigate",
+            "browser": true
+          },
+          {
+            "method": "GET",
+            "path": "/new",
+            "query": {},
+            "at": 1791005963024,
+            "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+            "fetch_dest": "document",
+            "fetch_mode": "navigate",
+            "browser": true
+          },
+          {
+            "method": "POST",
+            "path": "/new",
+            "query": {},
+            "at": 1791005968133,
+            "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+            "fetch_dest": "document",
+            "fetch_mode": "navigate",
+            "browser": true
+          },
+          {
+            "method": "POST",
+            "path": "/new",
+            "query": {},
+            "at": 1791005972011,
+            "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+            "fetch_dest": "document",
+            "fetch_mode": "navigate",
+            "browser": true
+          },
+          {
+            "method": "GET",
+            "path": "/tasks/T-553",
+            "query": {
+              "saved": "1"
+            },
+            "at": 1791005972013,
+            "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+            "fetch_dest": "document",
+            "fetch_mode": "navigate",
+            "browser": true
+          },
+          {
+            "method": "GET",
+            "path": "/",
+            "query": {},
+            "at": 1791006006125,
+            "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+            "fetch_dest": "document",
+            "fetch_mode": "navigate",
+            "browser": true
+          }
+        ],
+        "catalogRequests": [],
+        "documentVisits": [],
+        "records": [
+          {
+            "id": "T-543",
+            "title": "季度指标复核 543",
+            "owner": "周溪",
+            "priority": "普通",
+            "due": "2026-11-18",
+            "notes": "检查统计口径并提交内部复核。",
+            "status": "待处理",
+            "revision": 1
+          },
+          {
+            "id": "T-545",
+            "title": "渠道反馈归档 543",
+            "owner": "林遥",
+            "priority": "低",
+            "due": "2026-11-18",
+            "notes": "归档本周反馈。",
+            "status": "待处理",
+            "revision": 1
+          },
+          {
+            "id": "T-544",
+            "title": "产品目录整理 543",
+            "owner": "陈舟",
+            "priority": "普通",
+            "due": "2026-11-18",
+            "notes": "整理目录中缺失的展示信息。",
+            "status": "进行中",
+            "revision": 1
+          },
+          {
+            "title": "排期复核 543",
+            "owner": "赵宁",
+            "priority": "高",
+            "due": "2026-11-20",
+            "notes": "核对清单与负责人，编号 543。",
+            "status": "待处理",
+            "id": "T-553",
+            "revision": 1
+          }
+        ],
+        "mutations": [
+          {
+            "record_id": "T-553",
+            "browser": true,
+            "type": "create",
+            "fields": {
+              "title": "排期复核 543",
+              "owner": "赵宁",
+              "priority": "高",
+              "due": "2026-11-20",
+              "notes": "核对清单与负责人，编号 543。",
+              "status": ""
+            },
+            "revision": 1
+          }
+        ],
+        "validationErrors": [
+          {
+            "message": "排期容量已满：2026-11-18不可用。最近可用日期为2026-11-20，请调整截止日期后保存。",
+            "values": {
+              "title": "排期复核 543",
+              "owner": "赵宁",
+              "priority": "高",
+              "due": "2026-11-18",
+              "notes": "核对清单与负责人，编号 543。",
+              "status": ""
+            },
+            "browser": true
+          }
+        ],
+        "submissions": 2,
+        "successfulSubmissions": 1,
+        "duplicateSubmissions": 0
+      },
+      "original_status": "failed",
+      "original_failures": [
+        "answer_denies_completion_or_evidence"
+      ]
+    },
+    {
+      "id": "workbench-update",
+      "seed": 20261005,
+      "startURL": "http://127.0.0.1:52198/cases/workbench-update/",
+      "answer": "修改已完成并核验通过。\n\n**操作过程**：从工作台列表进入「产品目录整理 794」的编辑页（编辑前为：负责人赵宁、优先级普通、备注“整理目录中缺失的展示信息。”），将负责人改为林遥、优先级改为高、备注改为“复核完成，等待负责人确认 794。”，状态（进行中）与截止日期（2026-11-16）确认保持，随后点击“保存修改”。\n\n**保存后详情页核验结果**（页面 http://127.0.0.1:52198/cases/workbench-update/tasks/T-795?saved=1 ，页面提示“任务已保存”）：\n\n| 字段 | 值 |\n|---|---|\n| 任务名称 | 产品目录整理 794 |\n| **任务编号** | **T-795** |\n| 负责人 | 林遥 ✓ |\n| 优先级 | 高 ✓ |\n| 截止日期 | 2026-11-16 ✓ |\n| **状态** | **进行中** ✓ |\n| **版本号** | **2** |\n| 备注 | 复核完成，等待负责人确认 794。 ✓ |\n\n所有指定字段均按要求保存，无异常或未核验项。页面底部标注该站为“演示业务空间 · 本机数据”。",
+      "actions": [
+        {
+          "action": "snapshot",
+          "ok": true,
+          "result": {
+            "ok": true,
+            "url": "http://127.0.0.1:52198/cases/workbench-update/",
+            "text": "栖木工作台\n让信息清楚，让选择简单\n团队任务\n\n让每一项安排有负责人、有进度、有确认。\n\n新建任务\n进行中\n产品目录整理 794\n\n赵宁 · 普通优先级 · 截止 2026-11-16\n\n编辑产品目录整理 794\n待处理\n渠道反馈归档 794\n\n陈舟 · 低优先级 · 截止 2026-11-16\n\n编辑渠道反馈归档 794\n待处理\n季度指标复核 794\n\n周溪 · 普通优先级 · 截止 2026-11-16\n\n编辑季度指标复核 794\n栖木工作台 · 演示业务空间 · 本机数据\n\n[e1] link \"新建任务\" href=http://127.0.0.1:52198/cases/workbench-update/new\n[e2] link \"产品目录整理 794\" href=http://127.0.0.1:52198/cases/workbench-update/tasks/T-795\n[e3] link \"编辑产品目录整理 794\" href=http://127.0.0.1:52198/cases/workbench-update/tasks/T-795/edit\n[e4] link \"渠道反馈归档 794\" href=http://127.0.0.1:52198/cases/workbench-update/tasks/T-796\n[e5] link \"编辑渠道反馈归档 794\" href=http://127.0.0.1:52198/cases/workbench-update/tasks/T-796/edit\n[e6] link \"季度指标复核 794\" href=http://127.0.0.1:52198/cases/workbench-update/tasks/T-794\n[e7] link \"编辑季度指标复核 794\" href=http://127.0.0.1:52198/cases/workbench-update/tasks/T-794/edit"
+          }
+        },
+        {
+          "action": "click",
+          "ok": true,
+          "result": {
+            "ok": true,
+            "url": "http://127.0.0.1:52198/cases/workbench-update/tasks/T-795/edit",
+            "text": "栖木工作台\n让信息清楚，让选择简单\n任务列表\n编辑任务\n\n保存后可在任务详情核对编号与版本。\n\n任务名称\n负责人\n请选择负责人\n林遥\n周溪\n赵宁\n陈舟\n截止日期\n优先级\n低\n普通\n高\n状态\n待处理\n进行中\n已完成\n备注\n保存修改\n栖木工作台 · 演示业务空间 · 本机数据\n\n[e8] link \"任务列表\" href=http://127.0.0.1:52198/cases/workbench-update/\n[e9] textbox \"任务名称\" value=\"产品目录整理 794\"\n[e10] combobox \"负责人请选择负责人林遥周溪赵宁陈舟\" value=\"赵宁\" options=[{\"value\":\"\",\"label\":\"请选择负责人\"},{\"value\":\"林遥\",\"label\":\"林遥\"},{\"value\":\"周溪\",\"label\":\"周溪\"},{\"value\":\"赵宁\",\"label\":\"赵宁\"},{\"value\":\"陈舟\",\"label\":\"陈舟\"}]\n[e11] textbox \"截止日期\" value=\"2026-11-16\"\n[e12] radio \"低\" value=\"低\" checked=false\n[e13] radio \"普通\" value=\"普通\" checked=true\n[e14] radio \"高\" value=\"高\" checked=false\n[e15] combobox \"状态待处理进行中已完成\" value=\"进行中\" options=[{\"value\":\"待处理\",\"label\":\"待处理\"},{\"value\":\"进行中\",\"label\":\"进行中\"},{\"value\":\"已完成\",\"label\":\"已完成\"}]\n[e16] textbox \"备注整理目录中缺失的展示信息。\" value=\"整理目录中缺失的展示信息。\"\n[e17] button \"保存修改\""
+          }
+        },
+        {
+          "action": "select",
+          "ok": true,
+          "result": {
+            "ok": true
+          }
+        },
+        {
+          "action": "click",
+          "ok": true,
+          "result": {
+            "ok": true
+          }
+        },
+        {
+          "action": "select",
+          "ok": true,
+          "result": {
+            "ok": true
+          }
+        },
+        {
+          "action": "type",
+          "ok": true,
+          "result": {
+            "ok": true
+          }
+        },
+        {
+          "action": "click",
+          "ok": true,
+          "result": {
+            "ok": true,
+            "url": "http://127.0.0.1:52198/cases/workbench-update/tasks/T-795?saved=1",
+            "text": "栖木工作台\n让信息清楚，让选择简单\n任务列表\n任务已保存。以下为当前记录，请核对安排。\n进行中\n产品目录整理 794\n任务编号\nT-795\n负责人\n林遥\n优先级\n高\n截止日期\n2026-11-16\n状态\n进行中\n版本号\n2\n备注\n复核完成，等待负责人确认 794。\n编辑任务\n栖木工作台 · 演示业务空间 · 本机数据\n\n[e18] link \"任务列表\" href=http://127.0.0.1:52198/cases/workbench-update/\n[e19] status \"任务已保存。以下为当前记录，请核对安排。\"\n[e20] link \"编辑任务\" href=http://127.0.0.1:52198/cases/workbench-update/tasks/T-795/edit\nBatch stopped after navigation/tab change; inspect the current page before continuing."
+          }
+        }
+      ],
+      "server_state": {
+        "caseID": "workbench-update",
+        "family": "workbench",
+        "seed": 20261005,
+        "layout_variant": 0,
+        "audit": [
+          {
+            "method": "GET",
+            "path": "/",
+            "query": {},
+            "at": 1791006016871,
+            "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+            "fetch_dest": "document",
+            "fetch_mode": "navigate",
+            "browser": true
+          },
+          {
+            "method": "GET",
+            "path": "/tasks/T-795/edit",
+            "query": {},
+            "at": 1791006052510,
+            "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+            "fetch_dest": "document",
+            "fetch_mode": "navigate",
+            "browser": true
+          },
+          {
+            "method": "POST",
+            "path": "/tasks/T-795/edit",
+            "query": {},
+            "at": 1791006061518,
+            "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+            "fetch_dest": "document",
+            "fetch_mode": "navigate",
+            "browser": true
+          },
+          {
+            "method": "GET",
+            "path": "/tasks/T-795",
+            "query": {
+              "saved": "1"
+            },
+            "at": 1791006061520,
+            "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+            "fetch_dest": "document",
+            "fetch_mode": "navigate",
+            "browser": true
+          }
+        ],
+        "catalogRequests": [],
+        "documentVisits": [],
+        "records": [
+          {
+            "id": "T-795",
+            "title": "产品目录整理 794",
+            "owner": "林遥",
+            "priority": "高",
+            "due": "2026-11-16",
+            "notes": "复核完成，等待负责人确认 794。",
+            "status": "进行中",
+            "revision": 2
+          },
+          {
+            "id": "T-796",
+            "title": "渠道反馈归档 794",
+            "owner": "陈舟",
+            "priority": "低",
+            "due": "2026-11-16",
+            "notes": "归档本周反馈。",
+            "status": "待处理",
+            "revision": 1
+          },
+          {
+            "id": "T-794",
+            "title": "季度指标复核 794",
+            "owner": "周溪",
+            "priority": "普通",
+            "due": "2026-11-16",
+            "notes": "检查统计口径并提交内部复核。",
+            "status": "待处理",
+            "revision": 1
+          }
+        ],
+        "mutations": [
+          {
+            "record_id": "T-795",
+            "browser": true,
+            "type": "update",
+            "fields": {
+              "title": "产品目录整理 794",
+              "owner": "林遥",
+              "priority": "高",
+              "due": "2026-11-16",
+              "notes": "复核完成，等待负责人确认 794。",
+              "status": "进行中"
+            },
+            "revision": 2
+          }
+        ],
+        "validationErrors": [],
+        "submissions": 1,
+        "successfulSubmissions": 1,
+        "duplicateSubmissions": 0
+      },
+      "original_status": "failed",
+      "original_failures": [
+        "answer_denies_completion_or_evidence",
+        "contradictory_task_owner"
+      ]
+    }
+  ]
+}

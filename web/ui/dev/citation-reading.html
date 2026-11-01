@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pogo · 引用阅读体验</title>
+    <style>
+      body { margin: 0; background: var(--el-bg-color-page); color: var(--el-text-color-primary); }
+      main { max-width: 1180px; margin: auto; padding: 28px; }
+      .demo-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 24px; }
+      .demo-heading h1 { margin: 0; font: 600 20px/1.5 system-ui; }
+      .demo-heading small { color: var(--el-text-color-secondary); }
+      .demo-heading button { border: 1px solid var(--el-border-color-light); border-radius: 6px; background: var(--el-bg-color); color: inherit; padding: 6px 10px; cursor: pointer; }
+      .demo-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; align-items: start; }
+      .demo-answer, .demo-preview { padding: 24px; border: 1px solid var(--el-border-color-extra-light); border-radius: 14px; background: var(--el-bg-color); min-width: 0; }
+      .demo-preview { padding: 0; overflow: hidden; min-height: 320px; height: min(640px, calc(100vh - 120px)); }
+      .demo-preview > .preview { min-height: 320px; }
+      .demo-empty { padding: 28px; color: var(--el-text-color-secondary); font-size: 13px; }
+      .demo-caption { font-size: 12px; color: var(--el-text-color-secondary); margin-bottom: 16px; }
+      .demo-share { margin-top: 24px; padding-top: 18px; border-top: 1px solid var(--el-border-color-extra-light); }
+      .demo-checks { font-size: 13px; line-height: 1.8; }
+      @media (max-width: 800px) { main { padding: 16px; } .demo-layout { grid-template-columns: minmax(0, 1fr); } .demo-answer { padding: 18px; } }
+    </style>
+  </head>
+  <body><main><div id="app"></div></main><script type="module" src="./citation-reading.ts"></script></body>
+</html>

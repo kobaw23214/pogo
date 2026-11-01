@@ -1,0 +1,94 @@
+#!/opt/venv/bin/python3
+"""pdf-text <pdf> [起页 止页] — 带页锚点的正文提取。
+
+两遍法（调研 A3）：第一遍统计页顶/页底条带里跨页重复的归一化文本（页眉页脚），
+第二遍过滤后按阅读序输出。双栏页（左右块之间有干净栏沟）先左栏后右栏，栏内按
+y 排（调研 A2，multi_column.py 的简化版）。每页输出受字符预算约束，超限截断并
+标注——模型据此把页段切小重取。
+"""
+import os
+import sys
+from collections import Counter
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import pdflib
+
+
+def collect_repeats(doc, pages):
+    """第一遍：跨页重复的页眉/页脚归一化键。出现于 >max(3, 50%页数) 判为重复。"""
+    freq = Counter()
+    for i in pages:
+        page = doc[i]
+        h = page.rect.height * pdflib.STRIP_FRAC
+        for b in pdflib.page_blocks(page):
+            if b[1] < h or b[3] > page.rect.height - h:
+                freq[pdflib.strip_norm(b[4])] += 1
+    threshold = max(3, len(pages) * 0.5)
+    return {t for t, c in freq.items() if t and c >= threshold}
+
+
+def ordered_blocks(page, bad):
+    """过滤页眉页脚/页码后按阅读序返回文本列表。"""
+    blocks = []
+    h = page.rect.height * pdflib.STRIP_FRAC
+    for b in pdflib.page_blocks(page):
+        if pdflib.strip_norm(b[4]) in bad:
+            continue
+        if pdflib.PAGE_NO_RE.match(b[4]) and (b[1] < h or b[3] > page.rect.height - h):
+            continue
+        blocks.append(b)
+    if not blocks:
+        return []
+    # 双栏判定：左右两簇块之间存在干净栏沟（左簇最大 x1 < 右簇最小 x0）
+    mid = page.rect.width / 2
+    left = [b for b in blocks if (b[0] + b[2]) / 2 < mid]
+    right = [b for b in blocks if (b[0] + b[2]) / 2 >= mid]
+    if len(left) >= 2 and len(right) >= 2:
+        gutter = max(b[2] for b in left), min(b[0] for b in right)
+        if gutter[0] < gutter[1] - 6:
+            ordered = sorted(left, key=lambda b: (b[1], b[0])) + \
+                sorted(right, key=lambda b: (b[1], b[0]))
+            return [b[4] for b in ordered]
+    ordered = sorted(blocks, key=lambda b: (b[3], b[0]))  # 同 PyMuPDF sort=True 语义
+    return [b[4] for b in ordered]
+
+
+def main():
+    args = sys.argv[1:]
+    if not (1 <= len(args) <= 3):
+        raise pdflib.Fail(2, "usage: pdf-text <pdf> [起页 止页]（页码 1 基，含端点）")
+    doc = pdflib.open_guarded(args[0])
+    start, end = 1, doc.page_count
+    if len(args) >= 2:
+        start = int(args[1])
+        end = int(args[2]) if len(args) == 3 else start
+    if not (1 <= start <= end <= doc.page_count):
+        raise pdflib.Fail(2, f"页段 {start}-{end} 越界（全文 1-{doc.page_count}）")
+    pages = list(range(start - 1, end))
+
+    bad = collect_repeats(doc, pages)
+
+    total_chars = 0
+    emitted_pages = 0
+    out = [f"# {os.path.basename(args[0])} · 第 {start}-{end} 页 / 共 {doc.page_count} 页"]
+    for i in pages:
+        chunks = ordered_blocks(doc[i], bad)
+        text = "\n".join(chunks).strip()
+        n = len(text)
+        total_chars += n
+        if n == 0:
+            continue
+        emitted_pages += 1
+        if n > pdflib.PAGE_CHAR_BUDGET:
+            cut = pdflib.PAGE_CHAR_BUDGET
+            text = text[:cut] + f"\n[...本页超长，已截断 {n - cut} 字符；请缩小页段或改用关键词定位后重取...]"
+        out.append(f"===== Page {i + 1} =====")
+        out.append(text)
+    if emitted_pages == 0:
+        raise pdflib.Fail(4, "该页段没有可提取的文字（扫描版或纯图页）；"
+                             "可用 pdf-info 查每页字符数确认")
+    out.append(f"[提取统计: 本段共 {emitted_pages} 个非空页，{total_chars} 字符；Page 标记为原 PDF 页码（从 1 开始）]")
+    print("\n".join(out))
+
+
+pdflib.run(main)

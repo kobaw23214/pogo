@@ -1,0 +1,11 @@
+ARG BASE_IMAGE=node:24-bookworm-slim
+FROM ${BASE_IMAGE}
+ARG SOURCE_REVISION
+ARG BASE_IMAGE_ID
+LABEL org.opencontainers.image.revision=$SOURCE_REVISION \
+      io.pogo.lab="browser-auth-candidate" io.pogo.lab.base-image-id=$BASE_IMAGE_ID
+WORKDIR /app
+COPY mock-platform ./mock-platform
+USER node
+EXPOSE 5190
+CMD ["node", "mock-platform/server.js", "--host=0.0.0.0", "--port=5190"]

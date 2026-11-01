@@ -1,0 +1,423 @@
+{
+  "schema_version": 1,
+  "source": "pogo/browser-runtime/eval/runs/general-web-glm-5.3-20261003-v1/summary.json",
+  "source_snapshot_sha256": "5de101eec90e6cbe4d1b2841265eef1a7b3ecea48ce82d07148e6b2cc0d71a5a",
+  "scope": "checker_regression_original_scores_preserved",
+  "cases": [
+    {
+      "id": "workbench-recover",
+      "seed": 20261003,
+      "startURL": "http://127.0.0.1:64111/cases/workbench-recover/",
+      "answer": "任务已成功创建并核验完成。\n\n**核验结果**\n- **任务编号**：T-416\n- **任务名称**：排期复核 406\n- **负责人**：陈舟\n- **优先级**：高\n- **最终截止日期**：**2026-11-19**（系统提示“排期容量已满：2026-11-16不可用。最近可用日期为2026-11-19”，按指引调整后保存成功）\n- **备注**：核对清单与负责人，编号 406。\n- **状态/版本**：待处理 / 版本号 1\n\n**核验来源**\n- 保存后详情页 `http://127.0.0.1:64111/cases/workbench-recover/tasks/T-416?saved=1` 显示\"任务已保存”及上述全部字段。\n- 返回列表页 `http://127.0.0.1:64111/cases/workbench-recover/` 后，仅新增一条“排期复核 406（陈舟 · 高优先级 · 截止 2026-11-19）\"，确认**只生成了一条任务**，原有的 3 条任务（T-406、T-407、T-408）保持不变，无重复提交或重复记录。",
+      "actions": [
+        {
+          "action": "snapshot",
+          "ok": true,
+          "result": {
+            "ok": true,
+            "url": "http://127.0.0.1:64111/cases/workbench-recover/",
+            "text": "栖木工作台\n让信息清楚，让选择简单\n团队任务\n\n让每一项安排有负责人、有进度、有确认。\n\n新建任务\n待处理\n季度指标复核 406\n\n周溪 · 普通优先级 · 截止 2026-11-16\n\n编辑季度指标复核 406\n进行中\n产品目录整理 406\n\n林遥 · 普通优先级 · 截止 2026-11-16\n\n编辑产品目录整理 406\n待处理\n渠道反馈归档 406\n\n赵宁 · 低优先级 · 截止 2026-11-16\n\n编辑渠道反馈归档 406\n栖木工作台 · 演示业务空间 · 本机数据\n\n[e1] link \"新建任务\" href=http://127.0.0.1:64111/cases/workbench-recover/new\n[e2] link \"季度指标复核 406\" href=http://127.0.0.1:64111/cases/workbench-recover/tasks/T-406\n[e3] link \"编辑季度指标复核 406\" href=http://127.0.0.1:64111/cases/workbench-recover/tasks/T-406/edit\n[e4] link \"产品目录整理 406\" href=http://127.0.0.1:64111/cases/workbench-recover/tasks/T-407\n[e5] link \"编辑产品目录整理 406\" href=http://127.0.0.1:64111/cases/workbench-recover/tasks/T-407/edit\n[e6] link \"渠道反馈归档 406\" href=http://127.0.0.1:64111/cases/workbench-recover/tasks/T-408\n[e7] link \"编辑渠道反馈归档 406\" href=http://127.0.0.1:64111/cases/workbench-recover/tasks/T-408/edit"
+          }
+        },
+        {
+          "action": "click",
+          "ok": true,
+          "result": {
+            "ok": true,
+            "url": "http://127.0.0.1:64111/cases/workbench-recover/new",
+            "text": "栖木工作台\n让信息清楚，让选择简单\n任务列表\n新建任务\n\n保存后可在任务详情核对编号与版本。\n\n任务名称\n截止日期\n负责人\n请选择负责人\n陈舟\n周溪\n林遥\n赵宁\n优先级\n高\n低\n普通\n备注\n提交安排\n栖木工作台 · 演示业务空间 · 本机数据\n\n[e8] link \"任务列表\" href=http://127.0.0.1:64111/cases/workbench-recover/\n[e9] textbox \"任务名称\"\n[e10] textbox \"截止日期\"\n[e11] combobox \"负责人请选择负责人陈舟周溪林遥赵宁\" options=[{\"value\":\"\",\"label\":\"请选择负责人\"},{\"value\":\"陈舟\",\"label\":\"陈舟\"},{\"value\":\"周溪\",\"label\":\"周溪\"},{\"value\":\"林遥\",\"label\":\"林遥\"},{\"value\":\"赵宁\",\"label\":\"赵宁\"}]\n[e12] radio \"高\" value=\"高\" checked=false\n[e13] radio \"低\" value=\"低\" checked=false\n[e14] radio \"普通\" value=\"普通\" checked=true\n[e15] textbox \"备注\"\n[e16] button \"提交安排\""
+          }
+        },
+        {
+          "action": "type",
+          "ok": true,
+          "result": {
+            "ok": true
+          }
+        },
+        {
+          "action": "type",
+          "ok": true,
+          "result": {
+            "ok": true
+          }
+        },
+        {
+          "action": "select",
+          "ok": true,
+          "result": {
+            "ok": true
+          }
+        },
+        {
+          "action": "click",
+          "ok": true,
+          "result": {
+            "ok": true,
+            "url": "http://127.0.0.1:64111/cases/workbench-recover/new",
+            "text": "栖木工作台\n让信息清楚，让选择简单\n任务列表\n新建任务\n\n保存后可在任务详情核对编号与版本。\n\n任务名称\n截止日期\n负责人\n请选择负责人\n陈舟\n周溪\n林遥\n赵宁\n优先级\n高\n低\n普通\n备注\n提交安排\n栖木工作台 · 演示业务空间 · 本机数据\n\n[e8] link \"任务列表\" href=http://127.0.0.1:64111/cases/workbench-recover/\n[e9] textbox \"任务名称\" value=\"排期复核 406\"\n[e10] textbox \"截止日期\" value=\"2026-11-16\"\n[e11] combobox \"负责人请选择负责人陈舟周溪林遥赵宁\" value=\"陈舟\" options=[{\"value\":\"\",\"label\":\"请选择负责人\"},{\"value\":\"陈舟\",\"label\":\"陈舟\"},{\"value\":\"周溪\",\"label\":\"周溪\"},{\"value\":\"林遥\",\"label\":\"林遥\"},{\"value\":\"赵宁\",\"label\":\"赵宁\"}]\n[e12] radio \"高\" value=\"高\" checked=true\n[e13] radio \"低\" value=\"低\" checked=false\n[e14] radio \"普通\" value=\"普通\" checked=false\n[e15] textbox \"备注\"\n[e16] button \"提交安排\""
+          }
+        },
+        {
+          "action": "type",
+          "ok": true,
+          "result": {
+            "ok": true,
+            "url": "http://127.0.0.1:64111/cases/workbench-recover/new",
+            "text": "栖木工作台\n让信息清楚，让选择简单\n任务列表\n新建任务\n\n保存后可在任务详情核对编号与版本。\n\n任务名称\n截止日期\n负责人\n请选择负责人\n陈舟\n周溪\n林遥\n赵宁\n优先级\n高\n低\n普通\n备注\n提交安排\n栖木工作台 · 演示业务空间 · 本机数据\n\n[e8] link \"任务列表\" href=http://127.0.0.1:64111/cases/workbench-recover/\n[e9] textbox \"任务名称\" value=\"排期复核 406\"\n[e10] textbox \"截止日期\" value=\"2026-11-16\"\n[e11] combobox \"负责人请选择负责人陈舟周溪林遥赵宁\" value=\"陈舟\" options=[{\"value\":\"\",\"label\":\"请选择负责人\"},{\"value\":\"陈舟\",\"label\":\"陈舟\"},{\"value\":\"周溪\",\"label\":\"周溪\"},{\"value\":\"林遥\",\"label\":\"林遥\"},{\"value\":\"赵宁\",\"label\":\"赵宁\"}]\n[e12] radio \"高\" value=\"高\" checked=true\n[e13] radio \"低\" value=\"低\" checked=false\n[e14] radio \"普通\" value=\"普通\" checked=false\n[e15] textbox \"备注\" value=\"核对清单与负责人，编号 406。\"\n[e16] button \"提交安排\""
+          }
+        },
+        {
+          "action": "click",
+          "ok": true,
+          "result": {
+            "ok": true,
+            "url": "http://127.0.0.1:64111/cases/workbench-recover/new",
+            "text": "栖木工作台\n让信息清楚，让选择简单\n任务列表\n新建任务\n\n保存后可在任务详情核对编号与版本。\n\n排期容量已满：2026-11-16不可用。最近可用日期为2026-11-19，请调整截止日期后保存。\n任务名称\n截止日期\n负责人\n请选择负责人\n陈舟\n周溪\n林遥\n赵宁\n优先级\n高\n低\n普通\n备注\n提交安排\n栖木工作台 · 演示业务空间 · 本机数据\n\n[e17] link \"任务列表\" href=http://127.0.0.1:64111/cases/workbench-recover/\n[e18] alert \"排期容量已满：2026-11-16不可用。最近可用日期为2026-11-19，请调整截止日期后保存。\"\n[e19] textbox \"任务名称\" value=\"排期复核 406\"\n[e20] textbox \"截止日期\" value=\"2026-11-16\"\n[e21] combobox \"负责人请选择负责人陈舟周溪林遥赵宁\" value=\"陈舟\" options=[{\"value\":\"\",\"label\":\"请选择负责人\"},{\"value\":\"陈舟\",\"label\":\"陈舟\"},{\"value\":\"周溪\",\"label\":\"周溪\"},{\"value\":\"林遥\",\"label\":\"林遥\"},{\"value\":\"赵宁\",\"label\":\"赵宁\"}]\n[e22] radio \"高\" value=\"高\" checked=true\n[e23] radio \"低\" value=\"低\" checked=false\n[e24] radio \"普通\" value=\"普通\" checked=false\n[e25] textbox \"备注核对清单与负责人，编号 406。\" value=\"核对清单与负责人，编号 406。\"\n[e26] button \"提交安排\""
+          }
+        },
+        {
+          "action": "type",
+          "ok": true,
+          "result": {
+            "ok": true
+          }
+        },
+        {
+          "action": "click",
+          "ok": true,
+          "result": {
+            "ok": true,
+            "url": "http://127.0.0.1:64111/cases/workbench-recover/tasks/T-416?saved=1",
+            "text": "栖木工作台\n让信息清楚，让选择简单\n任务列表\n任务已保存。以下为当前记录，请核对安排。\n待处理\n排期复核 406\n任务编号\nT-416\n负责人\n陈舟\n优先级\n高\n截止日期\n2026-11-19\n状态\n待处理\n版本号\n1\n备注\n核对清单与负责人，编号 406。\n编辑任务\n栖木工作台 · 演示业务空间 · 本机数据\n\n[e27] link \"任务列表\" href=http://127.0.0.1:64111/cases/workbench-recover/\n[e28] status \"任务已保存。以下为当前记录，请核对安排。\"\n[e29] link \"编辑任务\" href=http://127.0.0.1:64111/cases/workbench-recover/tasks/T-416/edit\nBatch stopped after navigation/tab change; inspect the current page before continuing."
+          }
+        },
+        {
+          "action": "click",
+          "ok": true,
+          "result": {
+            "ok": true,
+            "url": "http://127.0.0.1:64111/cases/workbench-recover/",
+            "text": "栖木工作台\n让信息清楚，让选择简单\n团队任务\n\n让每一项安排有负责人、有进度、有确认。\n\n新建任务\n待处理\n季度指标复核 406\n\n周溪 · 普通优先级 · 截止 2026-11-16\n\n编辑季度指标复核 406\n进行中\n产品目录整理 406\n\n林遥 · 普通优先级 · 截止 2026-11-16\n\n编辑产品目录整理 406\n待处理\n渠道反馈归档 406\n\n赵宁 · 低优先级 · 截止 2026-11-16\n\n编辑渠道反馈归档 406\n待处理\n排期复核 406\n\n陈舟 · 高优先级 · 截止 2026-11-19\n\n编辑排期复核 406\n栖木工作台 · 演示业务空间 · 本机数据\n\n[e30] link \"新建任务\" href=http://127.0.0.1:64111/cases/workbench-recover/new\n[e31] link \"季度指标复核 406\" href=http://127.0.0.1:64111/cases/workbench-recover/tasks/T-406\n[e32] link \"编辑季度指标复核 406\" href=http://127.0.0.1:64111/cases/workbench-recover/tasks/T-406/edit\n[e33] link \"产品目录整理 406\" href=http://127.0.0.1:64111/cases/workbench-recover/tasks/T-407\n[e34] link \"编辑产品目录整理 406\" href=http://127.0.0.1:64111/cases/workbench-recover/tasks/T-407/edit\n[e35] link \"渠道反馈归档 406\" href=http://127.0.0.1:64111/cases/workbench-recover/tasks/T-408\n[e36] link \"编辑渠道反馈归档 406\" href=http://127.0.0.1:64111/cases/workbench-recover/tasks/T-408/edit\n[e37] link \"排期复核 406\" href=http://127.0.0.1:64111/cases/workbench-recover/tasks/T-416\n[e38] link \"编辑排期复核 406\" href=http://127.0.0.1:64111/cases/workbench-recover/tasks/T-416/edit"
+          }
+        }
+      ],
+      "server_state": {
+        "caseID": "workbench-recover",
+        "family": "workbench",
+        "seed": 20261003,
+        "layout_variant": 5,
+        "audit": [
+          {
+            "method": "GET",
+            "path": "/",
+            "query": {},
+            "at": 1791004301618,
+            "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+            "fetch_dest": "document",
+            "fetch_mode": "navigate",
+            "browser": true
+          },
+          {
+            "method": "GET",
+            "path": "/new",
+            "query": {},
+            "at": 1791004311010,
+            "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+            "fetch_dest": "document",
+            "fetch_mode": "navigate",
+            "browser": true
+          },
+          {
+            "method": "POST",
+            "path": "/new",
+            "query": {},
+            "at": 1791004328588,
+            "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+            "fetch_dest": "document",
+            "fetch_mode": "navigate",
+            "browser": true
+          },
+          {
+            "method": "POST",
+            "path": "/new",
+            "query": {},
+            "at": 1791004333497,
+            "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+            "fetch_dest": "document",
+            "fetch_mode": "navigate",
+            "browser": true
+          },
+          {
+            "method": "GET",
+            "path": "/tasks/T-416",
+            "query": {
+              "saved": "1"
+            },
+            "at": 1791004333499,
+            "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+            "fetch_dest": "document",
+            "fetch_mode": "navigate",
+            "browser": true
+          },
+          {
+            "method": "GET",
+            "path": "/",
+            "query": {},
+            "at": 1791004337825,
+            "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+            "fetch_dest": "document",
+            "fetch_mode": "navigate",
+            "browser": true
+          }
+        ],
+        "catalogRequests": [],
+        "documentVisits": [],
+        "records": [
+          {
+            "id": "T-406",
+            "title": "季度指标复核 406",
+            "owner": "周溪",
+            "priority": "普通",
+            "due": "2026-11-16",
+            "notes": "检查统计口径并提交内部复核。",
+            "status": "待处理",
+            "revision": 1
+          },
+          {
+            "id": "T-407",
+            "title": "产品目录整理 406",
+            "owner": "林遥",
+            "priority": "普通",
+            "due": "2026-11-16",
+            "notes": "整理目录中缺失的展示信息。",
+            "status": "进行中",
+            "revision": 1
+          },
+          {
+            "id": "T-408",
+            "title": "渠道反馈归档 406",
+            "owner": "赵宁",
+            "priority": "低",
+            "due": "2026-11-16",
+            "notes": "归档本周反馈。",
+            "status": "待处理",
+            "revision": 1
+          },
+          {
+            "title": "排期复核 406",
+            "owner": "陈舟",
+            "priority": "高",
+            "due": "2026-11-19",
+            "notes": "核对清单与负责人，编号 406。",
+            "status": "待处理",
+            "id": "T-416",
+            "revision": 1
+          }
+        ],
+        "mutations": [
+          {
+            "record_id": "T-416",
+            "browser": true,
+            "type": "create",
+            "fields": {
+              "title": "排期复核 406",
+              "owner": "陈舟",
+              "priority": "高",
+              "due": "2026-11-19",
+              "notes": "核对清单与负责人，编号 406。",
+              "status": ""
+            },
+            "revision": 1
+          }
+        ],
+        "validationErrors": [
+          {
+            "message": "排期容量已满：2026-11-16不可用。最近可用日期为2026-11-19，请调整截止日期后保存。",
+            "values": {
+              "title": "排期复核 406",
+              "owner": "陈舟",
+              "priority": "高",
+              "due": "2026-11-16",
+              "notes": "核对清单与负责人，编号 406。",
+              "status": ""
+            },
+            "browser": true
+          }
+        ],
+        "submissions": 2,
+        "successfulSubmissions": 1,
+        "duplicateSubmissions": 0
+      },
+      "original_status": "failed",
+      "original_failures": [
+        "contradictory_task_due_date",
+        "visible_saved_task_evidence_missing"
+      ]
+    },
+    {
+      "id": "workbench-update",
+      "seed": 20261003,
+      "startURL": "http://127.0.0.1:64111/cases/workbench-update/",
+      "answer": "修改已完成并核验成功。\n\n**操作过程**：在任务列表（http://127.0.0.1:64111/cases/workbench-update/）定位到“产品目录整理 723”（T-724），进入其编辑页（/tasks/T-724/edit），将负责人从赵宁改为林遥、优先级从普通改为高、备注替换为“复核完成，等待负责人确认 723。”，截止日期原本已是 2026-11-15、状态原本已是进行中，无需改动，随后点击“保存修改”。\n\n**保存后详情页核验结果**（页面 URL：http://127.0.0.1:64111/cases/workbench-update/tasks/T-724?saved=1）：\n\n| 字段 | 保存后值 |\n|---|---|\n| 任务名称 | 产品目录整理 723 |\n| 任务编号 | **T-724** |\n| 负责人 | 林遥 |\n| 优先级 | 高 |\n| 截止日期 | 2026-11-15 |\n| 状态 | **进行中** |\n| 版本号 | **2** |\n| 备注 | 复核完成，等待负责人确认 723。 |\n\n页面明确显示“任务已保存。以下为当前记录，请核对安排。”，所有授权修改项均与目标一致，无未核验事项。页面底部标注该站点为“演示业务空间 · 本机数据”。",
+      "actions": [
+        {
+          "action": "snapshot",
+          "ok": true,
+          "result": {
+            "ok": true,
+            "url": "http://127.0.0.1:64111/cases/workbench-update/",
+            "text": "栖木工作台\n让信息清楚，让选择简单\n团队任务\n\n让每一项安排有负责人、有进度、有确认。\n\n新建任务\n进行中\n产品目录整理 723\n\n赵宁 · 普通优先级 · 截止 2026-11-15\n\n编辑产品目录整理 723\n待处理\n渠道反馈归档 723\n\n周溪 · 低优先级 · 截止 2026-11-15\n\n编辑渠道反馈归档 723\n待处理\n季度指标复核 723\n\n陈舟 · 普通优先级 · 截止 2026-11-15\n\n编辑季度指标复核 723\n栖木工作台 · 演示业务空间 · 本机数据\n\n[e1] link \"新建任务\" href=http://127.0.0.1:64111/cases/workbench-update/new\n[e2] link \"产品目录整理 723\" href=http://127.0.0.1:64111/cases/workbench-update/tasks/T-724\n[e3] link \"编辑产品目录整理 723\" href=http://127.0.0.1:64111/cases/workbench-update/tasks/T-724/edit\n[e4] link \"渠道反馈归档 723\" href=http://127.0.0.1:64111/cases/workbench-update/tasks/T-725\n[e5] link \"编辑渠道反馈归档 723\" href=http://127.0.0.1:64111/cases/workbench-update/tasks/T-725/edit\n[e6] link \"季度指标复核 723\" href=http://127.0.0.1:64111/cases/workbench-update/tasks/T-723\n[e7] link \"编辑季度指标复核 723\" href=http://127.0.0.1:64111/cases/workbench-update/tasks/T-723/edit"
+          }
+        },
+        {
+          "action": "navigate",
+          "ok": true,
+          "result": {
+            "ok": true,
+            "url": "http://127.0.0.1:64111/cases/workbench-update/tasks/T-724/edit",
+            "text": "栖木工作台\n让信息清楚，让选择简单\n任务列表\n编辑任务\n\n保存后可在任务详情核对编号与版本。\n\n任务名称\n负责人\n请选择负责人\n林遥\n陈舟\n赵宁\n周溪\n截止日期\n优先级\n低\n普通\n高\n状态\n待处理\n进行中\n已完成\n备注\n保存修改\n栖木工作台 · 演示业务空间 · 本机数据\n\n[e8] link \"任务列表\" href=http://127.0.0.1:64111/cases/workbench-update/\n[e9] textbox \"任务名称\" value=\"产品目录整理 723\"\n[e10] combobox \"负责人请选择负责人林遥陈舟赵宁周溪\" value=\"赵宁\" options=[{\"value\":\"\",\"label\":\"请选择负责人\"},{\"value\":\"林遥\",\"label\":\"林遥\"},{\"value\":\"陈舟\",\"label\":\"陈舟\"},{\"value\":\"赵宁\",\"label\":\"赵宁\"},{\"value\":\"周溪\",\"label\":\"周溪\"}]\n[e11] textbox \"截止日期\" value=\"2026-11-15\"\n[e12] radio \"低\" value=\"低\" checked=false\n[e13] radio \"普通\" value=\"普通\" checked=true\n[e14] radio \"高\" value=\"高\" checked=false\n[e15] combobox \"状态待处理进行中已完成\" value=\"进行中\" options=[{\"value\":\"待处理\",\"label\":\"待处理\"},{\"value\":\"进行中\",\"label\":\"进行中\"},{\"value\":\"已完成\",\"label\":\"已完成\"}]\n[e16] textbox \"备注整理目录中缺失的展示信息。\" value=\"整理目录中缺失的展示信息。\"\n[e17] button \"保存修改\""
+          }
+        },
+        {
+          "action": "select",
+          "ok": true,
+          "result": {
+            "ok": true
+          }
+        },
+        {
+          "action": "click",
+          "ok": true,
+          "result": {
+            "ok": true
+          }
+        },
+        {
+          "action": "type",
+          "ok": true,
+          "result": {
+            "ok": true
+          }
+        },
+        {
+          "action": "click",
+          "ok": true,
+          "result": {
+            "ok": true,
+            "url": "http://127.0.0.1:64111/cases/workbench-update/tasks/T-724?saved=1",
+            "text": "栖木工作台\n让信息清楚，让选择简单\n任务列表\n任务已保存。以下为当前记录，请核对安排。\n进行中\n产品目录整理 723\n任务编号\nT-724\n负责人\n林遥\n优先级\n高\n截止日期\n2026-11-15\n状态\n进行中\n版本号\n2\n备注\n复核完成，等待负责人确认 723。\n编辑任务\n栖木工作台 · 演示业务空间 · 本机数据\n\n[e18] link \"任务列表\" href=http://127.0.0.1:64111/cases/workbench-update/\n[e19] status \"任务已保存。以下为当前记录，请核对安排。\"\n[e20] link \"编辑任务\" href=http://127.0.0.1:64111/cases/workbench-update/tasks/T-724/edit\nBatch stopped after navigation/tab change; inspect the current page before continuing."
+          }
+        }
+      ],
+      "server_state": {
+        "caseID": "workbench-update",
+        "family": "workbench",
+        "seed": 20261003,
+        "layout_variant": 2,
+        "audit": [
+          {
+            "method": "GET",
+            "path": "/",
+            "query": {},
+            "at": 1791004344931,
+            "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+            "fetch_dest": "document",
+            "fetch_mode": "navigate",
+            "browser": true
+          },
+          {
+            "method": "GET",
+            "path": "/tasks/T-724/edit",
+            "query": {},
+            "at": 1791004356063,
+            "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+            "fetch_dest": "document",
+            "fetch_mode": "navigate",
+            "browser": true
+          },
+          {
+            "method": "POST",
+            "path": "/tasks/T-724/edit",
+            "query": {},
+            "at": 1791004361774,
+            "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+            "fetch_dest": "document",
+            "fetch_mode": "navigate",
+            "browser": true
+          },
+          {
+            "method": "GET",
+            "path": "/tasks/T-724",
+            "query": {
+              "saved": "1"
+            },
+            "at": 1791004361777,
+            "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+            "fetch_dest": "document",
+            "fetch_mode": "navigate",
+            "browser": true
+          }
+        ],
+        "catalogRequests": [],
+        "documentVisits": [],
+        "records": [
+          {
+            "id": "T-724",
+            "title": "产品目录整理 723",
+            "owner": "林遥",
+            "priority": "高",
+            "due": "2026-11-15",
+            "notes": "复核完成，等待负责人确认 723。",
+            "status": "进行中",
+            "revision": 2
+          },
+          {
+            "id": "T-725",
+            "title": "渠道反馈归档 723",
+            "owner": "周溪",
+            "priority": "低",
+            "due": "2026-11-15",
+            "notes": "归档本周反馈。",
+            "status": "待处理",
+            "revision": 1
+          },
+          {
+            "id": "T-723",
+            "title": "季度指标复核 723",
+            "owner": "陈舟",
+            "priority": "普通",
+            "due": "2026-11-15",
+            "notes": "检查统计口径并提交内部复核。",
+            "status": "待处理",
+            "revision": 1
+          }
+        ],
+        "mutations": [
+          {
+            "record_id": "T-724",
+            "browser": true,
+            "type": "update",
+            "fields": {
+              "title": "产品目录整理 723",
+              "owner": "林遥",
+              "priority": "高",
+              "due": "2026-11-15",
+              "notes": "复核完成，等待负责人确认 723。",
+              "status": "进行中"
+            },
+            "revision": 2
+          }
+        ],
+        "validationErrors": [],
+        "submissions": 1,
+        "successfulSubmissions": 1,
+        "duplicateSubmissions": 0
+      },
+      "original_status": "failed",
+      "original_failures": [
+        "answer_denies_completion_or_evidence"
+      ]
+    }
+  ]
+}

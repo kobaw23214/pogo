@@ -1,0 +1,1 @@
+import{I as e,P as t,w as n}from"./_baseIsEqual-BfTTsQfE.js";function r(t,n,r){n==`__proto__`&&e?e(t,n,{configurable:!0,enumerable:!0,value:r,writable:!0}):t[n]=r}var i=Object.prototype.hasOwnProperty;function a(e,n,a){var o=e[n];(!(i.call(e,n)&&t(o,a))||a===void 0&&!(n in e))&&r(e,n,a)}var o=n(Object.getPrototypeOf,Object);export{a as n,r,o as t};

@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pogo · 引用网站图标回归</title>
+    <style>
+      body { margin: 0; background: var(--el-bg-color-page); color: var(--el-text-color-primary); font: 14px/1.6 system-ui; }
+      main { max-width: 1040px; margin: auto; padding: 28px; }
+      .fixture-heading { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }
+      .fixture-heading h1 { font: 600 21px/1.4 system-ui; margin: 0; }
+      .fixture-heading small, .fixture-caption { color: var(--el-text-color-secondary); }
+      .fixture-heading button { padding: 6px 10px; border: 1px solid var(--el-border-color-light); border-radius: 6px; background: var(--el-bg-color); color: inherit; cursor: pointer; }
+      .fixture-answer { background: var(--el-bg-color); padding: 24px; border: 1px solid var(--el-border-color-extra-light); border-radius: 14px; min-width: 0; }
+      .fixture-answer + .fixture-answer { margin-top: 22px; }
+      .fixture-answer h2 { margin: 0 0 12px; font-size: 16px; }
+      .fixture-caption { font-size: 12px; margin: 0 0 12px; }
+      .fixture-answer .sources-panel { margin-top: 20px; }
+      #fixture-status { font: 12px/1.5 ui-monospace, monospace; color: var(--el-text-color-secondary); display: block; margin-top: 18px; }
+      @media (max-width: 600px) { main { padding: 16px 12px; } .fixture-answer { padding: 16px; } }
+    </style>
+  </head>
+  <body><main><div id="app"></div></main><script type="module" src="./citation-favicons.ts"></script></body>
+</html>

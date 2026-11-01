@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pogo desktop browser fixture</title>
+  <style>
+    :root { color-scheme: light; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #172b3a; background: #f3f6f8; --accent: #137b69; --soft: #e5f4ed; --line: #d9e3e8; }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    body[data-tab="B"] { --accent: #b65323; --soft: #fff0df; }
+    [hidden] { display: none !important; }
+    main { max-width: 1180px; padding: 24px; margin: auto; }
+    header { display: flex; align-items: center; gap: 18px; margin-bottom: 20px; }
+    .marker { display: grid; place-items: center; width: 72px; height: 72px; flex: 0 0 72px; border-radius: 18px; background: var(--accent); color: white; font-size: 40px; font-weight: 760; }
+    h1 { margin: 4px 0 6px; font-size: 26px; letter-spacing: -.6px; }
+    h2 { margin: 0 0 16px; font-size: 16px; }
+    p { margin: 0; line-height: 1.55; }
+    .eyebrow { font-size: 11px; letter-spacing: 1.5px; color: var(--accent); font-weight: 750; }
+    .muted { color: #617583; font-size: 13px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .card { padding: 20px; border: 1px solid var(--line); background: white; border-radius: 16px; min-width: 0; }
+    label { display: block; margin-bottom: 7px; font-size: 13px; font-weight: 650; }
+    input[type="text"], textarea, [contenteditable] { width: 100%; border: 1px solid #cbd8df; border-radius: 8px; padding: 10px 12px; font: inherit; color: inherit; background: #fff; outline: none; }
+    input:focus-visible, textarea:focus-visible, [contenteditable]:focus-visible, button:focus-visible, [role="slider"]:focus-visible { outline: 3px solid #69acff; outline-offset: 3px; }
+    textarea { height: 74px; resize: vertical; }
+    [contenteditable] { min-height: 55px; }
+    [contenteditable]:empty::before { content: attr(data-placeholder); color: #83929c; pointer-events: none; }
+    .field + .field { margin-top: 15px; }
+    input[type="range"] { width: 100%; accent-color: var(--accent); }
+    .range-label { display: flex; justify-content: space-between; }
+    output { color: var(--accent); font-variant-numeric: tabular-nums; }
+    #drag-track { position: relative; height: 58px; margin-top: 9px; border: 1px solid var(--line); border-radius: 10px; background: var(--soft); overflow: hidden; }
+    #drag-track::before { content: "普通拖动 · 移动到右侧"; position: absolute; inset: 0; display: grid; place-items: center; color: #657c79; font-size: 12px; pointer-events: none; }
+    #drag-handle { position: absolute; top: 6px; left: 6px; width: 44px; height: 44px; display: grid; place-items: center; border-radius: 8px; color: white; background: var(--accent); cursor: grab; touch-action: none; user-select: none; font-size: 23px; }
+    #drag-handle[data-active="true"] { cursor: grabbing; }
+    .save-row { margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--line); display: flex; gap: 14px; align-items: center; }
+    button { border: 0; border-radius: 9px; padding: 11px 17px; color: white; background: var(--accent); font: inherit; font-size: 13px; font-weight: 650; cursor: pointer; }
+    button:disabled { opacity: .6; cursor: wait; }
+    #save-result { flex: 1; font-size: 13px; overflow-wrap: anywhere; }
+    #save-result[data-status="failed"] { color: #aa342b; }
+    .frame-card { margin-top: 16px; }
+    .frame-title { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+    #iframe { display: block; width: 100%; height: 140px; border: 1px solid var(--line); border-radius: 10px; background: #f8fafb; }
+    footer { margin-top: 16px; font-size: 12px; color: #687c8a; line-height: 1.6; }
+    .child { padding: 18px; background: #f8fafb; min-height: 130px; }
+    .child-row { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+    .child-row input { max-width: 400px; min-width: 0; }
+    #frame-count { white-space: nowrap; }
+    @media (max-width: 650px) { main { padding: 16px; } .grid { grid-template-columns: 1fr; } h1 { font-size: 22px; } .marker { width: 60px; height: 60px; flex-basis: 60px; } .card { padding: 16px; } .frame-title { display: block; } .frame-title p { margin: -8px 0 12px; } .child-row { flex-wrap: wrap; } }
+  </style>
+</head>
+<body>
+  <main id="main-fixture">
+    <header>
+      <div id="page-marker" class="marker" data-testid="page-marker">A</div>
+      <div><p class="eyebrow">LOCAL BROWSER LAB</p><h1>原生页面 <span class="tab-label">A</span></h1><p class="muted">同一网页中的输入、拖动、引用与一次保存。</p></div>
+    </header>
+    <div class="grid">
+      <section class="card" aria-labelledby="input-title">
+        <h2 id="input-title">01 · 文本与中文输入</h2>
+        <div class="field"><label for="text-input">单行输入</label><input id="text-input" type="text" autocomplete="off" placeholder="在这里输入中文或英文"></div>
+        <div class="field"><label for="text-area">多行文本</label><textarea id="text-area" placeholder="输入、选择、复制和粘贴"></textarea></div>
+        <div class="field"><label for="editable">可编辑区域</label><div id="editable" contenteditable="true" role="textbox" aria-multiline="true" aria-label="可编辑区域" data-placeholder="这是 contenteditable 区域"></div></div>
+      </section>
+      <section class="card" aria-labelledby="pointer-title">
+        <h2 id="pointer-title">02 · 指针与网页交互</h2>
+        <div class="field"><label class="range-label" for="range"><span>标准网页滑块</span><output id="range-value" for="range">25</output></label><input id="range" type="range" min="0" max="100" value="25" aria-label="标准网页滑块"></div>
+        <div class="field"><label id="drag-label">普通拖动 <output id="drag-value">0%</output></label><div id="drag-track"><div id="drag-handle" role="slider" tabindex="0" aria-labelledby="drag-label" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">↔</div></div></div>
+        <p class="muted" style="margin-top:12px">这是普通测试控件，不含验证码。也可聚焦后用方向键调整。</p>
+        <div class="save-row"><button id="save" type="button">保存一次</button><p id="save-result" role="status" data-status="idle">尚未保存 · 以服务端计数为准</p></div>
+      </section>
+    </div>
+    <section class="card frame-card">
+      <div class="frame-title"><h2>03 · 子页面</h2><p id="frame-origin" class="muted">独立 iframe</p></div>
+      <iframe id="iframe" title="独立测试 iframe"></iframe>
+    </section>
+    <footer>事件日志仅保存在内存，不随指针移动刷新日志面板。自动化插入文本不等于真实系统输入法；事件时间不等于屏幕光子延迟。</footer>
+  </main>
+  <section id="child-fixture" class="child" hidden>
+    <p class="eyebrow">IFRAME · PAGE <span class="tab-label">A</span></p>
+    <div class="child-row"><input id="frame-input" type="text" autocomplete="off" aria-label="子页面输入" placeholder="在 iframe 中输入"><button id="frame-button" type="button">子页面按钮</button><output id="frame-count">点击 0 次</output></div>
+  </section>
+  <script>
+    (() => {
+      "use strict";
+      const params = new URLSearchParams(location.search);
+      const tab = (params.get("tab") || "A").slice(0, 24);
+      const child = params.get("child") === "1";
+      const limit = 256;
+      const metrics = window.__pocMetrics = {
+        schemaVersion: 1, tab, child, timeOrigin: performance.timeOrigin,
+        startedAt: performance.now(), eventLimit: limit, droppedEvents: 0,
+        counts: {}, typed: { input: "", textarea: "", editable: "", frame: "" },
+        range: 25, drag: { value: 0, active: false, moves: 0, completed: 0, cancelled: 0 },
+        lastSaved: null, events: [],
+        measurementScope: "Browser events and command outcomes only; no proof of physical keyboard, real IME, or input-to-photon latency."
+      };
+      let sequence = 0;
+      const text = value => String(value ?? "").slice(0, 2000);
+      function record(type, event, extra = {}) {
+        metrics.counts[type] = (metrics.counts[type] || 0) + 1;
+        const entry = { seq: ++sequence, type, at: performance.now(), ...extra };
+        if (event) {
+          entry.eventTime = event.timeStamp;
+          entry.target = event.target?.id || event.target?.tagName || "";
+          entry.isTrusted = event.isTrusted;
+          if ("key" in event) entry.key = text(event.key);
+          if ("isComposing" in event) entry.isComposing = event.isComposing;
+          if ("inputType" in event) entry.inputType = event.inputType;
+          if ("data" in event && typeof event.data === "string") entry.data = text(event.data);
+          if ("pointerId" in event) { entry.pointerId = event.pointerId; entry.pointerType = event.pointerType; }
+          if ("clientX" in event) { entry.x = event.clientX; entry.y = event.clientY; entry.buttons = event.buttons; entry.button = event.button; }
+        }
+        metrics.events.push(entry);
+        if (metrics.events.length > limit) { metrics.events.shift(); metrics.droppedEvents++; }
+      }
+      document.body.dataset.tab = tab;
+      document.title = `Pogo Desktop PoC · ${child ? "Frame" : "Page"} ${tab}`;
+      document.querySelectorAll(".tab-label").forEach(el => { el.textContent = tab; });
+      document.getElementById("page-marker").textContent = tab;
+      const names = ["focus", "blur", "keydown", "keyup", "compositionstart", "compositionupdate", "compositionend", "beforeinput", "input", "change", "copy", "cut", "paste", "pointerdown", "pointermove", "pointerup", "pointercancel", "gotpointercapture", "lostpointercapture", "mousedown", "mousemove", "mouseup", "click", "wheel", "dragstart", "dragend", "drop"];
+      for (const name of names) document.addEventListener(name, event => record(name, event), { capture: true, passive: true });
+      const inputs = { "text-input": "input", "text-area": "textarea", editable: "editable", "frame-input": "frame" };
+      for (const [id, name] of Object.entries(inputs)) document.getElementById(id).addEventListener("input", event => {
+        metrics.typed[name] = text(id === "editable" ? event.target.textContent : event.target.value);
+      });
+      if (child) {
+        document.getElementById("main-fixture").hidden = true;
+        document.getElementById("child-fixture").hidden = false;
+        let clicks = 0;
+        document.getElementById("frame-button").addEventListener("click", () => {
+          document.getElementById("frame-count").textContent = `点击 ${++clicks} 次`;
+          record("frameButton", null, { clicks });
+        });
+        record("ready");
+        return;
+      }
+      const frame = document.getElementById("iframe");
+      let frameOrigin = location.origin;
+      if (params.has("frameOrigin")) {
+        try {
+          const url = new URL(params.get("frameOrigin"));
+          if (!["http:", "https:"].includes(url.protocol) || !["localhost", "127.0.0.1", "[::1]"].includes(url.hostname) || url.username || url.password) throw new Error("Use a loopback HTTP(S) origin");
+          frameOrigin = url.origin;
+        } catch (error) { record("frameOriginRejected", null, { message: text(error.message) }); }
+      }
+      frame.src = `${frameOrigin}/frame.html?child=1&tab=${encodeURIComponent(tab)}`;
+      document.getElementById("frame-origin").textContent = frameOrigin === location.origin ? "同源 iframe" : `跨源 iframe · ${frameOrigin}`;
+      frame.addEventListener("load", event => record("frameLoad", event));
+      const range = document.getElementById("range");
+      range.addEventListener("input", () => {
+        metrics.range = Number(range.value);
+        document.getElementById("range-value").value = range.value;
+      });
+      const track = document.getElementById("drag-track");
+      const handle = document.getElementById("drag-handle");
+      let pointerId = null;
+      let grabOffset = 22;
+      function renderDrag() {
+        const travel = Math.max(0, track.clientWidth - handle.offsetWidth - 12);
+        handle.style.transform = `translateX(${travel * metrics.drag.value / 100}px)`;
+        handle.setAttribute("aria-valuenow", String(metrics.drag.value));
+        document.getElementById("drag-value").value = `${metrics.drag.value}%`;
+      }
+      function updateDrag(event) {
+        const bounds = track.getBoundingClientRect();
+        const travel = Math.max(1, track.clientWidth - handle.offsetWidth - 12);
+        metrics.drag.value = Math.round(Math.max(0, Math.min(1, (event.clientX - bounds.left - track.clientLeft - 6 - grabOffset) / travel)) * 100);
+        renderDrag();
+      }
+      handle.addEventListener("pointerdown", event => {
+        if (event.button !== 0 || pointerId !== null) return;
+        event.preventDefault();
+        handle.focus({ preventScroll: true });
+        grabOffset = event.clientX - handle.getBoundingClientRect().left;
+        pointerId = event.pointerId;
+        metrics.drag.active = true;
+        handle.dataset.active = "true";
+        handle.setPointerCapture(pointerId);
+        record("dragBegin", event);
+      });
+      handle.addEventListener("pointermove", event => {
+        if (event.pointerId !== pointerId) return;
+        metrics.drag.moves++;
+        updateDrag(event);
+      });
+      function finishDrag(event, cancelled) {
+        if (event.pointerId !== pointerId) return;
+        if (!cancelled) updateDrag(event);
+        const captured = pointerId;
+        pointerId = null;
+        metrics.drag.active = false;
+        metrics.drag[cancelled ? "cancelled" : "completed"]++;
+        handle.dataset.active = "false";
+        if (handle.hasPointerCapture(captured)) handle.releasePointerCapture(captured);
+        record(cancelled ? "dragCancel" : "dragComplete", event, { value: metrics.drag.value });
+      }
+      handle.addEventListener("pointerup", event => finishDrag(event, false));
+      handle.addEventListener("pointercancel", event => finishDrag(event, true));
+      handle.addEventListener("lostpointercapture", event => finishDrag(event, true));
+      handle.addEventListener("keydown", event => {
+        if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+        event.preventDefault();
+        metrics.drag.value = event.key === "Home" ? 0 : event.key === "End" ? 100 : Math.max(0, Math.min(100, metrics.drag.value + (event.key === "ArrowRight" ? 1 : -1)));
+        renderDrag();
+      });
+      new ResizeObserver(renderDrag).observe(track);
+      const save = document.getElementById("save");
+      const result = document.getElementById("save-result");
+      let saving = false;
+      save.addEventListener("click", async () => {
+        if (saving) return;
+        saving = true;
+        save.disabled = true;
+        result.dataset.status = "pending";
+        result.textContent = "等待服务端回执…";
+        const requestStartedAt = performance.now();
+        const payload = { tab, value: document.getElementById("text-input").value, textarea: document.getElementById("text-area").value, editable: document.getElementById("editable").textContent, range: Number(range.value), drag: metrics.drag.value };
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 8000);
+        record("saveRequest", null, { tab });
+        try {
+          const response = await fetch(`/save?tab=${encodeURIComponent(tab)}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload), signal: controller.signal });
+          const receipt = await response.json();
+          if (!response.ok || !Number.isFinite(receipt.counter)) throw new Error(`Invalid server receipt (HTTP ${response.status})`);
+          metrics.lastSaved = { status: "ok", tab, counter: receipt.counter, httpStatus: response.status, requestStartedAt, responseReceivedAt: performance.now(), payload };
+          result.dataset.status = "ok";
+          result.textContent = `页面 ${tab} 已保存 · 服务端计数 ${receipt.counter}`;
+          record("saveResponse", null, { counter: receipt.counter });
+        } catch (error) {
+          metrics.lastSaved = { status: "failed", tab, counter: null, requestStartedAt, responseReceivedAt: performance.now(), error: text(error.message) };
+          result.dataset.status = "failed";
+          result.textContent = "未取得有效回执；结果未知，不会自动重试。";
+          record("saveError", null, { message: text(error.message) });
+        } finally { clearTimeout(timeout); saving = false; save.disabled = false; }
+      });
+      record("ready");
+    })();
+  </script>
+</body>
+</html>

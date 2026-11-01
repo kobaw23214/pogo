@@ -1,0 +1,37 @@
+/* Top attachments, ordered references and shortcut drafts share one identity.
+   Only placement changes: an ordered reference remains an atomic text node. */
+.command-token-surface {
+  --command-token-color: var(--el-text-color-regular);
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  border: 1px solid color-mix(in srgb, var(--command-token-color) 24%, transparent);
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--command-token-color) 10%, transparent);
+  color: var(--command-token-color);
+  font-size: 13px;
+  line-height: 1.4;
+}
+.command-token-surface.skill { --command-token-color: var(--pg-syn-type, #7a5ea8); }
+.command-token-copy { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.command-token-type { flex-shrink: 0; opacity: .85; font-size: 11px; }
+.command-token-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.command-token-editable { min-height: 36px; overflow: hidden; transition: border-color .15s, background .15s; }
+.command-token-editable:focus-within { border-color: var(--command-token-color); box-shadow: 0 0 0 2px color-mix(in srgb, var(--command-token-color) 18%, transparent); }
+.command-token-primary,.command-token-remove { display: flex; align-items: center; min-height: 34px; box-sizing: border-box; margin: 0; border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+.command-token-primary { flex: 1; min-width: 0; padding: 7px 9px; text-align: left; }
+.command-token-primary .command-token-copy { width: 100%; }
+.command-token-remove { flex: 0 0 32px; justify-content: center; align-self: stretch; width: 32px; padding: 7px; border-left: 1px solid color-mix(in srgb, var(--command-token-color) 14%, transparent); }
+.command-token-remove svg { display: block; width: 17px; height: 17px; pointer-events: none; }
+.command-token-primary:hover,.command-token-remove:hover { background: color-mix(in srgb, var(--command-token-color) 10%, transparent); }
+.command-token-primary:focus-visible,.command-token-remove:focus-visible { outline: 2px solid var(--command-token-color); outline-offset: -3px; border-radius: 8px; }
+.command-token-editable.disabled { opacity: .55; }
+.command-token-primary:disabled,.command-token-remove:disabled { cursor: default; }
+@media (max-width: 480px), (pointer: coarse) {
+  .command-token-editable { min-height: 46px; }
+  .command-token-primary,.command-token-remove { min-height: 44px; }
+  .command-token-remove { flex-basis: 44px; width: 44px; }
+}
+@media (prefers-reduced-motion: reduce) { .command-token-editable { transition: none; } }

@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Pogo · 工具卡片隔离验证</title>
+    <style>
+      body { margin: 0; font-family: system-ui, sans-serif; }
+      #app { max-width: 1080px; margin: 24px auto; padding: 0 20px 80px; }
+      .fixture-heading h1 { font-size: 22px; margin: 0 0 8px; }
+      .fixture-heading p, .fixture-note { color: var(--el-text-color-secondary); font-size: 13px; }
+      .fixture-controls { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0; }
+      .fixture-controls button { background: var(--el-bg-color); color: var(--el-text-color-primary); border: 1px solid var(--el-border-color); border-radius: 6px; padding: 6px 10px; cursor: pointer; }
+      .fixture-panel { border: 1px solid var(--el-border-color); border-radius: 12px; padding: 18px; margin-top: 18px; min-width: 0; }
+      .fixture-panel h2 { font-size: 15px; margin: 0 0 12px; }
+      .fixture-status { display: block; font-size: 12px; color: var(--el-text-color-secondary); }
+      .fixture-gallery { display: grid; gap: 16px; }
+      @media (max-width: 600px) { #app { padding: 0 10px 40px; } .fixture-panel { padding: 12px; } }
+    </style>
+  </head>
+  <body><div id="app"></div><script type="module" src="/dev/tool-cards.ts"></script></body>
+</html>

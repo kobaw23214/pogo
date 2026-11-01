@@ -1,0 +1,131 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:pogo:skill:1:process-request",
+  "title": "Pogo process-request v0.1 (draft)",
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "protocolVersion": {
+          "const": "pogo.tool/1"
+        },
+        "callId": {
+          "$ref": "urn:pogo:skill:1:common#/$defs/opaqueRef"
+        },
+        "type": {
+          "const": "describe"
+        }
+      },
+      "required": [
+        "protocolVersion",
+        "callId",
+        "type"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "protocolVersion": {
+          "const": "pogo.tool/1"
+        },
+        "callId": {
+          "$ref": "urn:pogo:skill:1:common#/$defs/opaqueRef"
+        },
+        "type": {
+          "const": "invoke"
+        },
+        "operation": {
+          "$ref": "urn:pogo:skill:1:common#/$defs/id"
+        },
+        "contract": {
+          "$ref": "urn:pogo:skill:1:common#/$defs/contractRef"
+        },
+        "input": {
+          "type": "object"
+        },
+        "context": {
+          "type": "object",
+          "properties": {
+            "files": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "inputPointer": {
+                    "$ref": "urn:pogo:skill:1:common#/$defs/jsonPointer"
+                  },
+                  "fileId": {
+                    "$ref": "urn:pogo:skill:1:common#/$defs/opaqueRef"
+                  },
+                  "path": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "digest": {
+                    "$ref": "urn:pogo:skill:1:common#/$defs/digest"
+                  }
+                },
+                "required": [
+                  "inputPointer",
+                  "fileId",
+                  "path",
+                  "digest"
+                ],
+                "additionalProperties": false
+              },
+              "minItems": 0
+            },
+            "assets": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "assetId": {
+                    "$ref": "urn:pogo:skill:1:common#/$defs/id"
+                  },
+                  "path": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "digest": {
+                    "$ref": "urn:pogo:skill:1:common#/$defs/digest"
+                  }
+                },
+                "required": [
+                  "assetId",
+                  "path",
+                  "digest"
+                ],
+                "additionalProperties": false
+              },
+              "minItems": 0
+            },
+            "outputDirectory": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "files",
+            "assets",
+            "outputDirectory"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "protocolVersion",
+        "callId",
+        "type",
+        "operation",
+        "contract",
+        "input",
+        "context"
+      ],
+      "additionalProperties": false
+    }
+  ]
+}

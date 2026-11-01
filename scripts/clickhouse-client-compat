@@ -1,0 +1,252 @@
+#!/bin/sh
+# clickhouse-client-compat is installed as /usr/local/bin/clickhouse-client
+# and stands in front of the official binary from the ClickHouse apt
+# repository. That binary's instruction-set baseline is newer than some
+# deployment CPUs: the aarch64 build needs ARMv8.2 with LSE atomics (since
+# 22.10) and LRCPC (since 23.5) — so both ARMv8.0 Phytium and LRCPC-less
+# Kunpeng 920 die with SIGILL — and the x86-64 build targets x86-64-v3
+# (AVX2). The official repositories publish no pinned-version compatible
+# build to fall back to (only unpinned master builds), so one image has to
+# serve every host.
+#
+# The wrapper probes the native client once per container and either execs it
+# untouched — the common case, zero overhead after the probe — or translates
+# the call to the server's HTTP interface, which curl speaks from any CPU.
+# HTTP mode is a documented subset, not an emulation: flags outside the set
+# below are rejected rather than silently dropped, because a query that runs
+# with half its options ignored is a wrong answer wearing a success exit
+# code. Interactive REPL, parametrized queries and --ask-password have no
+# HTTP equivalent and say so.
+set -u
+
+# POGO_CLICKHOUSE_REAL and POGO_CLICKHOUSE_STATE exist so tests can point the
+# wrapper at a stub binary and a private cache; both are also deployment
+# knobs if an operator wants the same shadowing around a different build.
+real=${POGO_CLICKHOUSE_REAL:-/usr/bin/clickhouse-client}
+state=${POGO_CLICKHOUSE_STATE:-${TMPDIR:-/tmp}/pogo-clickhouse-client-compat-$(id -u)}
+
+mode=""
+if [ -r "$state" ]; then
+    mode=$(cat "$state" 2>/dev/null)
+fi
+if [ "$mode" != native ] && [ "$mode" != http ]; then
+    if [ ! -x "$real" ]; then
+        # No native client at all (never installed, or removed): HTTP is the
+        # only option rather than a compatibility judgement.
+        mode=http
+    elif "$real" --version >/dev/null 2>&1; then
+        # The probe is the ground truth a static feature check cannot be: it
+        # also catches instructions nobody lists in /proc/cpuinfo (the
+        # vmull_p64 crash on pre-25.9 aarch64 compat CPUs, say).
+        mode=native
+    else
+        mode=http
+    fi
+    # Cache so a crashing binary costs one probe per container, not one per
+    # query. Best-effort: a read-only temp dir only costs the repeated probe.
+    printf '%s\n' "$mode" >"$state" 2>/dev/null || :
+fi
+if [ "$mode" = native ]; then
+    exec "$real" "$@"
+fi
+
+# Everything below runs only when the native client cannot.
+
+# missing_features names what the CPU lacks, best-effort: it shapes the
+# notice, it decides nothing. /proc/cpuinfo names differ from compiler flags
+# (the official install.sh carries the same caveat), so only the features
+# known to gate the official builds are named, and only on the two
+# architectures those builds exist for.
+missing_features() {
+    case $(uname -m) in
+        aarch64 | arm64)
+            for f in atomics lrcpc; do
+                grep -m1 '^Features' /proc/cpuinfo 2>/dev/null | grep -qw "$f" ||
+                    printf ' %s' "$f"
+            done
+            ;;
+        x86_64 | amd64)
+            grep -m1 '^flags' /proc/cpuinfo 2>/dev/null | grep -qw avx2 ||
+                printf ' avx2'
+            ;;
+    esac
+}
+
+unsupported() {
+    printf 'clickhouse-client: %s is not supported by the HTTP compatibility fallback; re-run with the supported subset (-h/--host, --port, -u/--user, --password, -d/--database, -q/--query, -f/--format, -s/--secure, -n/--multiquery) or curl the HTTP interface directly.\n' "$1" >&2
+    exit 64
+}
+
+host="" port="" user="" password="" database="" query="" format=""
+secure=0 multi=0 want_version=0 want_help=0
+while [ $# -gt 0 ]; do
+    arg=$1
+    case $arg in
+        -h | --host) [ $# -ge 2 ] || unsupported "$arg"; host=$2; shift 2 ;;
+        --host=*) host=${arg#*=} ;;
+        -h*) host=${arg#-h} ;;
+        -u | --user) [ $# -ge 2 ] || unsupported "$arg"; user=$2; shift 2 ;;
+        --user=*) user=${arg#*=} ;;
+        -u*) user=${arg#-u} ;;
+        --password) [ $# -ge 2 ] || unsupported "$arg"; password=$2; shift 2 ;;
+        --password=*) password=${arg#*=} ;;
+        --port) [ $# -ge 2 ] || unsupported "$arg"; port=$2; shift 2 ;;
+        --port=*) port=${arg#*=} ;;
+        -d | --database) [ $# -ge 2 ] || unsupported "$arg"; database=$2; shift 2 ;;
+        --database=*) database=${arg#*=} ;;
+        -d*) database=${arg#-d} ;;
+        -q | --query) [ $# -ge 2 ] || unsupported "$arg"; query=$2; shift 2 ;;
+        --query=*) query=${arg#*=} ;;
+        -q*) query=${arg#-q} ;;
+        -f | --format) [ $# -ge 2 ] || unsupported "$arg"; format=$2; shift 2 ;;
+        --format=*) format=${arg#*=} ;;
+        -f*) format=${arg#-f} ;;
+        -s | --secure) secure=1; shift ;;
+        -n | --multiquery) multi=1; shift ;;
+        -V | --version) want_version=1; shift ;;
+        --help) want_help=1; shift ;;
+        -*) unsupported "$arg" ;;
+        *)
+            if [ -n "$query" ]; then
+                unsupported "extra argument $arg"
+            fi
+            query=$arg
+            shift
+            ;;
+    esac
+done
+
+if [ "$want_version" = 1 ]; then
+    # The package version, not the binary's own banner: the binary cannot
+    # run on this host, which is the whole reason this branch exists.
+    ver=$(dpkg-query -W -f'${Version}' clickhouse-client 2>/dev/null) || ver=unknown
+    printf 'ClickHouse client version %s (official build, HTTP compatibility fallback).\n' "$ver"
+    exit 0
+fi
+if [ "$want_help" = 1 ]; then
+    cat >&2 <<'EOF'
+Usage (HTTP compatibility fallback; the native client cannot run on this CPU):
+  clickhouse-client [-h host] [--port N] [-u user] [--password p] [-d db]
+                    [-q query | query] [-f format] [-s] [-n] [< data]
+
+Speaks the ClickHouse HTTP interface via curl. Unsupported: interactive
+mode, --ask-password, parametrized queries, and every other native flag.
+EOF
+    exit 0
+fi
+
+scheme=http
+default_port=8123
+if [ "$secure" -eq 1 ]; then
+    scheme=https
+    default_port=8443
+fi
+# 9000/9440 are the native-protocol ports; a caller naming them almost
+# certainly means the server's default HTTP listener, not an HTTP server on
+# a native port. Any other explicit port is taken as the HTTP port as-is.
+case $port in
+    "") port=$default_port ;;
+    9000) port=8123 ;;
+    9440) port=8443 ;;
+esac
+
+if [ -z "$query" ] && [ -t 0 ]; then
+    unsupported "interactive mode"
+fi
+
+# Percent-encode every byte, unreserved ones included: over-encoding is
+# still correct URL grammar, and one rule that never misses beats a table
+# of safe characters maintained by hand.
+enc() {
+    printf '%s' "$1" | od -An -v -tx1 | tr -d ' \n' | sed 's/\(..\)/%\1/g'
+}
+
+url="$scheme://$host:$port/"
+param_sep='?'
+add_param() {
+    url="${url}${param_sep}$1"
+    param_sep='&'
+}
+if [ -n "$database" ]; then
+    add_param "database=$(enc "$database")"
+fi
+if [ -n "$format" ]; then
+    add_param "default_format=$(enc "$format")"
+fi
+if [ "$multi" -eq 1 ]; then
+    add_param "multiquery=1"
+fi
+
+is_insert=0
+case $(printf '%s\n' "$query" | sed -n 's/^[[:space:]]*//p') in
+[Ii][Nn][Ss][Ee][Rr][Tt]*)
+    # INSERT is the one shape where the query must ride the URL (as the
+    # query parameter) and the body carries the data — the documented HTTP
+    # pattern, and what the native client's stdin behavior maps onto.
+    is_insert=1
+    add_param "query=$(enc "$query")"
+    ;;
+esac
+
+# Credentials travel as headers inside a curl config file rather than URL
+# parameters: mktemp gives 0600, and the config file keeps both user and key
+# out of ps. X-ClickHouse-User/X-ClickHouse-Key are the documented HTTP
+# auth headers.
+cfg=$(mktemp "${TMPDIR:-/tmp}/chcompat.XXXXXX") || exit 1
+out=$(mktemp "${TMPDIR:-/tmp}/chcompat.XXXXXX") || {
+    rm -f "$cfg"
+    exit 1
+}
+trap 'rm -f "$cfg" "$out"' EXIT
+{
+    [ -n "$user" ] && printf 'header = "X-ClickHouse-User: %s"\n' "$user"
+    [ -n "$password" ] && printf 'header = "X-ClickHouse-Key: %s"\n' "$password"
+} >"$cfg"
+
+missing=$(missing_features)
+if [ -n "$missing" ]; then
+    note=" (missing:$missing)"
+else
+    note=""
+fi
+printf 'clickhouse-client: native client cannot run on this CPU%s; query forwarded over HTTP to %s://%s:%s\n' \
+    "$note" "$scheme" "$host" "$port" >&2
+
+rc=0
+if [ "$is_insert" -eq 1 ]; then
+    # The body is stdin when data is piped, empty when the statement is
+    # self-contained (inline VALUES).
+    if [ -t 0 ]; then
+        status=$(curl -sS -o "$out" -w '%{http_code}' --config "$cfg" --data-binary '' "$url") || rc=$?
+    else
+        status=$(curl -sS -o "$out" -w '%{http_code}' --config "$cfg" --data-binary @- "$url") || rc=$?
+    fi
+elif [ -n "$query" ]; then
+    # Piped rather than passed, so the query text never appears in ps.
+    status=$(printf '%s' "$query" | curl -sS -o "$out" -w '%{http_code}' --config "$cfg" --data-binary @- "$url") || rc=$?
+else
+    # No query, data piped in: native batch mode reads statements from
+    # stdin, and multiquery is what lets HTTP accept more than one of them.
+    if [ "$multi" -eq 0 ]; then
+        add_param "multiquery=1"
+    fi
+    status=$(curl -sS -o "$out" -w '%{http_code}' --config "$cfg" --data-binary @- "$url") || rc=$?
+fi
+if [ "$rc" -ne 0 ]; then
+    printf 'clickhouse-client: HTTP request failed (curl exit %d)\n' "$rc" >&2
+    exit "$rc"
+fi
+case $status in
+'' | *[!0-9]*)
+    printf 'clickhouse-client: HTTP request failed (status %s)\n' "$status" >&2
+    exit 1
+    ;;
+esac
+if [ "$status" -ge 400 ]; then
+    # Without -f, curl writes the error body to the file and exits zero;
+    # the body is the server's explanation and belongs on stderr, like the
+    # native client's errors.
+    cat "$out" >&2
+    exit 1
+fi
+cat "$out"

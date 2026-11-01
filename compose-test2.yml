@@ -1,0 +1,63 @@
+# pogo-base2:第二套 pogo 实例,专用于 MCP 功能测试。
+#   docker compose -f pogo/compose-test2.yml up -d
+#   http://127.0.0.1:19778/  (admin token: pogo-base2-token)
+#   MCP:  http://127.0.0.1:19778/mcp  (token: pogo-base2-mcp-token)
+#
+# 与主实例(pogo-base)的隔离与互通:
+#   - 独立容器名/端口/数据卷(pogo2-home、pogo2-skills),互不污染状态;
+#   - 不挂 users.json:单管理员 token 模式,测试环境最简;
+#   - 共用 malagent 的 providers.json(只读)与 deploy.env 的 API key;
+#   - 接入主实例同一 docker 网络(pogo_default):主 pogo 的 MCP 客户端
+#     可用 http://pogo-base2:7777/mcp 按容器名直连本实例。
+name: pogo2
+
+services:
+  pogo-base2:
+    image: pogo:pub-note-20260929
+    container_name: pogo-base2
+    init: true
+    security_opt:
+      - no-new-privileges:true
+      - seccomp=./seccomp-bwrap.json
+    cap_drop: [ALL]
+    read_only: true
+    mem_limit: ${POGO_MEMORY_LIMIT:-4g}
+    cpus: ${POGO_CPUS:-4}
+    pids_limit: 768
+    stop_grace_period: 30s
+    tmpfs:
+      - /tmp:size=1g,exec
+    volumes:
+      - pogo2-home:/home/pogo
+      - pogo2-skills:/var/lib/pogo-skills
+      - ../malagent/providers.json:/home/pogo/.pogo/providers.json:ro
+    env_file:
+      - ./deploy.env
+    environment:
+      - POGO_WEB_TOKEN=pogo-base2-token
+      - POGO_SANDBOX=enforce
+      - POGO_SKILL_RUNTIME_STORE=/var/lib/pogo-skills
+      - POGO_SKILL_RUNTIME_EXECUTOR=local
+      # MCP 服务端(本实例被测的部分):/mcp 与 /sse 端点 + 独立鉴权。
+      # policy=auto 让 MCP 提交的任务自动过审批门,适合无人值守测试;
+      # 要复现人工审批场景改成 strict。
+      - POGO_MCP=1
+      - POGO_MCP_TOKEN=pogo-base2-mcp-token
+      - POGO_MCP_POLICY=auto
+    ports:
+      - "127.0.0.1:19778:7777"
+    command: ["-web", "-listen", "0.0.0.0:7777"]
+    restart: unless-stopped
+    networks:
+      - pogo-net
+
+volumes:
+  pogo2-home:
+    name: pogo2-home
+  pogo2-skills:
+    name: pogo2-skills
+
+networks:
+  pogo-net:
+    name: pogo_default
+    external: true

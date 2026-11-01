@@ -1,0 +1,43 @@
+# W2 browser overlay: only the Pogo Web port is public; worker traffic is internal.
+services:
+  pogo:
+    environment:
+      - POGO_BROWSER_URL=http://pogo-browser:7788
+      - POGO_BROWSER_TOKEN=${POGO_BROWSER_TOKEN:?Set a random POGO_BROWSER_TOKEN}
+      - POGO_BROWSER_MEDIA_RELAY=web-port
+      - POGO_BROWSER_RELAY_UDP_PORT_RANGE=${POGO_BROWSER_RELAY_UDP_PORT_RANGE:-${POGO_BROWSER_WEBRTC_UDP_PORT_RANGE:-19780-19811}}
+    depends_on:
+      pogo-browser:
+        condition: service_healthy
+  pogo-browser:
+    image: ${POGO_BROWSER_IMAGE:-pogo-browser:playwright-1.63.0}
+    platform: ${POGO_PLATFORM:-linux/amd64}
+    build:
+      context: ./browser-runtime
+    init: true
+    security_opt:
+      - no-new-privileges:true
+      - seccomp=./browser-runtime/seccomp.json
+    cap_drop: [ALL]
+    read_only: true
+    tmpfs:
+      - /tmp:size=1g,exec,mode=1777
+    shm_size: 1g
+    mem_limit: ${POGO_BROWSER_MEMORY_LIMIT:-3g}
+    cpus: ${POGO_BROWSER_CPUS:-2}
+    pids_limit: 1024
+    environment:
+      - POGO_BROWSER_TOKEN=${POGO_BROWSER_TOKEN:?Set a random POGO_BROWSER_TOKEN}
+      - POGO_BROWSER_MAX_SESSIONS=${POGO_BROWSER_MAX_SESSIONS:-16}
+      - POGO_BROWSER_IDLE_MS=${POGO_BROWSER_IDLE_MS:-1800000}
+      - POGO_BROWSER_SETTLE_MS=${POGO_BROWSER_SETTLE_MS:-2000}
+      - POGO_BROWSER_WEBRTC_RELAY_ONLY=1
+      - POGO_BROWSER_WEBRTC_UDP_PORT_RANGE=${POGO_BROWSER_RELAY_UDP_PORT_RANGE:-${POGO_BROWSER_WEBRTC_UDP_PORT_RANGE:-19780-19811}}
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:7788/healthz',{headers:{Authorization:'Bearer '+process.env.POGO_BROWSER_TOKEN}}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+    stop_grace_period: 15s
+    restart: unless-stopped

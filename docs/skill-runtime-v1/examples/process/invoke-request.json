@@ -1,0 +1,26 @@
+{
+  "protocolVersion": "pogo.tool/1",
+  "callId": "call:fixture-001",
+  "type": "invoke",
+  "operation": "file.decompile",
+  "contract": {
+    "id": "malware.file.decompile",
+    "version": "1.0.0",
+    "digest": "sha256:a621f8166aa55329b6c6f6ca3f7993f3879c7d680d5caa38fb559c29e95366b7"
+  },
+  "input": {
+    "fileId": "file:fixture-sample"
+  },
+  "context": {
+    "files": [
+      {
+        "inputPointer": "/fileId",
+        "fileId": "file:fixture-sample",
+        "path": "/run/pogo/call-001/input/sample.bin",
+        "digest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+      }
+    ],
+    "assets": [],
+    "outputDirectory": "/run/pogo/call-001/output"
+  }
+}

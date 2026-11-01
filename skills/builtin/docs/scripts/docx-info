@@ -1,0 +1,51 @@
+#!/opt/venv/bin/python3
+"""docx-info <docx> — 首屏导航：标题树/段落数/表格数/字数。
+
+输出单行紧凑 JSON。标题树给出每个标题的级别、序号和原文，长文档由此
+决定取哪几段正文。
+"""
+
+import json
+import sys
+import os
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from docxlib import DocxError, body_items, open_body, para_heading, para_text  # noqa: E402
+
+
+def main():
+    if len(sys.argv) != 2:
+        print("usage: docx-info <docx>", file=sys.stderr)
+        return 2
+    try:
+        root = open_body(sys.argv[1])
+        headings = []
+        paras = tables = chars = 0
+        for kind, item in body_items(root):
+            if kind == "para":
+                paras += 1
+                text = para_text(item)
+                chars += len(text)
+                lvl = para_heading(item)
+                if lvl and text.strip():
+                    headings.append({"lvl": lvl, "text": text.strip()[:120]})
+            else:
+                tables += 1
+        print(json.dumps({
+            "paragraphs": paras,
+            "tables": tables,
+            "chars": chars,
+            "headings": headings[:200],
+        }, ensure_ascii=False, separators=(",", ":")))
+        return 0
+    except DocxError as e:
+        print(f"docx-info: {e}", file=sys.stderr)
+        return 1
+    except Exception as e:
+        reason = " ".join(str(e).split())[:240]
+        print(f"docx-info: docx 文档结构不可读取: {reason}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

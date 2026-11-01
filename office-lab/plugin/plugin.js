@@ -1,0 +1,1 @@
+../../office-runtime/bridge/plugin.js

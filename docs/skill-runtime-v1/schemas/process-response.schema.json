@@ -1,0 +1,143 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:pogo:skill:1:process-response",
+  "title": "Pogo process-response v0.1 (draft)",
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "protocolVersion": {
+          "const": "pogo.tool/1"
+        },
+        "callId": {
+          "$ref": "urn:pogo:skill:1:common#/$defs/opaqueRef"
+        },
+        "type": {
+          "const": "describe"
+        },
+        "operations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "operation": {
+                "$ref": "urn:pogo:skill:1:common#/$defs/id"
+              },
+              "contract": {
+                "$ref": "urn:pogo:skill:1:common#/$defs/contractRef"
+              }
+            },
+            "required": [
+              "operation",
+              "contract"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "protocolVersion",
+        "callId",
+        "type",
+        "operations"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "protocolVersion": {
+          "const": "pogo.tool/1"
+        },
+        "callId": {
+          "$ref": "urn:pogo:skill:1:common#/$defs/opaqueRef"
+        },
+        "type": {
+          "const": "result"
+        },
+        "output": {
+          "type": "object"
+        },
+        "artifacts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "$ref": "urn:pogo:skill:1:common#/$defs/id"
+              },
+              "path": {
+                "$ref": "urn:pogo:skill:1:common#/$defs/relativePath"
+              },
+              "mediaType": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              }
+            },
+            "required": [
+              "name",
+              "path",
+              "mediaType"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 0
+        }
+      },
+      "required": [
+        "protocolVersion",
+        "callId",
+        "type",
+        "output",
+        "artifacts"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "protocolVersion": {
+          "const": "pogo.tool/1"
+        },
+        "callId": {
+          "$ref": "urn:pogo:skill:1:common#/$defs/opaqueRef"
+        },
+        "type": {
+          "const": "error"
+        },
+        "error": {
+          "type": "object",
+          "properties": {
+            "code": {
+              "enum": [
+                "INVALID_INPUT",
+                "UNSUPPORTED_OPERATION",
+                "TOOL_FAILED",
+                "RESOURCE_UNAVAILABLE"
+              ]
+            },
+            "message": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096
+            }
+          },
+          "required": [
+            "code",
+            "message"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "protocolVersion",
+        "callId",
+        "type",
+        "error"
+      ],
+      "additionalProperties": false
+    }
+  ]
+}

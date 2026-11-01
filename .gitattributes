@@ -1,0 +1,17 @@
+# Golden test data is compared byte for byte, so it must not be line-ending
+# converted on checkout. Without this, a Windows clone with core.autocrlf=true
+# gets CRLF fixtures and the patch/replay parsers fail on a trailing \r that
+# exists only on that machine.
+web/ui/src/agent/__fixtures__/** -text
+
+# Embedded skill scripts run via shebang; a CRLF checkout turns
+# "#!/opt/venv/bin/python3" into "...python3\r" and the kernel ENOENTs.
+pogo/skills/builtin/** text eol=lf
+*.py text eol=lf
+
+# Skill contracts are embedded by providers and pinned by their raw-byte digest.
+skillruntime/core/schemas/*.json text eol=lf
+docs/skill-runtime-v1/**/*.json text eol=lf
+cmd/pogo-malagent-provider/contracts/*.json text eol=lf
+cmd/pogo-yara-provider/contract.json text eol=lf
+cmd/pogo-yara-package/contract.json text eol=lf

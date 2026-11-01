@@ -1,0 +1,191 @@
+{
+  "apiVersion": "pogo.skill/v1",
+  "kind": "ResolvedLock",
+  "lockId": "lock:fixture-001",
+  "agentId": "agent:malware-analyst",
+  "sessionId": "session:fixture-001",
+  "bindingRevision": 1,
+  "bindingDigest": "sha256:09551bcfa28525bde06cb0967d73ac73daa650496b4f37f2d9a4159f0340d5f9",
+  "policyRevision": "policy:fixture-v1",
+  "registryRevision": "registry:fixture-v1",
+  "drivers": [
+    {
+      "id": "bundle",
+      "version": "1"
+    },
+    {
+      "id": "process-json",
+      "version": "1"
+    }
+  ],
+  "packages": [
+    {
+      "id": "org.example.malware",
+      "version": "0.1.0",
+      "manifestDigest": "sha256:09e921c2aebd413f24709a2f50d94ecef694bc9f39f16fc8d499985a56c280ec",
+      "packageDigest": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+    }
+  ],
+  "skills": [
+    {
+      "skill": {
+        "packageId": "org.example.malware",
+        "skillId": "malware-analysis"
+      },
+      "entryDigest": "sha256:59a50afe264b350d0731280333b6cb78e902cce2063464212e04ef85449e1a28"
+    }
+  ],
+  "capabilities": [
+    {
+      "contract": {
+        "id": "malware.sample.search",
+        "version": "1.0.0",
+        "digest": "sha256:0f5c3611681549149ee31e17c95f5e67d080184132feec071d18ec302ca047f4"
+      },
+      "provider": {
+        "packageId": "org.example.malware",
+        "providerId": "malquery-search"
+      }
+    },
+    {
+      "contract": {
+        "id": "malware.file.capabilities",
+        "version": "1.0.0",
+        "digest": "sha256:f83945fd19f8ea5e71e6678d4ed76b416a860b23fc0a6ec4b030fa12976fca6f"
+      },
+      "provider": {
+        "packageId": "org.example.malware",
+        "providerId": "capa-analyze"
+      }
+    },
+    {
+      "contract": {
+        "id": "malware.file.yara.scan",
+        "version": "1.0.0",
+        "digest": "sha256:8661589e241b70ccb7eae8f58c393fccc64e9c826ba53eb8073f0efdca81a552"
+      },
+      "provider": {
+        "packageId": "org.example.malware",
+        "providerId": "yara-scan"
+      }
+    },
+    {
+      "contract": {
+        "id": "malware.file.decompile",
+        "version": "1.0.0",
+        "digest": "sha256:a621f8166aa55329b6c6f6ca3f7993f3879c7d680d5caa38fb559c29e95366b7"
+      },
+      "provider": {
+        "packageId": "org.example.malware",
+        "providerId": "ghidra-decompile"
+      }
+    }
+  ],
+  "runtimes": [
+    {
+      "packageId": "org.example.malware",
+      "runtimeId": "analysis-tools",
+      "artifactDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  ],
+  "assets": [
+    {
+      "packageId": "org.example.malware",
+      "assetId": "capa-rules",
+      "artifactDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    {
+      "packageId": "org.example.malware",
+      "assetId": "yara-rules",
+      "artifactDigest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    }
+  ],
+  "resources": [
+    {
+      "packageId": "org.example.malware",
+      "slotId": "samples",
+      "resourceRef": "files:current-session",
+      "resourceRevision": "resource:fixture-v1",
+      "authorizationRevision": "authz:fixture-v1"
+    },
+    {
+      "packageId": "org.example.malware",
+      "slotId": "results",
+      "resourceRef": "artifacts:current-call",
+      "resourceRevision": "resource:fixture-v1",
+      "authorizationRevision": "authz:fixture-v1"
+    }
+  ],
+  "connections": [],
+  "effectiveGrants": [
+    {
+      "mode": "sandbox",
+      "provider": {
+        "packageId": "org.example.malware",
+        "providerId": "malquery-search"
+      },
+      "isolationProfileRef": "sandbox:linux-pkg-v1",
+      "ceiling": {
+        "network": "none",
+        "limits": {
+          "timeoutSeconds": 60,
+          "memoryMiB": 512,
+          "cpuMilliCores": 1000,
+          "maxOutputBytes": 1048576
+        }
+      }
+    },
+    {
+      "mode": "sandbox",
+      "provider": {
+        "packageId": "org.example.malware",
+        "providerId": "capa-analyze"
+      },
+      "isolationProfileRef": "sandbox:linux-pkg-v1",
+      "ceiling": {
+        "network": "none",
+        "limits": {
+          "timeoutSeconds": 300,
+          "memoryMiB": 2048,
+          "cpuMilliCores": 1000,
+          "maxOutputBytes": 1048576
+        }
+      }
+    },
+    {
+      "mode": "sandbox",
+      "provider": {
+        "packageId": "org.example.malware",
+        "providerId": "yara-scan"
+      },
+      "isolationProfileRef": "sandbox:linux-pkg-v1",
+      "ceiling": {
+        "network": "none",
+        "limits": {
+          "timeoutSeconds": 120,
+          "memoryMiB": 1024,
+          "cpuMilliCores": 1000,
+          "maxOutputBytes": 1048576
+        }
+      }
+    },
+    {
+      "mode": "sandbox",
+      "provider": {
+        "packageId": "org.example.malware",
+        "providerId": "ghidra-decompile"
+      },
+      "isolationProfileRef": "sandbox:linux-pkg-v1",
+      "ceiling": {
+        "network": "none",
+        "limits": {
+          "timeoutSeconds": 900,
+          "memoryMiB": 4096,
+          "cpuMilliCores": 1000,
+          "maxOutputBytes": 1048576
+        }
+      }
+    }
+  ],
+  "createdBy": "pogo-host"
+}

@@ -1,0 +1,79 @@
+#!/opt/venv/bin/python3
+"""pdf-info <pdf> — 首屏导航：页数/元数据/书签目录/每页字符数/文字层判定。
+
+输出单行紧凑 JSON。digital_text_layer=false 即扫描版（本技能不做 OCR）。
+"""
+import json
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import pdflib
+
+
+def main():
+    if len(sys.argv) != 2:
+        raise pdflib.Fail(2, "usage: pdf-info <pdf>")
+    doc = pdflib.open_guarded(sys.argv[1])
+
+    sample_n = min(10, doc.page_count)
+    page_chars = []
+    for i in range(doc.page_count):
+        try:
+            n = len(doc[i].get_text())
+        except Exception:
+            n = 0
+        page_chars.append(n)
+
+    # 扫描版判定（调研 A5）：producer/creator 有扫描器痕迹、或采样页字符中位数
+    # 极低且整页被图像覆盖 → 没有可提取的文字层
+    md = doc.metadata or {}
+    producer = (md.get("producer") or "") + " " + (md.get("creator") or "")
+    scanner_hint = any(
+        k in producer.lower()
+        for k in ("scan", "hp ", "xerox", "epson", "canon", "paperport", "ricoh")
+    )
+    sample = page_chars[:sample_n] or [0]
+    sample_chars = sorted(sample)[len(sample) // 2]
+    img_cover = 0.0
+    for i in range(sample_n):
+        try:
+            rects = doc[i].get_image_info()
+        except Exception:
+            rects = []
+        area = 0
+        seen = []
+        for d in rects:
+            bb = d.get("bbox")
+            if not bb:
+                continue
+            r = (bb[2] - bb[0]) * (bb[3] - bb[1])
+            if r <= 0:
+                continue
+            # 重叠的图不重复计面积：粗略按并集上界（报告版面很少三层叠图）
+            area += r
+            seen.append(bb)
+        page_area = doc[i].rect.width * doc[i].rect.height
+        if page_area > 0:
+            img_cover = max(img_cover, min(area / page_area, 1.0))
+    digital = sample_chars > 200 and img_cover < 0.9 and not scanner_hint
+
+    text_pages = sum(1 for c in page_chars if c > 50)
+    out = {
+        "file": sys.argv[1],
+        "pages": doc.page_count,
+        "repaired": doc.is_repaired,
+        "producer": md.get("producer") or "",
+        "creator": md.get("creator") or "",
+        "toc": doc.get_toc()[:200],
+        "page_chars": page_chars,
+        "text_pages": text_pages,
+        "image_cover_sample": round(img_cover, 2),
+        "digital_text_layer": digital,
+        "note": "" if digital else
+            "无文字层（扫描版或纯图）：本技能只做文字层提取，请如实告知用户",
+    }
+    print(json.dumps(out, ensure_ascii=False, separators=(",", ":")))
+
+
+pdflib.run(main)

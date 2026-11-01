@@ -1,0 +1,202 @@
+/* The opening owns its styles; the following four chapters keep the deployed design. */
+.cinema-hybrid .opening-scene {
+  --gutter: var(--page-x);
+  --paper: #f1f0e8;
+  --ink: #17272c;
+  --night: #111e27;
+  position: relative;
+}
+.cinema-hybrid .opening-stage {
+  position: sticky;
+  top: var(--header-h);
+  height: calc(100svh - var(--header-h));
+  overflow: hidden;
+  isolation: isolate;
+}
+.cinema-hybrid .opening-scene .cinema-button { display: inline-flex; align-items: center; justify-content: space-between; gap: 36px; min-height: 46px; padding: 12px 21px; background: var(--ink); color: #f7f7ef; font-size: 12px; position: relative; overflow: hidden; isolation: isolate; transition: background .3s,transform .3s,box-shadow .3s; }
+.cinema-hybrid .opening-scene .cinema-button::before { content: ""; position: absolute; inset: 0; z-index: -1; background: #167a99; transform: translateY(101%); transition: transform .4s cubic-bezier(.2,.7,.2,1); }
+.cinema-hybrid .opening-scene .cinema-button:hover::before { transform: translateY(0); }
+.cinema-hybrid .opening-scene .cinema-button>span { font-size: 20px; line-height: 1; transition: translate .3s; }
+.cinema-hybrid .opening-scene .cinema-button:hover>span { translate: 3px -3px; }
+.cinema-hybrid .opening-scene .cinema-button:active { transform: scale(.98); }
+.cinema-hybrid .opening-scene .cinema-meta { position: absolute; z-index: 15; top: 26px; left: var(--gutter); right: var(--gutter); display: flex; align-items: center; justify-content: space-between; gap: 15px; font: 9px/1.4 var(--mono); letter-spacing: 1.1px; }
+.cinema-hybrid .opening-scene .cinema-meta span:first-child { display: flex; align-items: center; gap: 9px; }
+.cinema-hybrid .opening-scene .cinema-meta i { width: 6px; height: 6px; background: #25a9d0; }
+.cinema-hybrid .opening-scene .cinema-eyebrow { font: 9px/1.6 var(--mono); letter-spacing: 1.3px; }
+.cinema-hybrid .opening-scene { height: 310svh; background: var(--night); }
+.cinema-hybrid .opening-scene .opening-stage { background: var(--paper); }
+.cinema-hybrid .opening-scene .opening-grid { position: absolute; inset: 0; opacity: .18; background-image: linear-gradient(#8da9ad44 1px,transparent 1px),linear-gradient(90deg,#8da9ad44 1px,transparent 1px); background-size: 9vw 9vw; mask-image: linear-gradient(transparent,#0006,transparent); }
+.cinema-hybrid .opening-scene .opening-watermark { position: absolute; top: -5%; left: 25%; font: 700 35vw/.95 var(--sans); letter-spacing: -.08em; color: #819e9420; }
+.cinema-hybrid .opening-scene .opening-art { position: absolute; left: 31%; top: 10%; width: 63%; height: 58%; transform-origin: 48% 50%; z-index: 4; }
+.cinema-hybrid .opening-scene .opening-wires { position: absolute; width: 112%; height: 118%; inset: -5%; color: #488697; stroke-width: .7; overflow: visible; opacity: .6; }
+.cinema-hybrid .opening-scene .cinema-paper { position: absolute; aspect-ratio: 1; transform: rotate(var(--paper-rotation)); box-shadow: 0 2px 3px #18394118,2px 13px 32px #18394113; transform-origin: 50% 50%; translate: calc(var(--pointer-x,0px) * var(--depth) / 11) calc(var(--pointer-y,0px) * var(--depth) / 11); }
+.cinema-hybrid .opening-scene .paper-image { background-image: url('../../assets/studio/scientific-atlas.webp'); background-size: 300% 200%; background-repeat: no-repeat; }
+.cinema-hybrid .opening-scene .atlas-neuron { background-position: 0 0; background-color: #eae0c7; }
+.cinema-hybrid .opening-scene .atlas-wave { background-position: 50% 0; background-color: #1d5c78; }
+.cinema-hybrid .opening-scene .atlas-shell { background-position: 100% 0; background-color: #eddda3; }
+.cinema-hybrid .opening-scene .atlas-mountain { background-position: 0 100%; background-color: #a6a395; }
+.cinema-hybrid .opening-scene .atlas-iris { background-position: 50% 100%; background-color: #b7d3d9; }
+.cinema-hybrid .opening-scene .atlas-leaf { background-position: 100% 100%; background-color: #a4b58b; }
+.cinema-hybrid .opening-scene .paper-register { position: absolute; bottom: 8px; left: 8px; padding: 3px 4px; background: #f7f5e5a8; color: #294749; font: 6px var(--mono); letter-spacing: .4px; }
+.cinema-hybrid .opening-scene .paper-archive { padding: 16px; background: #e7ddbe; color: #827f63; }
+.cinema-hybrid .opening-scene .cinema-paper small, .cinema-hybrid .opening-scene .cinema-paper>span { font: 7px/1.6 var(--mono); letter-spacing: .7px; }
+.cinema-hybrid .opening-scene .archive-lines { height: 46%; margin: 14px 0; background: repeating-linear-gradient(0deg,transparent 0 8px,#9e987c44 8px 9px); }
+.cinema-hybrid .opening-scene .paper-archive em { display: block; font: italic 31px var(--serif); margin: 10px 0; }
+.cinema-hybrid .opening-scene .paper-blueprint { padding: 13px; color: #426578; background: #c2dbe1; }
+.cinema-hybrid .opening-scene .paper-blueprint svg { width: 100%; height: 75%; stroke-width: .75; opacity: .75; }
+.cinema-hybrid .opening-scene .paper-vellum { padding: 18px; background: #eaeee1e8; color: #566f65; border: 1px solid #f5f7ecc9; }
+.cinema-hybrid .opening-scene .paper-vellum strong { display: grid; place-items: center; height: 72%; font: 95px/1 var(--serif); }
+.cinema-hybrid .opening-scene .paper-ticket { aspect-ratio: 3.2; display: flex; align-items: center; gap: 12px; padding: 12px 17px; background: #f2f2df; }
+.cinema-hybrid .opening-scene .paper-ticket b { font: 700 29px var(--sans); letter-spacing: -2px; }
+.cinema-hybrid .opening-scene .paper-ticket small { font-size: 6px; }
+.cinema-hybrid .opening-scene .paper-ticket i { color: #1788ac; font-size: 25px; font-style: normal; margin-left: auto; }
+.cinema-hybrid .opening-scene .paper-tag { aspect-ratio: 1.6; background: #a9d6e2; padding: 20px; color: #225c71; }
+.cinema-hybrid .opening-scene .paper-tag>i { display: block; width: 7px; height: 7px; border: 1px solid currentColor; border-radius: 50%; margin-bottom: 10px; }
+.cinema-hybrid .opening-scene .opening-copy { position: absolute; z-index: 8; left: var(--gutter); bottom: 13%; width: 88%; pointer-events: none; }
+.cinema-hybrid .opening-scene .opening-copy .cinema-eyebrow { margin-bottom: 17px; color: #677e80; }
+.cinema-hybrid .opening-scene .opening-copy h1 { font-size: clamp(56px,6.5vw,106px); line-height: 1.16; letter-spacing: -.045em; }
+.cinema-hybrid .opening-scene .opening-copy h1>span { color: #117ba5; position: relative; }
+.cinema-hybrid .opening-scene .opening-copy h1 i { font: 25px var(--sans); position: absolute; top: 6px; right: -21px; }
+.cinema-hybrid .opening-scene .opening-intro { position: absolute; right: 3%; bottom: 4px; max-width: 30%; pointer-events: auto; }
+.cinema-hybrid .opening-scene .opening-intro p { font-size: 12px; color: #607175; line-height: 1.9; margin-bottom: 20px; }
+.cinema-hybrid .opening-scene .opening-discovery { position: absolute; left: var(--gutter); top: 24%; z-index: 7; opacity: 0; visibility: hidden; }
+.cinema-hybrid .opening-scene .opening-discovery h2 { font-size: clamp(48px,6.6vw,92px); line-height: 1.2; margin: 17px 0 22px; }
+.cinema-hybrid .opening-scene .opening-discovery h2 span { color: #087eae; }
+.cinema-hybrid .opening-scene .opening-discovery>p { color: #617677; font-size: 13px; }
+.cinema-hybrid .opening-scene .opening-portal { position: absolute; left: 64%; top: 43%; width: 180px; height: 180px; margin: -90px; z-index: 6; border-radius: 50%; background: var(--night); display: grid; place-items: center; color: #93d4d4; opacity: 0; }
+.cinema-hybrid .opening-scene .opening-portal>svg { filter: invert(1); }
+.cinema-hybrid .opening-scene .opening-portal>i { position: absolute; inset: -12px; border: 1px solid #538e9d60; border-radius: inherit; }
+.cinema-hybrid .opening-scene .opening-bottom { position: absolute; z-index: 8; bottom: 25px; left: var(--gutter); right: var(--gutter); display: flex; align-items: center; justify-content: space-between; border-top: 1px solid #819ca33b; padding-top: 18px; font: 8px var(--mono); color: #607475; letter-spacing: .65px; }
+.cinema-hybrid .opening-scene .opening-bottom a { display: flex; gap: 20px; align-items: center; font: 10px var(--sans); letter-spacing: 1px; }
+.cinema-hybrid .opening-scene .opening-bottom i { font: 22px var(--sans); }
+.cinema-hybrid .opening-scene .scene-scrub { position: absolute; z-index: 9; left: var(--gutter); bottom: 25px; width: 180px; align-items: center; gap: 15px; display: flex; font: 10px var(--sans); opacity: 0; visibility: hidden; }
+.cinema-hybrid .opening-scene .scene-scrub>i { flex: 1; height: 1px; background: #6d989877; overflow: hidden; }
+.cinema-hybrid .opening-scene .scene-scrub b { height: 100%; display: block; background: #087eae; transform-origin: left; transform: scaleX(var(--scene-progress,0)); }
+.cinema-hybrid .opening-scene .architecture-copy .cinema-eyebrow { color: #85acae; }
+.cinema-hybrid .opening-scene .final-copy .cinema-eyebrow { color: #6e9f9a; }
+@media (max-width: 760px) {
+  .cinema-hybrid .opening-scene .cinema-meta { top: 20px; font-size: 7px; letter-spacing: .4px; }
+}
+@media (max-width: 760px) {
+  .cinema-hybrid .opening-scene .cinema-meta>span:last-child { max-width: 45%; text-align: right; }
+}
+@media (max-width: 760px) {
+  .cinema-hybrid .opening-scene .opening-meta>span:nth-child(2) { display: none; }
+}
+@media (max-width: 760px) {
+  .cinema-hybrid .opening-scene { height: 240svh; }
+}
+@media (max-width: 760px) {
+  .cinema-hybrid .opening-scene .opening-watermark { top: 8%; left: 0; font-size: 63vw; }
+}
+@media (max-width: 760px) {
+  .cinema-hybrid .opening-scene .opening-art { left: -5%; top: 16%; width: 108%; height: 35%; }
+}
+@media (max-width: 760px) {
+  .cinema-hybrid .opening-scene .cinema-paper small, .cinema-hybrid .opening-scene .cinema-paper>span { font-size: 4px; }
+}
+@media (max-width: 760px) {
+  .cinema-hybrid .opening-scene .paper-register { bottom: 4px; left: 4px; padding: 2px; font-size: 4px; }
+}
+@media (max-width: 760px) {
+  .cinema-hybrid .opening-scene .paper-archive, .cinema-hybrid .opening-scene .paper-vellum, .cinema-hybrid .opening-scene .paper-blueprint { padding: 9px; }
+}
+@media (max-width: 760px) {
+  .cinema-hybrid .opening-scene .archive-lines { margin: 7px 0; height: 36%; }
+}
+@media (max-width: 760px) {
+  .cinema-hybrid .opening-scene .paper-archive em { font-size: 18px; margin: 5px 0; }
+}
+@media (max-width: 760px) {
+  .cinema-hybrid .opening-scene .paper-vellum strong { font-size: 54px; height: 70%; }
+}
+@media (max-width: 760px) {
+  .cinema-hybrid .opening-scene .paper-ticket { gap: 8px; padding: 6px 9px; }
+}
+@media (max-width: 760px) {
+  .cinema-hybrid .opening-scene .paper-ticket b { font-size: 19px; letter-spacing: -1px; }
+}
+@media (max-width: 760px) {
+  .cinema-hybrid .opening-scene .paper-ticket small { font-size: 4px; }
+}
+@media (max-width: 760px) {
+  .cinema-hybrid .opening-scene .paper-ticket i { font-size: 16px; }
+}
+@media (max-width: 760px) {
+  .cinema-hybrid .opening-scene .paper-tag { padding: 10px; }
+}
+@media (max-width: 760px) {
+  .cinema-hybrid .opening-scene .paper-tag>i { width: 4px; height: 4px; margin-bottom: 5px; }
+}
+@media (max-width: 760px) {
+  .cinema-hybrid .opening-scene .opening-copy { bottom: 13%; width: calc(100% - 48px); }
+}
+@media (max-width: 760px) {
+  .cinema-hybrid .opening-scene .opening-copy .cinema-eyebrow { font-size: 6px; letter-spacing: .8px; margin-bottom: 11px; }
+}
+@media (max-width: 760px) {
+  .cinema-hybrid .opening-scene .opening-copy h1 { font-size: clamp(44px,12.5vw,80px); line-height: 1.2; }
+}
+@media (max-width: 760px) {
+  .cinema-hybrid .opening-scene .opening-copy h1 i { font-size: 17px; right: -15px; }
+}
+@media (max-width: 760px) {
+  .cinema-hybrid .opening-scene .opening-intro { position: static; max-width: none; display: flex; align-items: end; justify-content: space-between; gap: 10px; margin-top: 20px; }
+}
+@media (max-width: 760px) {
+  .cinema-hybrid .opening-scene .opening-intro p { font-size: 9px; margin: 0; max-width: 54%; }
+}
+@media (max-width: 760px) {
+  .cinema-hybrid .opening-scene .opening-intro .cinema-button { font-size: 10px; padding: 9px 11px; gap: 12px; min-height: 37px; }
+}
+@media (max-width: 760px) {
+  .cinema-hybrid .opening-scene .opening-bottom { bottom: 18px; padding-top: 12px; font-size: 5px; }
+}
+@media (max-width: 760px) {
+  .cinema-hybrid .opening-scene .opening-bottom a { gap: 10px; font-size: 8px; }
+}
+@media (max-width: 760px) {
+  .cinema-hybrid .opening-scene .opening-bottom .scene-counter { display: none; }
+}
+@media (max-width: 760px) {
+  .cinema-hybrid .opening-scene .opening-discovery { top: 48%; }
+}
+@media (max-width: 760px) {
+  .cinema-hybrid .opening-scene .opening-discovery h2 { font-size: 45px; margin: 15px 0; }
+}
+@media (max-width: 760px) {
+  .cinema-hybrid .opening-scene .opening-discovery>p { font-size: 10px; }
+}
+@media (max-width: 760px) {
+  .cinema-hybrid .opening-scene .opening-portal { left: 56%; top: 33%; width: 120px; height: 120px; margin: -60px; }
+}
+@media (max-width: 760px) {
+  .cinema-hybrid .opening-scene .architecture-copy .cinema-eyebrow { font-size: 7px; }
+}
+@media (max-width: 760px) {
+  .cinema-hybrid .opening-scene .horizon-copy .cinema-eyebrow { font-size: 7px; }
+}
+@media (max-width: 370px) {
+  .cinema-hybrid .opening-scene .opening-intro p { font-size: 8px; }
+}
+.cinema-hybrid .opening-scene { background: #eceee5; }
+.cinema-hybrid .opening-scene.is-scene-active .cinema-paper { will-change: transform; }
+.cinema-hybrid.login-open .opening-scene .cinema-paper { will-change: auto; }
+.cinema-hybrid:not(.motion-enabled) .opening-scene,
+.cinema-hybrid .opening-scene[data-layout="compact"] { height: auto; }
+.cinema-hybrid:not(.motion-enabled) .opening-stage,
+.cinema-hybrid .opening-scene[data-layout="compact"] .opening-stage {
+  position: relative;
+  top: 0;
+  min-height: 650px;
+}
+@media (max-width: 760px) {
+  .cinema-hybrid .opening-scene { --gutter: 24px; }
+  .cinema-hybrid .opening-bottom>span:first-child { display: none; }
+  .cinema-hybrid .opening-bottom .motion-button { font-size: 9px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cinema-hybrid .opening-scene .cinema-button { transition-duration: .1s; }
+}
+.cinema-hybrid { scroll-behavior: auto; scroll-padding-top: var(--header-h); }
+.cinema-hybrid .chapter:not(.opening-scene) { min-height: calc(100svh - var(--header-h)); }

@@ -1,0 +1,140 @@
+/* Detail motion uses its own translate inputs; the paper's fold is untouched. */
+.hero-title-line { display: block; }
+.detail-reveal { translate: 0 var(--detail-y, 0px); }
+.hero-art .plate {
+  translate:
+    calc(var(--motion-x, 0px) + var(--pointer-x, 0px) * var(--z) / 11)
+    calc(var(--motion-y, 0px) + var(--arrival-y, 0px) + var(--pointer-y, 0px) * var(--z) / 11);
+}
+.site-header {
+  transition: background .35s, box-shadow .35s, border-color .35s;
+}
+.has-scrolled .site-header {
+  background: rgb(245 244 238 / .97);
+  border-bottom-color: #abb8ba55;
+  box-shadow: 0 4px 20px #17384808;
+}
+.desktop-nav a[aria-current="location"] { color: var(--blue); }
+.desktop-nav a[aria-current="location"]::after,
+.desktop-nav a:focus-visible::after { right: 0; }
+.chapter-nav a i { transition: scale .3s, box-shadow .3s, background .3s; }
+.chapter-nav a.is-active i { box-shadow: 0 0 0 5px #199ed610; }
+.chapter-nav a:hover i { scale: 1.4; }
+
+.motion-enabled .button {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  transition: background .3s, border-color .3s, color .3s, transform .35s, box-shadow .35s;
+}
+.motion-enabled .button::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(105deg, transparent 28%, #ffffff20 49%, transparent 70%);
+  transform: translateX(-120%);
+  transition: transform .65s cubic-bezier(.2,.7,.2,1);
+}
+.motion-enabled .button:is(:hover, :focus-visible)::before { transform: translateX(120%); }
+.motion-enabled .button:is(:hover, :focus-visible) { box-shadow: 0 7px 18px #006ec522; }
+.motion-enabled .button:active { transform: translateY(0) scale(.985); box-shadow: none; }
+.motion-enabled .button > span,
+.motion-enabled .text-link > span,
+.motion-enabled .card-link > i,
+.motion-enabled .ticket-cross {
+  display: inline-block;
+  transition: translate .35s cubic-bezier(.2,.7,.2,1), color .3s;
+}
+.motion-enabled .button:is(:hover, :focus-visible) > span,
+.motion-enabled .editorial-card:is(:hover, :focus-visible) .card-link > i { translate: 3px -3px; }
+.motion-enabled .text-link:is(:hover, :focus-visible) > span { translate: 0 4px; }
+.motion-enabled .brand svg { transition: rotate .45s; }
+.motion-enabled .brand:hover svg { rotate: -8deg; }
+.text-link, .card-link { transition: color .25s, border-color .25s; }
+.text-link:hover, .editorial-card:hover .card-link { color: var(--blue); border-color: #54a2c3; }
+
+.motion-enabled .fold-trigger { transition: background .3s; }
+.motion-enabled .fold-trigger:hover { background: #ffffff35; }
+.motion-enabled .fold-name { transition: translate .35s; }
+.motion-enabled .fold-trigger:is(:hover, :focus-visible) .fold-name { translate: 4px 0; }
+.fold-icon { position: relative; width: 24px; height: 24px; color: transparent; flex-shrink: 0; }
+.fold-icon::before, .fold-icon::after {
+  content: "";
+  position: absolute;
+  width: 14px;
+  height: 1px;
+  left: 5px;
+  top: 12px;
+  background: #55734d;
+  transition: rotate .35s, opacity .35s;
+}
+.fold-icon::after { rotate: 90deg; }
+.is-open .fold-icon::after { rotate: 0deg; opacity: 0; }
+.motion-enabled .fold-keywords span { transition: translate .3s, background .3s; }
+.motion-enabled .fold-keywords span:hover { translate: 0 -2px; background: #ffffff50; }
+.motion-enabled .scenario-switch button { transition: color .25s, background .3s, border-color .3s; }
+.scenario-switch button:hover { background: #dae8e6; }
+.scenario-switch button[aria-pressed="true"] { background: #d4e6e4; }
+.motion-enabled .workspace-progress i { position: relative; overflow: hidden; }
+.motion-enabled .workspace-progress i::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: #478594;
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform .6s cubic-bezier(.2,.7,.2,1);
+}
+[data-workflow-step="1"] .workspace-progress i:first-of-type::after,
+[data-workflow-step="2"] .workspace-progress i::after { transform: scaleX(1); }
+
+.motion-enabled .editorial-image { transition: scale .8s cubic-bezier(.2,.7,.2,1); }
+.motion-enabled .editorial-card:is(:hover, :focus-visible) .editorial-image { scale: 1.045; }
+.motion-enabled .editorial-art { transition: filter .6s; }
+.motion-enabled .editorial-card:is(:hover, :focus-visible) .editorial-art { filter: saturate(1) contrast(1); }
+.motion-enabled .card-coordinates { transition: background .35s, translate .35s; }
+.motion-enabled .editorial-card:hover .card-coordinates { background: #fffB; translate: 0 2px; }
+.motion-enabled .mountain-cross { transition: rotate .8s; }
+.motion-enabled .editorial-card:hover .mountain-cross { rotate: 90deg; }
+
+/* Small, local ambient details run only inside a visible chapter. */
+.motion-enabled .atlas-links .dash {
+  animation: atlas-flow 16s linear infinite;
+  animation-play-state: paused;
+}
+.motion-enabled .title-star {
+  display: inline-block;
+  animation: atlas-turn 28s linear infinite;
+  animation-play-state: paused;
+}
+.motion-enabled .scroll-label > span {
+  display: inline-block;
+  animation: atlas-nudge 2.8s ease-in-out infinite;
+  animation-play-state: paused;
+}
+.motion-enabled .image-pin::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border: 1px solid #17a5d877;
+  animation: atlas-pulse 3.6s ease-out infinite;
+  animation-play-state: paused;
+}
+.motion-enabled:not(.motion-reduced):not(.motion-paused) .hero.is-in-view .atlas-links .dash,
+.motion-enabled:not(.motion-reduced):not(.motion-paused) .hero.is-in-view .title-star,
+.motion-enabled:not(.motion-reduced):not(.motion-paused) .hero.is-in-view .scroll-label > span,
+.motion-enabled:not(.motion-reduced):not(.motion-paused) .hero.is-in-view .image-pin::after { animation-play-state: running; }
+
+@keyframes atlas-flow { to { stroke-dashoffset: -96; } }
+@keyframes atlas-turn { to { rotate: 360deg; } }
+@keyframes atlas-nudge { 0%, 65%, 100% { translate: 0 0; } 35% { translate: 0 4px; } }
+@keyframes atlas-pulse { 0% { scale: .85; opacity: .7; } 80%,100% { scale: 2.4; opacity: 0; } }
+
+@media (hover: none), (pointer: coarse) {
+  .motion-enabled .button:hover, .editorial-card:hover { transform: none; }
+  .motion-enabled .editorial-card:hover .editorial-image { scale: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .motion-enabled .hero-art .plate { --pointer-x: 0px; --pointer-y: 0px; }
+}

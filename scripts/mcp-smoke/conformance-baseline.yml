@@ -1,0 +1,32 @@
+# pogo's MCP server is a tools-only agent surface: no prompts, no resources,
+# no completion, no sampling/elicitation, and not the conformance reference
+# fixtures (test_simple_text & friends). Every scenario probing one of those
+# is an expected failure — what must stay green is the rest.
+#
+# Usage:
+#   npx @modelcontextprotocol/conformance server \
+#     --url "http://127.0.0.1:7777/mcp?token=t" --suite active \
+#     --expected-failures scripts/mcp-smoke/conformance-baseline.yml
+server:
+  - completion-complete
+  - tools-call-simple-text
+  - tools-call-image
+  - tools-call-audio
+  - tools-call-embedded-resource
+  - tools-call-mixed-content
+  - tools-call-with-logging
+  - tools-call-error
+  - tools-call-with-progress
+  - tools-call-sampling
+  - tools-call-elicitation
+  - elicitation-sep1034-defaults
+  - elicitation-sep1330-enums
+  - resources-read-text
+  - resources-read-binary
+  - resources-templates-read
+  - resources-subscribe
+  - resources-unsubscribe
+  - prompts-get-simple
+  - prompts-get-with-args
+  - prompts-get-embedded-resource
+  - prompts-get-with-image

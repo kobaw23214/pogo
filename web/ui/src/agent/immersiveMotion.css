@@ -1,0 +1,7 @@
+/* Immersion moves the live browser and conversation on compositor layers.
+   Width/height reach their final values once, before animation starts; keeping
+   video live lets a newly decoded viewport appear during the same motion. */
+.shell[data-immersive-motion] > .dock,
+.shell[data-immersive-motion] > .main {
+  backface-visibility: hidden;
+}

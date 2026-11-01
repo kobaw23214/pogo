@@ -1,0 +1,9 @@
+{
+  "protocolVersion": "pogo.tool/1",
+  "callId": "call:fixture-001",
+  "type": "error",
+  "error": {
+    "code": "TOOL_FAILED",
+    "message": "Fixture: decompiler failed; no partial result was committed."
+  }
+}

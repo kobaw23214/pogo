@@ -1,0 +1,1 @@
+var e=new Set;function t(t){return e.add(t),()=>{e.delete(t)}}async function n(){for(let t of[...e])if(!await t())return!1;return!0}export{t as n,n as t};
