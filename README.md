@@ -136,6 +136,16 @@ docker compose up -d --build                                # Docker,http://127.
 
 ## 联系方式
 
-- Bug 反馈与功能建议:[提个 Issue](https://github.com/kobaw23214/pogo/issues)
+<div align="center">
+
+**微信扫码交流 / Scan to chat on WeChat**
+
+<img src="docs/images/contact-wechat-qrcode.jpg" width="220" alt="微信二维码">
+
+**邮箱 / Email**: [1477746214@qq.com](mailto:1477746214@qq.com)
+
+Bug 反馈与功能建议:[提个 Issue](https://github.com/kobaw23214/pogo/issues)
+
+</div>
 
 更多设计文档见 [docs/](docs/)。License 见 [LICENSE](LICENSE)。
