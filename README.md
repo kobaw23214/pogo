@@ -43,6 +43,10 @@
 - 编辑器**原生历史**撤销/重做,每文件 50 个版本可恢复
 - 解析有防护:PDF 300MB 上限、扫描版不假装 OCR;docx 防解压炸弹;xlsx 流式只读,宏不执行
 
+<div align="center">
+  <img src="docs/images/office-edit.png" width="880" alt="Office 编辑:Agent 在线表格加列加边框并保存">
+</div>
+
 ## 3. 对话即富文档
 
 | 写法 | 渲染 |
@@ -56,9 +60,20 @@
 
 流式输出期间先显示代码,完成后自动成图。
 
+<div align="center">
+  <img src="docs/images/markdown-render-demo.png" width="880" alt="富文档渲染:目录/公式/表格/列表">
+</div>
+<div align="center">
+  <img src="docs/images/chart-datagrid-panel.png" width="880" alt="ECharts 图表与可排序数据表">
+</div>
+
 ## 4. 公共信息区与 Agent 工作流
 
 **信息库**是用户与 Agent 的共享事实源:文件、快捷方式、网页引用、Office 选区统一编目,同工作空间的**兄弟 Agent 看到同一份视图**(Agent 侧只读检索);外部系统经 `/panels/<名称>/` 反代接入右侧 hub 标签条。
+
+<div align="center">
+  <img src="docs/images/information-store.png" width="880" alt="信息库:跨 Agent 共享的文件与引用编目">
+</div>
 
 **工作流**:绑定单个 Agent 的可复用流程,顺序(agent/confirm/code/iteration/loop)与图(condition/parallel/join,静态校验无环+全可达)双形态。
 
@@ -66,6 +81,10 @@
 - SSE 每 500ms 推送全节点状态;Vue Flow 画布着色,每节点可打开执行会话看 Usage 环
 - 「启用」存不可变版本快照,正式运行只执行 EnabledVersion;支持草稿试跑、单节点测试、链式重试
 - Agent 在对话中用 `agent_workflow_read/edit/enable/run` 自管流程
+
+<div align="center">
+  <img src="docs/images/workflow-canvas-chat.png" width="880" alt="工作流画布:多分支并行节点编排与对话解释">
+</div>
 
 ## 5. Agent 管理与嵌套快捷方式
 
@@ -76,6 +95,13 @@
 五个内置模板或空白起步,草稿 → 发布,发布后 `/a/{id}` 直达对话;一个 Agent 绑定多模型随时切换;Skill/MCP 按配置组合继承。
 
 **快捷方式**是 Agent 私有的可复用资料包(文本/文件/Skill/网页元素/Office 选区/**嵌套快捷方式**),扁平 DAG、上限 5 层 512 节点、静态校验无环;首页起始卡是实时投影,编辑即时生效不留过期副本。
+
+<div align="center">
+  <img src="docs/images/shortcut-db-ref-edit.png" width="880" alt="编辑快捷方式:保存可复用的连接引用资料">
+</div>
+<div align="center">
+  <img src="docs/images/agent-workbench-shortcuts.png" width="880" alt="对话中引用私有资料继续工作">
+</div>
 
 <div align="center">
   <img src="docs/images/agents-manage-graphite.png" width="880" alt="我的 Agents 管理页">
@@ -91,6 +117,10 @@
 
 每个 capability 注册为**该会话的普通工具**,由 `pogo-skill-runner` 在 bubblewrap 沙箱短命执行:请求/响应双向 JSON Schema 门,超时/输出/内存/进程硬限,调用入监控。
 
+<div align="center">
+  <img src="docs/images/skill-capabilities.png" width="880" alt="Skill 能力组:agent-workflows/background-tasks/browser-use/office">
+</div>
+
 ## 7. 后台 Bash 与后台任务
 
 - **后台 shell**:`run_in_background` 立即返回任务 ID,按字节偏移续读输出,回执持久化、重启可恢复
@@ -104,7 +134,14 @@
 
 ## 8. 多模型接入
 
-单一 OpenAI 兼容客户端(支持 `reasoning_content` 等扩展字段),`providers.json` 唯一配置源、零内置 provider、密钥只走环境变量;不原生支持工具调用的模型自动降级 XML/JSON 文本协议。
+单一 OpenAI 兼容客户端(支持 `reasoning_content` 等扩展字段),`providers.json` 唯一配置源、零内置 provider、密钥只走环境变量;不原生支持工具调用的模型自动降级 XML/JSON 文本协议。MCP 双向:接入外部工具服务,也可把 Agent 能力对外提供。
+
+<div align="center">
+  <img src="docs/images/model-provider-config.png" width="880" alt="模型配置:provider 与密钥环境变量">
+</div>
+<div align="center">
+  <img src="docs/images/mcp-client-panel.png" width="880" alt="MCP 管理:外部工具连接接入">
+</div>
 
 <div align="center">
   <img src="docs/images/agent-editor-models-mcp.png" width="720" alt="编辑 Agent:多模型与 MCP 绑定">
@@ -133,6 +170,9 @@ docker compose up -d --build                                # Docker,http://127.
 | ![浅色管理页](docs/images/agents-manage-light.png) | ![能力继承](docs/images/agents-manage-inheritance.png) |
 | ![创建与实时预览](docs/images/agent-create-light.png) | ![对话欢迎页](docs/images/chat-welcome-light.png) |
 | ![设置:存储/沙箱/附件/Skill 监控](docs/images/settings-storage-sandbox.png) | ![对话工作台](docs/images/chat-workspace-live.png) |
+| ![管理页:搜索筛选与导入](docs/images/agents-manage-import.png) | ![工作流列表](docs/images/workflow-list.png) |
+| ![通用偏好设置](docs/images/settings-preferences.png) | ![快捷方式 Bash 高亮编辑](docs/images/shortcut-bash-edit.png) |
+| ![Mermaid 图表集](docs/images/agent-rich-render.png) | ![生成图片预览](docs/images/agent-image-preview.png) |
 
 ## 联系方式
 
