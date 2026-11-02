@@ -80,14 +80,21 @@
 | 写法 | 渲染 |
 |---|---|
 | ` ```mermaid ` / ` ```echarts ` | Mermaid 11 全量图表 / ECharts 交互图表 |
+| ` ```html ` / ` ```html-preview ` | **对话内沙箱渲染完整网页**(图表/交互/图片),带源码/刷新/下载工具栏 |
 | `$…$` / `$$…$$` / ` ```math ` | KaTeX 数学公式 |
 | ` ```csv ` / ` ```json-table ` | 直接渲染成数据表 |
 | ` ```diff ` / 多语言代码块 | 增删高亮 / 语法高亮 |
 | `[TOC]` `[^1]` `- [x]` `> [!NOTE]` `:::` | 目录 / 脚注 / 任务列表 / callout / 折叠块 |
-| `[文件](路径)` | 工作区文件卡片,点击内联预览 |
+| `![图片](…) `[文件](路径)` | 图片/工作区文件卡片,点击内联预览 |
 
-流式输出期间先显示代码,完成后自动成图。
+流式输出期间先显示代码,完成后自动成图;HTML 工件在对话里直接渲染成可交互页面,亦可侧边栏打开:
 
+<div align="center">
+  <img src="docs/images/chat-html-dashboard.png" width="880" alt="对话内嵌渲染:Agent 生成的交互销售仪表盘(SVG 图表/联动高亮)">
+</div>
+<div align="center">
+  <img src="docs/images/chat-html-artifact-preview.png" width="880" alt="对话内嵌渲染:图片页工件与核验引用">
+</div>
 <div align="center">
   <img src="docs/images/markdown-render-demo.png" width="880" alt="富文档渲染:目录/公式/表格/列表">
 </div>
