@@ -1,16 +1,93 @@
 <a id="top"></a>
 
-# pogo
+# Pogo
 
 [![CI](https://github.com/kobaw23214/pogo/actions/workflows/ci.yml/badge.svg)](https://github.com/kobaw23214/pogo/actions/workflows/ci.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/kobaw23214/pogo)](https://goreportcard.com/report/github.com/kobaw23214/pogo)
 [![License](https://img.shields.io/github/license/kobaw23214/pogo?color=blue)](LICENSE)
-[![Go Version](https://img.shields.io/badge/Go-1.26+-00ADD8?logo=go&logoColor=white)](https://go.dev)
+[![Go Version](https://img.shields.io/badge/Go-1.26.5%2B-00ADD8?logo=go&logoColor=white)](https://go.dev)
 
-用 Go 与 Vue 构建的 Agent 工作台:每个 Agent 有真实的浏览器、真实的 Office 编辑、可编排的工作流与后台任务——全程可见、可审批、可回放。
+**A self-hosted AI agent workspace for browser automation, document tasks, and human-approved workflows.** Connect your own OpenAI-compatible models and MCP tools.
+
+用 Go 与 Vue 构建的自托管 Agent 工作台：在网页中协作完成浏览器、文档与工作流任务，查看工具执行过程、处理人工审批，并通过 MCP 连接外部工具。
+
+Early harness design inspired by [Pi](https://github.com/earendil-works/pi) (formerly `badlogic/pi-mono`). [设计来源与演进](docs/harness-design.md)。
+
+[Quick start / 快速开始](#quick-start) · [功能详情](#能力总览) · [文档](docs/README.md)
 
 <div align="center">
   <img src="docs/images/chat-workspace-live.png" width="880" alt="pogo 对话工作台">
+</div>
+
+## 三个上手场景
+
+- **Browser collaboration / 浏览器协作**：接入浏览器 worker 后，让 Agent 打开网页、提取和对比信息；需要登录或人工处理时，接管同一页面，再交还 Agent。[查看浏览器能力](#1-操作真实浏览器)
+- **Documents & artifacts / 从资料到产物**：整理文件、生成图表和 HTML 报告，在对话中预览结果；配置 Office 服务后，还能在共享画布中编辑文档。[查看文档能力](#2-编辑真实-office-文档)
+- **Human-in-the-loop workflows / 可审批工作流**：组合 Agent、代码与人工确认节点，连接 MCP 工具，保留执行记录；后台任务可单独管理。[查看工作流](#4-公共信息区与-agent-工作流)
+
+<a id="quick-start"></a>
+
+## 快速开始
+
+先运行本地 Web 工作台；浏览器、在线 Office 编辑和运行型 Skill 的额外依赖见下表。Electron 桌面端仍为实验性入口。
+
+**1. Clone and build / 克隆并构建。** 需要 Git、Go **1.26.5 或更新版本**。以下命令针对 GitHub 上的独立仓库布局：
+
+```bash
+git clone https://github.com/kobaw23214/pogo.git
+cd pogo
+go version
+go build -o pogo .
+```
+
+仓库已包含供 Go 嵌入的前端产物；只有修改前端时，才需要在 `web/ui/` 执行 `npm ci && npm run build`，然后重新构建 Go 程序。
+
+**2. Configure a model / 配置模型。** 首次使用，先创建配置目录：
+
+```bash
+mkdir -p "$HOME/.pogo"
+```
+
+用编辑器新建 `~/.pogo/providers.json`，填入下面的最小结构。**如果文件已存在，保留现有配置，不要用示例覆盖。**
+
+```json
+{
+  "providers": {
+    "my-provider": {
+      "base_url": "https://YOUR_PROVIDER_HOST/v1",
+      "key_env": "POGO_API_KEY"
+    }
+  },
+  "models": [
+    { "id": "YOUR_MODEL_ID", "provider": "my-provider" }
+  ]
+}
+```
+
+把 `base_url` 替换为供应商提供的 **OpenAI 兼容接口基础地址**，把 `YOUR_MODEL_ID` 替换为该端点实际接受的模型 ID；它们不是可直接调用的默认值。按供应商说明补充 `context_window`、`max_tokens` 等限制，字段与规则见[模型配置](docs/configuration.md)。Pogo 不内置模型目录或价格；API key 通过环境变量提供，不写入 JSON。
+
+**3. Check and start / 预检并启动。** 在同一个终端设置与 `key_env` 对应的变量：
+
+```bash
+export POGO_API_KEY='replace-with-your-api-key'
+./pogo -models
+./pogo -web -listen 127.0.0.1:7777
+```
+
+将示例 key 替换为自己的值；已有配置则使用它声明的环境变量名。`-models` 核对本地模型目录与缺失的 key 变量，不请求远端，也不证明模型服务已连通。启动后打开终端打印的本地地址，使用其中的登录 token，在网页中创建 Agent 并开始对话。
+
+**按需接入额外能力：**
+
+| 能力 | 额外依赖与入口 |
+|---|---|
+| 浏览器自动化与人工接管 | 独立 Linux 浏览器 worker（Chromium / Wayland / WebRTC）；见[运行时说明](browser-runtime/README.md)与[Compose 叠加配置](compose.browser.yml) |
+| 在线 Office 编辑 | ONLYOFFICE 服务与固定版本的 Pogo Office 扩展；见[使用说明](docs/office-agent-integration.md)与[运行时边界](office-runtime/README.md)，需单独部署和验收 |
+| 运行型 Skill 包 | Linux/amd64 或 Linux/arm64、匹配架构的 Skill 包及可用的 bubblewrap；见[运行规范](docs/skill-runtime-v1/README.md) |
+
+Docker 部署从 [Compose 示例](compose.yml)和[浏览器运行时说明](browser-runtime/README.md)进入。需先准备模型配置、账号文件及 `deploy.env` 等本地文件，再配置相应服务；一条 `docker compose up` 不会自动完成这些准备。功能实现、测试与部署状态见[项目现状及历史验证记录](docs/project-status.md)。
+
+<div align="center">
+  <img src="docs/images/agents-manage-docker.png" width="880" alt="Docker 部署下的管理页">
 </div>
 
 ## 能力总览
@@ -32,7 +109,7 @@
 
 | 能力 | 一句话 |
 |---|---|
-| [上下文工程](#9-运行时工程) | 自动压缩 + 软上限 + 上下文编辑,首条消息永久钉住 |
+| [上下文工程](#9-运行时工程) | 手动/可选自动压缩 + 软上限 + 上下文编辑,首条消息永久钉住 |
 | [检查点与回放](#9-运行时工程) | 影子 git 快照,rewind 三模式,先预览 diff 再回退 |
 | [引用核查](#9-运行时工程) | cite 标签由 harness 分配,引用不存在会被打回重写 |
 | [子代理治理](#9-运行时工程) | explore 默认后台,写操作租约串行,权限不超父级 |
@@ -85,7 +162,7 @@
 | ` ```csv ` / ` ```json-table ` | 直接渲染成数据表 |
 | ` ```diff ` / 多语言代码块 | 增删高亮 / 语法高亮 |
 | `[TOC]` `[^1]` `- [x]` `> [!NOTE]` `:::` | 目录 / 脚注 / 任务列表 / callout / 折叠块 |
-| `![图片](…) `[文件](路径)` | 图片/工作区文件卡片,点击内联预览 |
+| `![图片](…)` / `[文件](路径)` | 图片/工作区文件卡片,点击内联预览 |
 
 流式输出期间先显示代码,完成后自动成图;HTML 工件在对话里直接渲染成可交互页面,亦可侧边栏打开:
 
@@ -187,7 +264,7 @@
 <a id="runtime"></a>
 ## 9. 运行时工程
 
-- **上下文工程**:自动压缩在窗口 92-98% 水位触发——首条用户消息永久逐字钉住、切点对齐 tool 配对、摘要不叠罗汉;软上限注入一条通知由模型自决收尾;上下文编辑清最旧工具结果释放空间,是**视图不改转录**(rewind 仍见原文)
+- **上下文工程**:支持手动压缩与可选自动压缩（默认关闭，使用 `-compact auto` 显式启用）；自动路径按窗口水位触发——首条用户消息永久逐字钉住、切点对齐 tool 配对、摘要不叠罗汉;软上限注入一条通知由模型自决收尾;上下文编辑清最旧工具结果释放空间,是**视图不改转录**(rewind 仍见原文)
 - **检查点与回放**:每轮运行前把工作区快照进影子 git 仓;rewind 三模式(chat/files/both)先预览每文件 diff 再回退;转录 append-only,只留不可达分支不删记录
 - **引用核查**:harness 给每个工具调用分配 cite 标签并快照摘录;答案里的引用锚点经正则校验,**引用没产生过的标签或伪页码会被打回重写**;悬停卡直达工具记录,来源面板分组展示
 - **子代理治理**:explore 只读模式默认后台,结果以通知送达合并唤醒;写操作经全主机唯一 flock 租约串行;子代理审批经 FD 转发回父进程,权限不可能超过父级
@@ -216,19 +293,6 @@
 ## 安全设计
 
 审批门(浏览器/命令/写入类操作 fail-closed 超时)、Skill 沙箱(bwrap + seccomp + 双向 Schema 门)、workflow 代码节点(bwrap/Seatbelt 硬沙箱,不支持即拒绝执行)、浏览器动作封闭 schema 重建未知字段不透传、`html:false` 的 markdown 渲染、多用户账号体系(PBKDF2 密码 + 个人 token + 会话隔离)、大输出落盘(spill)保留策略自动清理。
-
-## 快速开始
-
-```bash
-go build -o pogo . && ./pogo -web -listen 127.0.0.1:7777   # 源码运行
-docker compose up -d --build                                # Docker,http://127.0.0.1:19777
-```
-
-首次启动需要 `~/.pogo/providers.json`(缺省会报最小示例);浏览器能力另起 `compose.browser.yml`。平台现状见 [docs/project-status.md](docs/project-status.md)。
-
-<div align="center">
-  <img src="docs/images/agents-manage-docker.png" width="880" alt="Docker 部署下的管理页">
-</div>
 
 ## 界面一览
 
