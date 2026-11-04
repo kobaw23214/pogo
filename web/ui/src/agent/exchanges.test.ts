@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildTimeline } from "./timeline";
-import { buildExchanges, foldable } from "./exchanges";
+import { buildConversationExchanges, buildExchanges, foldable } from "./exchanges";
 import { emptyLive, type Message, type ToolResult } from "@/api/types";
 
 // Fixture helpers mirror timeline.test.ts: buildTimeline is the real input
@@ -193,5 +193,18 @@ describe("buildExchanges", () => {
     expect(exs[0].id).toBe("head");
     expect(exs[0].notices).toHaveLength(1);
     expect(exs[0].turns).toHaveLength(1);
+  });
+
+  it("inserts persistent compaction cards at stable transcript boundaries", () => {
+    const items = buildTimeline([
+      user("u1", "first"), assistant("m1", [{ type: "text", text: "one" }]),
+      user("u2", "second"), assistant("m2", [{ type: "text", text: "two" }]),
+    ], {}, emptyLive());
+    const card = (id: string, after: number) => ({ id, after, ts: after, summary: `summary ${id}`, before: 4, before_tokens: 100, after_tokens: 20 });
+    const nodes = buildConversationExchanges(items, [card("second", 4), card("first", 2), card("legacy", 0)], false);
+    expect(nodes.map(node => node.id)).toEqual(["compaction:legacy", "u1", "compaction:first", "u2", "compaction:second"]);
+    expect(nodes[1].user?.text).toBe("first");
+    expect(nodes[2].compaction?.summary).toBe("summary first");
+    expect(nodes[2].turns).toHaveLength(0);
   });
 });

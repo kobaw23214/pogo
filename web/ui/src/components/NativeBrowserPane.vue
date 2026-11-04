@@ -59,6 +59,8 @@ const frameIssue = ref<"changing" | "unavailable" | "view-only" | "">("");
 const frameError = ref("");
 const actionError = ref("");
 const liveFailureMessage = ref("");
+const displayError = ref("");
+const displayRecovering = ref(false);
 const resetNotice = ref<string | null>(props.initialState.reset ? props.initialState.reset_reason ?? "" : null);
 const frameURL = ref("");
 const frameVersion = ref("");
@@ -153,19 +155,19 @@ const visible = computed(() => props.active && pageVisible.value && !recovering.
 const owned = computed(() => ownsNativeControl(state.value, lease.value, leaseEpoch.value));
 const controlReady = computed(() => !props.closing && visible.value && !viewResumePending.value && !inputDraining.value && owned.value && connected.value && !busy.value && !picking.value);
 const documentUnavailable = computed(() => nativeDocumentUnavailable(state.value));
-const writable = computed(() => !layoutTransition.value && mediaConnected.value && !mediaTransition.value && !heldFrameVisible.value && !documentUnavailable.value && controlReady.value && !pageLoading.value && frameReady.value && liveReady.value && viewportReady.value && !frameIssue.value && !state.value.busy && !state.value.dialog && !state.value.debugger_paused && !state.value.devtools_blocked);
-const canPick = computed(() => !props.closing && !layoutTransition.value && !mediaTransition.value && !heldFrameVisible.value && !documentUnavailable.value && visible.value && connected.value && !pageLoading.value && frameReady.value && !busy.value && !state.value.busy && !state.value.dialog && !state.value.debugger_paused && !state.value.devtools_blocked);
+const writable = computed(() => !displayRecovering.value && !layoutTransition.value && mediaConnected.value && !mediaTransition.value && !heldFrameVisible.value && !documentUnavailable.value && controlReady.value && !pageLoading.value && frameReady.value && liveReady.value && viewportReady.value && !frameIssue.value && !state.value.busy && !state.value.dialog && !state.value.debugger_paused && !state.value.devtools_blocked);
+const canPick = computed(() => !props.closing && !displayRecovering.value && !layoutTransition.value && !mediaTransition.value && !heldFrameVisible.value && !documentUnavailable.value && visible.value && connected.value && !pageLoading.value && frameReady.value && !busy.value && !state.value.busy && !state.value.dialog && !state.value.debugger_paused && !state.value.devtools_blocked);
 const canNavigate = computed(() => controlReady.value && !state.value.busy && !state.value.dialog && !state.value.debugger_paused && !state.value.devtools_blocked);
 const canGoBack = computed(() => canNavigate.value && !pageLoading.value && state.value.can_go_back === true);
 const addressChanged = computed(() => editingAddress.value && address.value.trim() !== addressBeforeEdit.value.trim());
 const controlLabel = computed(() => t(`nativeBrowser.${owned.value ? "human" : state.value.control === "human" ? "other" : "agent"}`));
-const actionFailed = computed(() => !!actionError.value && actionError.value !== liveFailureMessage.value);
+const actionFailed = computed(() => !!displayError.value || !!actionError.value && actionError.value !== liveFailureMessage.value);
 // A healthy retained receiver resumes its presentation authority, not the web
 // document. Do not show a navigation spinner for this ordinary Sheet switch.
 const healthyWarmResume = computed(() => viewResumePending.value && viewVisibilitySupported.value && liveReady.value && connected.value && mediaConnected.value &&
   !!mediaFrame.value && liveFrameMatches(mediaFrame.value, state.value, props.target) && presentedVideo.value?.video === videoEl.value &&
   presentedVideo.value?.media_epoch === mediaFrame.value.media_epoch && presentedVideo.value?.frame_id === mediaFrame.value.frame_id);
-const pageLoading = computed(() => nativePageLoading(state.value, (initialFramePending.value || mediaTransition.value && !healthyWarmResume.value) && frameIssue.value !== "unavailable" && !actionFailed.value, navigationPending.value && !actionFailed.value, !!error.value));
+const pageLoading = computed(() => nativePageLoading(state.value, (initialFramePending.value || displayRecovering.value && !displayError.value || mediaTransition.value && !healthyWarmResume.value) && frameIssue.value !== "unavailable" && !actionFailed.value, navigationPending.value && !actionFailed.value, !!error.value));
 watch(pageLoading, loading => {
   clearTimeout(loadingTimer);
   slowLoading.value = false;
@@ -175,7 +177,7 @@ const showNewTab = computed(() => connected.value && !error.value && !frameIssue
 const heldFrameVisible = computed(() => visible.value && !picking.value && state.value.url !== "about:blank" && browserHeldFrameMatches(heldFrame.value, presentationBinding()));
 const livePresentation = computed(() => heldFrameVisible.value ? "held" : picking.value ? "reference" : mediaFrame.value && presentedVideo.value?.video === videoEl.value ? "live" : "pending");
 const connectionLabel = computed(() => `${controlLabel.value} · ${error.value ? t("nativeBrowser.offline") : connected.value ? t("nativeBrowser.connected") : t("nativeBrowser.connecting")}`);
-const showActivity = computed(() => !error.value && !actionError.value && (!!state.value.dialog || state.value.debugger_paused || state.value.devtools_blocked || activity.value?.phase === "failed" || (!pageLoading.value && (state.value.busy || activity.value?.phase === "started"))));
+const showActivity = computed(() => !error.value && !actionError.value && !displayError.value && (!!state.value.dialog || state.value.debugger_paused || state.value.devtools_blocked || activity.value?.phase === "failed" || (!pageLoading.value && (state.value.busy || activity.value?.phase === "started"))));
 const activity = computed(() => { const action = state.value.activity?.last_action; return action?.tab_id === nativeViewedTab(state.value) ? action : null; });
 const actionNames = new Set(["snapshot", "find", "click", "type", "text", "navigate", "back", "wait", "extract", "scroll", "select", "press", "key", "hover", "drag", "upload", "screenshot", "tabs", "tab", "dialog", "devtools"]);
 const activityText = computed(() => {
@@ -216,7 +218,15 @@ let viewportTimer: ReturnType<typeof setTimeout> | undefined;
 let selectionRefreshTimer: ReturnType<typeof setTimeout> | undefined;
 let requestedViewport = "";
 let requestedViewportSeq: number | undefined;
+let requestedViewportFrame: BrowserLiveFrame | undefined;
 let viewportRetryAt = 0;
+let displayRecoveryTimer: ReturnType<typeof setTimeout> | undefined;
+let displayRecoveryRead: Promise<void> | undefined;
+let displayRecovery: {
+  sessionId: string; context: string; tab: string; generation: number | undefined; controlEpoch: number | undefined;
+  previousMediaEpoch?: string; previousDocument: string; viewport?: { width: number; height: number };
+  message: string; deadline: number; failures: number; observations: number;
+} | undefined;
 let pointerId: number | undefined;
 let pointerButtons = 0;
 let gestureClickCount = 1;
@@ -466,6 +476,7 @@ function applyState(next: NativeBrowserState) {
   if (props.closing) return;
   const previous = state.value;
   if (next.context_ref === previous.context_ref && typeof next.generation === "number" && typeof previous.generation === "number" && (next.generation < previous.generation || next.generation === previous.generation && (Number(next.control_epoch) < Number(previous.control_epoch) || Number(next.document_version) < Number(previous.document_version)))) return;
+  if (displayRecovery && (next.context_ref !== displayRecovery.context || nativeViewedTab(next) !== displayRecovery.tab || next.generation !== displayRecovery.generation || next.control_epoch !== displayRecovery.controlEpoch)) clearDisplayRecovery();
   if (next.context_ref !== previous.context_ref || nativeViewedTab(next) !== nativeViewedTab(previous) || next.generation !== previous.generation) resetImmersiveLayout();
   if (next.url === "about:blank" || next.context_ref !== previous.context_ref || nativeViewedTab(next) !== nativeViewedTab(previous) || next.generation !== previous.generation) clearHeldFrame();
   const previousURL = state.value.url;
@@ -507,6 +518,7 @@ function applyState(next: NativeBrowserState) {
   const title = next.url === "about:blank" ? t("nativeBrowser.newTabPageTitle") : next.title;
   if (title && title !== reportedTitle) { reportedTitle = title; emit("title", title); }
   if (next.url && next.url !== "about:blank" && next.url !== reportedURL) { reportedURL = next.url; emit("navigate", next.url); }
+  recoverPresentedDisplay();
 }
 
 function stopRead() {
@@ -572,19 +584,22 @@ function closeLive(preserveCodecSwitch = false, localOnly = false) {
   if (localOnly) { live?.clearPendingInput(); releaseLocalInput(); } else releaseInput();
   liveEpoch++;
   clearTimeout(reconnectTimer); clearTimeout(viewportTimer); viewportTimer = undefined; clearTimeout(selectionRefreshTimer); clearTimeout(liveConnectionTimer);
+  clearTimeout(displayRecoveryTimer); displayRecoveryTimer = undefined;
   liveAbort?.abort(); liveAbort = undefined;
   live?.close(); live = undefined; liveConnecting = undefined;
   clearMedia();
-  liveReady.value = false; viewportReady.value = false; lastLiveFrame = undefined; requestedViewport = ""; requestedViewportSeq = undefined; viewportRetryAt = 0;
+  liveReady.value = false; viewportReady.value = false; lastLiveFrame = undefined; requestedViewport = ""; requestedViewportSeq = undefined; requestedViewportFrame = undefined; viewportRetryAt = 0;
   renderScaleLimit.value = undefined;
   mediaConnected.value = false; diagnostics.value = null;
   viewVisibilitySupported.value = false; viewResumePending.value = false;
+  if (!props.closing && !disposed && visible.value) scheduleDisplayRecovery();
 }
 function recoverIdentity(cause?: unknown) {
   if (props.closing || disposed || recovering.value || cause !== undefined && !browserRecoveryReason(cause)) return false;
   // Revoke local input before closing sockets. In particular, do not send a
   // reset, return a lease or replay a picker/input command to a retired Page.
   recovering.value = true;
+  clearDisplayRecovery();
   cancelBookmarkSelection(); stopPicking(); picker.close(); stopRead(); closeLive();
   clearBrowserLease(props.sessionId, props.target.context_ref, props.target.tab_id, lease.value, leaseEpoch.value);
   connected.value = false; frameReady.value = false; initialFramePending.value = false;
@@ -600,13 +615,104 @@ function desiredCapture(viewport: { width: number; height: number }) {
   return browserRuntime.value === "wayland" && renderScaleLimit.value !== undefined
     ? browserCaptureResolution(canvasSize.value, viewport, window.devicePixelRatio || 1, renderScaleLimit.value) : null;
 }
-function liveRecovered() {
+function clearDisplayRecovery() {
+  clearTimeout(displayRecoveryTimer); displayRecoveryTimer = undefined;
+  displayRecovery = undefined; displayRecovering.value = false; displayError.value = "";
+}
+function currentDisplayRecovery() {
+  const recovery = displayRecovery;
+  return recovery && recovery.sessionId === props.sessionId && recovery.context === props.target.context_ref && recovery.tab === props.target.tab_id &&
+    targetMatches(state.value, props.target) && recovery.generation === state.value.generation && recovery.controlEpoch === state.value.control_epoch ? recovery : undefined;
+}
+function scheduleDisplayRecovery() {
+  if (displayRecoveryTimer !== undefined || props.closing || disposed || !visible.value) return;
+  const recovery = currentDisplayRecovery();
+  if (!recovery) return;
+  displayRecoveryTimer = setTimeout(() => {
+    displayRecoveryTimer = undefined;
+    if (props.closing || disposed || !visible.value || currentDisplayRecovery() !== recovery) return;
+    if (Date.now() >= recovery.deadline) {
+      // A persistent display failure remains visible. It can only be retired
+      // by verified pixels, a changed Page authority, or an explicit refresh.
+      displayError.value = recovery.message;
+      return;
+    }
+    queueViewport();
+    // Retry observation only, with one outstanding read and a fixed budget.
+    // No click, key, text, navigation or form submission is retained here.
+    if (recovery.observations < 8 && !displayRecoveryRead && !liveConnecting && !busy.value && !picking.value) {
+      recovery.observations++;
+      const reading = refresh(); displayRecoveryRead = reading;
+      void reading.finally(() => { if (displayRecoveryRead === reading) displayRecoveryRead = undefined; });
+    }
+    scheduleDisplayRecovery();
+  }, Math.max(0, Math.min(500, recovery.deadline - Date.now())));
+}
+function recoverDisplayNavigation(failure: Error & { code?: string; seq?: number; requestKind?: "input" | "display" }): boolean {
+  if (failure.requestKind === "input") return false;
+  const viewportFailure = failure.seq !== undefined && failure.seq === requestedViewportSeq;
+  const classified = failure.code === "LIVE_NAVIGATION_TRANSITION";
+  const legacyViewport = (viewportFailure || failure.requestKind === "display") && /Execution context was destroyed|Cannot find context with specified id/i.test(failure.message);
+  if (!classified && !legacyViewport) return false;
+  // A late error for an older display request must not invalidate a newer
+  // receiver. Only the worker's unsequenced media event is global to this view.
+  if (failure.seq !== undefined && !viewportFailure) return true;
+  const previous = viewportFailure ? requestedViewportFrame : mediaFrame.value ?? lastLiveFrame;
+  let recovery = currentDisplayRecovery();
+  if (!recovery) {
+    recovery = displayRecovery = {
+      sessionId: props.sessionId, context: props.target.context_ref, tab: props.target.tab_id,
+      generation: state.value.generation, controlEpoch: state.value.control_epoch,
+      previousMediaEpoch: previous?.media_epoch, previousDocument: previous?.frame_identity ?? state.value.frame_identity ?? "",
+      ...(viewportFailure ? { viewport: desiredViewport() ?? undefined } : {}),
+      message: failure.message, deadline: Date.now() + 8000, failures: 0, observations: 0,
+    };
+  }
+  recovery.message = failure.message;
+  recovery.failures++;
+  displayRecovering.value = true;
+  frameReady.value = false; viewportReady.value = false;
+  stopPicking(); invalidatePick(true); clearOverlay(); releaseInput();
+  if (viewportFailure && recovery.failures < 6 && Date.now() < recovery.deadline) {
+    requestedViewport = ""; requestedViewportSeq = undefined; requestedViewportFrame = undefined;
+    viewportRetryAt = Date.now() + 500;
+    clearTimeout(viewportTimer); viewportTimer = undefined;
+  }
+  observeMediaPresentation(); scheduleDisplayRecovery();
+  return true;
+}
+function liveRecovered(frame?: BrowserLiveFrame) {
+  const recovery = currentDisplayRecovery();
+  if (recovery && !state.value.page_loading && !nativeDocumentUnavailable(state.value) && !state.value.busy && !state.value.dialog && !state.value.debugger_paused && !state.value.devtools_blocked) {
+    // State polls and old healthy video cannot prove recovery. Require an
+    // actually presented current-document receiver, including the requested
+    // viewport/capture geometry when the failed task was a display resize.
+    const presented = frame && liveFrameMatches(frame, state.value, props.target) &&
+      (!recovery.previousMediaEpoch || frame.media_epoch !== recovery.previousMediaEpoch || frame.frame_identity !== recovery.previousDocument) &&
+      (!recovery.viewport || frame.viewport.width === recovery.viewport.width && frame.viewport.height === recovery.viewport.height && browserCaptureMatches(frame, desiredCapture(recovery.viewport)));
+    if (presented || !frame && state.value.url === "about:blank") clearDisplayRecovery();
+  }
   if (liveFailureMessage.value && actionError.value === liveFailureMessage.value) actionError.value = "";
   liveFailureMessage.value = "";
 }
+function recoverPresentedDisplay() {
+  const frame = mediaFrame.value, presented = presentedVideo.value, binding = presentationBinding();
+  if (!displayRecovery || props.closing || disposed || !visible.value || !mediaConnected.value || !frameReady.value ||
+      !frame || !presented || !binding || lastLiveFrame !== frame || presented.video !== videoEl.value ||
+      presented.media_epoch !== frame.media_epoch || presented.frame_id !== frame.frame_id ||
+      presented.binding.sessionId !== binding.sessionId || presented.binding.context_ref !== binding.context_ref ||
+      presented.binding.tab_id !== binding.tab_id || presented.binding.generation !== binding.generation ||
+      !liveFrameMatches(frame, state.value, props.target)) return;
+  // A static page may have painted its verified new receiver while still
+  // loading/busy. A later idle state can reuse that presentation proof, but
+  // never authorize an unpresented offer or an earlier document's pixels.
+  liveRecovered(frame);
+}
 function queueViewport(immediate = false) {
   if (props.closing || !visible.value || picking.value || !liveReady.value || state.value.control === "human" && !owned.value) return;
+  if (displayRecovery && (displayRecovery.failures >= 6 || Date.now() >= displayRecovery.deadline)) return;
   const current = desiredViewport();
+  if (current && displayRecovery?.viewport) displayRecovery.viewport = current;
   if (current && state.value.viewport.width === current.width && state.value.viewport.height === current.height && browserCaptureMatches(lastLiveFrame, desiredCapture(current)) && liveDisplayAuthority(lastLiveFrame, state.value, props.target, lease.value, leaseEpoch.value)) {
     viewportReady.value = true; clearTimeout(viewportTimer); viewportTimer = undefined; return;
   }
@@ -629,7 +735,7 @@ function queueViewport(immediate = false) {
     if (viewportReady.value && document.activeElement === inputEl.value) return;
     if (size !== requestedViewport) {
       const seq = live?.viewport(width, height, binding, capture?.preferredScale);
-      if (seq) { requestedViewport = size; requestedViewportSeq = seq; viewportReady.value = false; }
+      if (seq) { requestedViewport = size; requestedViewportSeq = seq; requestedViewportFrame = lastLiveFrame; viewportReady.value = false; }
       else if (live?.ready) queueViewport();
     }
   }, Math.max(immediate ? 0 : 160, viewportRetryAt - Date.now()));
@@ -784,7 +890,7 @@ function observeMediaPresentation() {
       const desired = desiredViewport();
       if (desired && frame.viewport.width === desired.width && frame.viewport.height === desired.height && browserCaptureMatches(frame, desiredCapture(desired))) viewportReady.value = true;
       initialFramePending.value = false; frameIssue.value = ""; frameError.value = "";
-      liveRecovered();
+      liveRecovered(frame);
       queueViewport();
     }
     presentationCallback = video.requestVideoFrameCallback(presented);
@@ -839,6 +945,7 @@ async function connectLive() {
           observationSequence++; applyState(next); liveReady.value = true; connected.value = true; error.value = "";
           if (viewVisibilitySupported.value && visible.value) { viewResumePending.value = next.url !== "about:blank"; live?.setViewVisibility(true); }
           if (next.url === "about:blank") { liveRecovered(); initialFramePending.value = false; if (codecSwitch.value === "connecting") codecSwitch.value = "idle"; }
+          scheduleDisplayRecovery();
         },
         state(next) {
           if (epoch !== liveEpoch) return;
@@ -868,6 +975,7 @@ async function connectLive() {
         error(failure) {
           if (epoch !== liveEpoch) return;
           if (recoverIdentity(failure)) return;
+          if (recoverDisplayNavigation(failure)) return;
           if (failure.code === "LIVE_FRAME_STALE") {
             // The protocol already retired only the affected old receiver.
             // The worker releases that old gesture; never send or replay it.
@@ -876,9 +984,9 @@ async function connectLive() {
             mediaTransition.value = state.value.url !== "about:blank";
             return;
           }
-          if (failure.code === "LIVE_BUSY" && failure.seq === requestedViewportSeq) {
+          if (failure.code === "LIVE_BUSY" && failure.seq !== undefined && failure.seq === requestedViewportSeq) {
             // Only the display request is retryable. Input is never replayed.
-            requestedViewport = ""; requestedViewportSeq = undefined; viewportRetryAt = Date.now() + 500;
+            requestedViewport = ""; requestedViewportSeq = undefined; requestedViewportFrame = undefined; viewportRetryAt = Date.now() + 500;
             clearTimeout(viewportTimer); viewportTimer = undefined; queueViewport();
             return;
           }
@@ -951,6 +1059,7 @@ function inputBlur(event: FocusEvent) {
 
 function refreshView() {
   if (props.closing) return;
+  clearDisplayRecovery();
   if (error.value) { recoverIdentity(); return; }
   if (!picking.value) { closeLive(); frameReady.value = false; }
   void refresh();
@@ -1015,7 +1124,9 @@ async function action(work: () => Promise<NativeBrowserState>, observe = false, 
   frameReady.value = false;
   frameIdentity.value = "";
   navigationPending.value = observe;
+  clearDisplayRecovery();
   actionError.value = "";
+  liveFailureMessage.value = "";
   const sequence = observationSequence;
   const sentLease = { token: lease.value, epoch: leaseEpoch.value, context: props.target.context_ref, tab: props.target.tab_id };
   try {
@@ -1471,6 +1582,7 @@ watch(visible, value => { if (!value) takeoverStarted = undefined; });
 watch(() => props.closing, (closing, previous) => {
   if (closing) {
     lifecycleEpoch++; liveEpoch++;
+    clearDisplayRecovery();
     stopRead(); liveAbort?.abort(); liveAbort = undefined;
     clearTimeout(reconnectTimer); clearTimeout(viewportTimer); viewportTimer = undefined;
     clearTimeout(selectionRefreshTimer); clearTimeout(liveConnectionTimer); clearTimeout(loadingTimer);
@@ -1511,7 +1623,9 @@ watch(visible, shown => {
     warmView.show();
     if (live?.ready && viewVisibilitySupported.value) syncSheetVisibility();
     else void refresh();
+    scheduleDisplayRecovery();
   } else {
+    clearTimeout(displayRecoveryTimer); displayRecoveryTimer = undefined;
     resetImmersiveLayout();
     cancelCodecSwitch(); cancelBookmarkSelection(); stopPicking(); stopRead();
     if (pageVisible.value && !recovering.value && live?.ready && viewVisibilitySupported.value) syncSheetVisibility();
@@ -1521,7 +1635,7 @@ watch(visible, shown => {
 // Compare the binding values independently. Parent state refreshes replace the
 // target object without changing this page; a tuple-returning getter would
 // treat every replacement as a new array and cancel its pending handoff.
-watch([() => props.sessionId, () => props.target.context_ref, () => props.target.tab_id], resetImmersiveLayout, { flush: "sync" });
+watch([() => props.sessionId, () => props.target.context_ref, () => props.target.tab_id], () => { clearDisplayRecovery(); resetImmersiveLayout(); }, { flush: "sync" });
 watch(owned, value => { if (props.closing) return; viewportReady.value = false; if (!value) releaseInput(); else queueViewport(); });
 watch([visible, connected, busy, lease, leaseEpoch, () => state.value], () => {
   if (props.closing || disposed || picking.value || recovering.value) return;
@@ -1544,6 +1658,7 @@ onMounted(() => {
 });
 onBeforeUnmount(() => {
   disposed = true;
+  clearDisplayRecovery();
   resetImmersiveLayout();
   diagnosticsEpoch++; clearTimeout(diagnosticsTimer);
   cancelBookmarkSelection();
@@ -1618,12 +1733,12 @@ onBeforeUnmount(() => {
       <textarea v-if="owned && !showNewTab" ref="inputEl" class="native-input-capture" :style="{ left: `${inputPosition.x}px`, top: `${inputPosition.y}px` }" :aria-label="t('nativeBrowser.liveInput')" autocomplete="off" autocapitalize="off" spellcheck="false" :disabled="!writable" @beforeinput="beforeText" @compositionstart="compositionStart" @compositionend="compositionEnd" @paste="paste" @blur="inputBlur" />
       <!-- Transient feedback must not resize the canvas or its remote viewport. -->
       <div v-if="!closing" class="canvas-feedback">
-        <div v-if="error || actionError || frameIssue || showActivity || resetNotice !== null || state.page_load_error || slowLoading" class="native-statusbar" aria-live="polite">
+        <div v-if="error || actionError || displayError || frameIssue || showActivity || resetNotice !== null || state.page_load_error || slowLoading" class="native-statusbar" aria-live="polite">
           <span v-if="state.page_load_error" class="native-load-error" role="alert" :title="state.page_load_error">{{ t('nativeBrowser.pageLoadFailed') }}</span>
           <span v-else-if="slowLoading && pageLoading" class="native-loading-status" role="status">{{ t('nativeBrowser.loadingSlow') }}</span>
           <div v-if="error" class="native-error" role="alert">{{ t('nativeBrowser.connectionFailed') }} <button data-testid="browser-recover" @click="recoverIdentity()">{{ t('nativeBrowser.reconnect') }}</button><details><summary>{{ t('nativeBrowser.connectionDetails') }}</summary>{{ error }}</details></div>
           <div v-if="frameIssue" class="native-frame-status" :class="{ unavailable: frameIssue === 'unavailable' }" :title="frameIssue === 'changing' ? t('nativeBrowser.frameUpdating') : frameIssue === 'view-only' ? t('nativeBrowser.frameViewOnly') : t('nativeBrowser.frameUnavailable', { message: frameError })" role="status">{{ frameIssue === 'changing' ? t('nativeBrowser.frameUpdatingShort') : frameIssue === 'view-only' ? t('nativeBrowser.frameViewOnlyShort') : t('nativeBrowser.frameUnavailableShort') }}</div>
-          <div v-if="actionError" class="native-error" role="alert">{{ t('nativeBrowser.actionFailed', { message: actionError }) }}</div>
+          <div v-if="actionError || displayError" class="native-error" role="alert">{{ t('nativeBrowser.actionFailed', { message: actionError || displayError }) }}</div>
           <div v-if="showActivity" class="native-activity" :title="activityText" :class="state.dialog ? 'waiting' : activity?.phase" role="status"><span class="activity-dot" aria-hidden="true" /><span>{{ activityText }}</span></div>
           <div v-if="resetNotice !== null" class="native-reset" role="status">{{ t('nativeBrowser.reset') }} {{ resetNotice }}</div>
         </div>

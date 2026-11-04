@@ -1,0 +1,17 @@
+{
+  "source_branch": "perf/webrtc-latency-tier1",
+  "source_commit": "62bc2eb55b55be6ba5bfbe7c8500ee96b6f43121",
+  "scope": "Retired W1 implementation; historical experiment evidence only, not W2 acceptance.",
+  "files": [
+    {
+      "path": "browser-webrtc.md",
+      "original_path": "pogo/docs/browser-webrtc.md",
+      "sha256": "d55f676d4e1f264339fa7c30608c9c4221238f33e5a6f0562bf3f53c09a2808e"
+    },
+    {
+      "path": "browser-performance.md",
+      "original_path": "pogo/docs/browser-performance.md",
+      "sha256": "aecb657c56862bf49016e36453b9729a1063e3db0be94226c1a1220ff3fdd359"
+    }
+  ]
+}

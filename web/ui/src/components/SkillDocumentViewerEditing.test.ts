@@ -23,9 +23,9 @@ interface Controller {
   reloadLatest(): Promise<void>;
 }
 const scopes: ReturnType<typeof effectScope>[] = [];
-function mount() {
+function mount(selectedPath = "SKILL.md") {
   const save = vi.fn(async (input: SkillDocumentUpdate) => doc(input.content, "revision-b"));
-  const props = reactive({ scopeKey: "skill-a", managed: true, rootDocument: doc(), selectedPath: "SKILL.md", loadDocument: vi.fn(async (path: string): Promise<SkillDocumentContent> => ({ content: "# flow", relative_path: path, truncated: false })), saveDocument: save });
+  const props = reactive({ scopeKey: "skill-a", managed: true, rootDocument: doc(), selectedPath, loadDocument: vi.fn(async (path: string): Promise<SkillDocumentContent> => ({ content: "# flow", relative_path: path, truncated: false })), saveDocument: save });
   const scope = effectScope(); scopes.push(scope); const emit = vi.fn(), discard = vi.fn(async () => false);
   const c = scope.run(() => (SkillDocumentViewer as unknown as { setup(props: unknown, ctx: unknown): Controller }).setup(props, { emit, expose() {} }))!;
   c.leaveConfirm.value = { ask: discard };
@@ -33,6 +33,27 @@ function mount() {
 }
 afterEach(() => { for (const cleanup of hooks.cleanup.splice(0)) cleanup(); for (const scope of scopes.splice(0)) scope.stop(); });
 describe("Skill detail editing UI handlers", () => {
+  it("loads a package document selected when the viewer first mounts", async () => {
+    const { c, props } = mount("references/flow.md");
+
+    await vi.waitFor(() => expect(c.document.value?.relative_path).toBe("references/flow.md"));
+
+    expect(props.loadDocument).toHaveBeenCalledExactlyOnceWith("references/flow.md");
+    expect(c.location.value.path).toBe("references/flow.md");
+    expect(c.source.value).toBe("# flow");
+  });
+  it("reopens the selected package document after the Skill scope changes", async () => {
+    const { c, props } = mount("references/flow.md");
+    await vi.waitFor(() => expect(c.document.value?.relative_path).toBe("references/flow.md"));
+    props.scopeKey = "skill-b";
+    props.rootDocument = doc("# Other Skill", "revision-b");
+
+    await vi.waitFor(() => expect(props.loadDocument).toHaveBeenCalledTimes(2));
+
+    expect(props.loadDocument).toHaveBeenLastCalledWith("references/flow.md");
+    expect(c.location.value.path).toBe("references/flow.md");
+    expect(c.document.value?.relative_path).toBe("references/flow.md");
+  });
   it("keeps raw frontmatter in edit mode and renders only the draft body in preview without saving", () => {
     const { c, save } = mount(); c.editor.edit(); expect(c.editor.draft.value).toBe(raw);
     c.editor.draft.value = raw.replace("# 已保存说明", "# 草稿预览"); c.editor.preview();

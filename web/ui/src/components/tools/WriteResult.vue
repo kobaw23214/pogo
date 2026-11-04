@@ -27,6 +27,8 @@ const size = computed(() => {
     <div class="meta">
       <span class="tag" :class="details.created ? 'new' : 'over'">{{ t(details.created ? "writeResult.created" : "writeResult.overwritten") }}</span>
       <span>{{ size }}</span>
+      <span v-if="details.added !== undefined" class="added">+{{ details.added }}</span>
+      <span v-if="details.removed !== undefined" class="removed">-{{ details.removed }}</span>
     </div>
     <DiffView v-if="diff" v-bind="diff" />
   </div>
@@ -41,6 +43,9 @@ const size = computed(() => {
   color: var(--el-text-color-secondary);
   margin-bottom: 6px;
 }
+
+.added { color: var(--el-color-success); }
+.removed { color: var(--el-color-danger); }
 
 .tag {
   padding: 1px 6px;

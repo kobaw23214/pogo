@@ -44,7 +44,9 @@ async function openLink(href: string) {
   if (target.kind === "blocked" || target.path === location.value.path) await open(href);
   else await navigate(() => open(href));
 }
-watch(() => props.selectedPath, path => { if (path && path !== location.value.path) void navigate(() => openPath(path)); });
+watch([() => props.scopeKey, () => props.rootDocument, () => props.selectedPath], ([, , path]) => {
+  if (path && path !== location.value.path) void navigate(() => openPath(path));
+}, { immediate: true });
 watch(() => location.value.path, path => emit("pathChange", path), { flush: "sync" });
 const unavailable = computed(() => props.fileInfo?.path === location.value.path && !props.fileInfo.previewable ? props.fileInfo : null);
 function bytes(size: number) { return size < 1024 ? `${size} B` : size < 1048576 ? `${(size / 1024).toFixed(1)} KiB` : `${(size / 1048576).toFixed(1)} MiB`; }

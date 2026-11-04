@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/yosukeno/pogo/session"
-	"github.com/yosukeno/pogo/tools"
 )
 
 // SessionStats contains all computed statistics for a session.
@@ -50,12 +49,13 @@ type TokenAnalysis struct {
 
 // BatchDistribution tracks how many tool calls were made per turn.
 //
-// The three fields past BySize exist to answer one question the counts cannot:
-// whether batching is actually buying anything. A batch of four is only worth more
-// than four batches of one if the four overlap, and in this harness they do not when
-// any of them is a sequential tool — one such call serializes the whole batch (see
-// agent.parallelBatch). So the size distribution alone can look healthy while every
-// batch runs one at a time.
+// The fields past Combos exist to answer one question the counts cannot: whether
+// batching is actually buying anything. A batch of four is only worth more than four
+// batches of one if the four overlap, and the loop decides that per call
+// (agent.segments): overlap-capable calls next to each other share a segment, and
+// every other call runs alone and is a barrier between the calls before and after
+// it. So the size distribution alone can look healthy while most calls still run one
+// at a time. See schedule.go for how the decision is rebuilt from a transcript.
 type BatchDistribution struct {
 	TotalCalls int         `json:"total_calls"`
 	Singles    int         `json:"singles"`  // 1 call
@@ -70,28 +70,24 @@ type BatchDistribution struct {
 	// with "+" so that read+bash and bash+read are one entry. This is what says
 	// which batches a harness change would even touch.
 	Combos map[string]int `json:"combos,omitempty"`
-	// Stalled counts parallel-capable calls that shared a batch with a sequential
-	// one, and therefore ran one at a time for a reason that had nothing to do with
-	// them. It is the size of the prize for making the batch rule finer-grained, and
-	// zero is a real answer: it means the rule costs this workload nothing.
-	Stalled int `json:"stalled_by_sequential_sibling"`
-}
 
-// sequentialByName reports, per tool name, whether that tool refuses to overlap a
-// sibling. Read from the tools' own declarations rather than a list kept here, so a
-// tool changing its mind cannot leave this report quietly wrong.
-//
-// tools.Default covers the seven that touch the workspace. todo and subagent are
-// registered only for a top-level session and are absent here; both declare
-// Parallel, so their absence gives the right answer today. A future sequential tool
-// outside the default set would have to be added.
-var sequentialByName = func() map[string]bool {
-	m := map[string]bool{}
-	for _, t := range tools.Default(".").All() {
-		m[t.Name()] = t.ExecutionMode() == tools.Sequential
-	}
-	return m
-}()
+	// ScheduleSummary is how the batches were dispatched under the loop's rule;
+	// its Stalled count is the size of the prize for any finer-grained rule.
+	ScheduleSummary
+	// SplitBy names the calls that stood between overlap-capable siblings.
+	SplitBy map[string]int `json:"split_by,omitempty"`
+	// ReadOnlySequential counts calls the loop ran alone although the tool's own
+	// declarations say the call changes nothing. IfReadOnlyParallel is the same
+	// history dispatched as if they could overlap; absent when there are none.
+	ReadOnlySequential map[string]int   `json:"read_only_scheduled_alone,omitempty"`
+	IfReadOnlyParallel *ScheduleSummary `json:"if_read_only_could_overlap,omitempty"`
+	// UnknownMode counts calls whose schedule the transcript cannot establish;
+	// they are counted as sequential above. See modeUnknown.
+	UnknownMode map[string]int `json:"schedule_unknown,omitempty"`
+	// ToolTimeMS sums the execution times the tool_results recorded: what the
+	// calls would have taken one after another.
+	ToolTimeMS int64 `json:"tool_time_ms,omitempty"`
+}
 
 // comboKey names a batch by its tool set, order-insensitively.
 func comboKey(names []string) string {
@@ -172,6 +168,13 @@ type messageRecord struct {
 type blockRecord struct {
 	Type string `json:"type"`
 	Name string `json:"name,omitempty"`
+	// tool_use: the call, whose arguments decide its schedule for some tools.
+	ID    string          `json:"id,omitempty"`
+	Input json.RawMessage `json:"input,omitempty"`
+	// tool_result: joined back to its call by ToolUseID.
+	ToolUseID  string `json:"tool_use_id,omitempty"`
+	IsError    bool   `json:"is_error,omitempty"`
+	DurationMS int64  `json:"duration_ms,omitempty"`
 }
 
 type metaRecord struct {
@@ -278,10 +281,13 @@ func AnalyzeSession(path string, config Config) (*SessionStats, error) {
 	lastTime := records[len(records)-1].Time
 	stats.Duration = lastTime - firstTime
 
-	// Group records by turn (message chains). The names are kept, not just the
-	// count: which tools shared a batch is what decides whether the batch overlapped.
+	// Group records by turn (message chains). The calls are kept whole, not just
+	// counted: which tools shared a batch, and with what arguments, is what decides
+	// whether the batch overlapped. Results are kept by call ID for their durations.
 	turnNumber := 0
-	toolNamesByTurn := make(map[int][]string)
+	var batches [][]blockRecord
+	results := make(map[string]blockRecord)
+	toolStatsRecorded := false
 
 	// Process records to compute statistics
 	for _, r := range records {
@@ -298,62 +304,43 @@ func AnalyzeSession(path string, config Config) (*SessionStats, error) {
 		// longer the rule for whether the record exists.
 		case "stats":
 			if r.Stats != nil {
+				toolStatsRecorded = toolStatsRecorded || r.Stats.Tools != nil
 				processStats(stats, r.Stats, turnNumber, config)
 			}
 
 		case "message":
-			if r.Message != nil && r.Message.Role == "assistant" {
+			if r.Message == nil {
+				break
+			}
+			switch r.Message.Role {
+			case "assistant":
 				turnNumber++
-
-				// Count tool calls from content
-				var names []string
+				var calls []blockRecord
 				for _, block := range r.Message.Content {
 					if block.Type == "tool_use" {
-						names = append(names, block.Name)
+						calls = append(calls, block)
 					}
 				}
-				if len(names) > 0 {
-					toolNamesByTurn[turnNumber] = names
+				if len(calls) > 0 {
+					batches = append(batches, calls)
+				}
+			case "user":
+				for _, block := range r.Message.Content {
+					if block.Type == "tool_result" && block.ToolUseID != "" {
+						results[block.ToolUseID] = block
+					}
 				}
 			}
 		}
 	}
 
 	// Compute batch distribution
-	for _, names := range toolNamesByTurn {
-		count := len(names)
-		stats.BatchSizes.TotalCalls += count
-		stats.BatchSizes.BySize[count]++
-		stats.BatchSizes.Combos[comboKey(names)]++
-		switch count {
-		case 1:
-			stats.BatchSizes.Singles++
-		case 2:
-			stats.BatchSizes.Doubles++
-		default:
-			if count >= 3 {
-				stats.BatchSizes.Multiple++
-			}
-		}
-		// A lone call has nothing to overlap with, so it is never stalled however
-		// sequential it is.
-		if count < 2 {
-			continue
-		}
-		sequential, parallel := 0, 0
-		for _, name := range names {
-			if sequentialByName[name] {
-				sequential++
-			} else {
-				parallel++
-			}
-		}
-		if sequential > 0 {
-			stats.BatchSizes.Stalled += parallel
-		}
+	for _, calls := range batches {
+		stats.BatchSizes.addBatch(calls, results)
 	}
-	if turns := len(toolNamesByTurn); turns > 0 {
-		stats.BatchSizes.AverageCalls = float64(stats.BatchSizes.TotalCalls) / float64(turns)
+	stats.BatchSizes.finish()
+	if !toolStatsRecorded {
+		timeFromResults(&stats.ToolTiming, batches, results)
 	}
 
 	// Compute averages
@@ -363,6 +350,14 @@ func AnalyzeSession(path string, config Config) (*SessionStats, error) {
 
 		if stats.ToolTiming.TotalCalls > 0 {
 			stats.ToolTiming.AverageDuration = float64(stats.ToolTiming.TotalDuration) / float64(stats.ToolTiming.TotalCalls)
+		}
+		// Per tool as well: the report prints this average, and it used to be
+		// left at zero for every tool.
+		for name, tool := range stats.ToolTiming.ByTool {
+			if tool.CallCount > 0 {
+				tool.AverageDuration = float64(tool.TotalDuration) / float64(tool.CallCount)
+				stats.ToolTiming.ByTool[name] = tool
+			}
 		}
 
 		if stats.ApprovalStats.TotalRequests > 0 {
@@ -378,6 +373,43 @@ func AnalyzeSession(path string, config Config) (*SessionStats, error) {
 	}
 
 	return stats, nil
+}
+
+// timeFromResults fills tool timing from the execution time each tool_result
+// recorded. The loop and the web runner no longer append per-turn tool stats, so
+// without this every recent transcript reported no tool calls at all. It runs only
+// when no stats record carried tool timing, so a transcript with both is counted
+// once. A call with no result in the file (a cut-off transcript) is skipped.
+func timeFromResults(t *ToolTimingAnalysis, batches [][]blockRecord, results map[string]blockRecord) {
+	if t.ByTool == nil {
+		t.ByTool = make(map[string]ToolStats)
+	}
+	for _, calls := range batches {
+		for _, c := range calls {
+			r, ok := results[c.ID]
+			if !ok || c.ID == "" {
+				continue
+			}
+			d := max(r.DurationMS, 0)
+			t.TotalCalls++
+			t.TotalDuration += d
+			t.MaxDuration = max(t.MaxDuration, d)
+			if t.TotalCalls == 1 || d < t.MinDuration {
+				t.MinDuration = d
+			}
+			tool := t.ByTool[c.Name]
+			tool.CallCount++
+			tool.TotalDuration += d
+			tool.MaxDuration = max(tool.MaxDuration, d)
+			if tool.CallCount == 1 || d < tool.MinDuration {
+				tool.MinDuration = d
+			}
+			if r.IsError {
+				tool.ErrorCount++
+			}
+			t.ByTool[c.Name] = tool
+		}
+	}
 }
 
 func processStats(sessionStats *SessionStats, sr *statsRecord, turnNumber int, config Config) {
@@ -594,7 +626,7 @@ func FormatText(stats *SessionStats) string {
 			builder.WriteString(fmt.Sprintf("    %-28s %d turn(s)\n", c, stats.BatchSizes.Combos[c]))
 		}
 	}
-	builder.WriteString(fmt.Sprintf("  Serialized by a sequential sibling: %d call(s)\n", stats.BatchSizes.Stalled))
+	writeScheduling(&builder, stats.BatchSizes)
 	builder.WriteString("\n")
 
 	builder.WriteString(fmt.Sprintf("Tool Timing:\n"))

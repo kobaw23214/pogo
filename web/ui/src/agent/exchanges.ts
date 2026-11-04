@@ -1,3 +1,4 @@
+import type { CompactionView } from "@/api/types";
 import type { NoticeItem, TimelineItem, TurnItem, UserItem } from "./timeline";
 
 // This module is deliberately free of Vue imports, like timeline.ts: it is a
@@ -16,6 +17,7 @@ import type { NoticeItem, TimelineItem, TurnItem, UserItem } from "./timeline";
 export interface Exchange {
   /** The opening user message id; a synthetic "head" if turns precede it. */
   id: string;
+  compaction?: CompactionView;
   user?: UserItem;
   turns: TurnItem[];
   /**
@@ -118,6 +120,35 @@ export function buildExchanges(items: TimelineItem[], runActive: boolean): Excha
   for (let i = 0; i < out.length; i++) {
     out[i].finished = i < out.length - 1 || !runActive;
   }
+  return out;
+}
+
+export function buildConversationExchanges(items: TimelineItem[], compactions: CompactionView[], runActive: boolean): Exchange[] {
+  const conversations = buildExchanges(items, runActive);
+  if (!compactions.length) return conversations;
+  const pending = compactions.map((value, index) => ({ value, index })).sort((a, b) => a.value.after - b.value.after || a.index - b.index);
+  const out: Exchange[] = [];
+  let cursor = 0, next = 0;
+  const appendThrough = (after: number) => {
+    while (next < pending.length && pending[next].value.after <= after) {
+      const compaction = pending[next++].value;
+      out.push({
+        id: `compaction:${compaction.id}`,
+        compaction,
+        turns: [],
+        notices: [],
+        stats: { calls: 0, failed: 0, files: 0, tools: {} },
+        finished: true,
+      });
+    }
+  };
+  for (const exchange of conversations) {
+    appendThrough(cursor);
+    out.push(exchange);
+    cursor += (exchange.user ? 1 : 0) + exchange.turns.length + exchange.notices.length + (exchange.steering?.length ?? 0);
+    appendThrough(cursor);
+  }
+  appendThrough(Number.POSITIVE_INFINITY);
   return out;
 }
 

@@ -1,4 +1,4 @@
-import type { Message, ToolResult } from "@/api/types";
+import type { ContextMessage, Message, ToolResult } from "@/api/types";
 import { createContextEstimator } from "./contextEstimate";
 
 export type ContextReadingSource = "measured" | "estimated" | "unknown";
@@ -21,6 +21,26 @@ interface ContextInput {
 }
 
 const count = (value: number) => Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
+
+/** Project the model-facing compacted history into the meter's display shapes.
+ * Undefined means an ordinary session; an empty array is an actual empty prompt. */
+export function projectContextMessages(context: ContextMessage[] | undefined): { messages: Message[]; results: ToolResult[] } | null {
+  if (context === undefined) return null;
+  const names = new Map<string, ToolResult["name"]>();
+  for (const message of context) {
+    for (const block of message.content) if (block.type === "tool_use") names.set(block.id, block.name);
+  }
+  const messages = context.map((message, index) => ({ id: `context-${index}`, role: message.role, content: message.content }));
+  const results: ToolResult[] = [];
+  for (const [messageIndex, message] of context.entries()) {
+    for (const [blockIndex, block] of message.content.entries()) {
+      if (block.type !== "tool_result") continue;
+      const callId = block.tool_use_id || `context-result-${messageIndex}-${blockIndex}`;
+      results.push({ call_id: callId, name: names.get(block.tool_use_id), text: block.text ?? "", is_error: block.is_error });
+    }
+  }
+  return { messages, results };
+}
 
 /** One reading for the slash menu, selected command and context meter.
  * The API's context_tokens is a single provider prompt, never usage.input's

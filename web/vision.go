@@ -79,6 +79,7 @@ func (m *Manager) visionClient() (llm.Client, error) {
 		APIKey:        cfg.APIKey,
 		Model:         cfg.Model,
 		MaxTokens:     maxTokens,
+		Timeout:       cfg.Timeout,
 		Headers:       cfg.Headers,
 		ExtraBody:     cfg.ExtraBody,
 		Compatibility: cfg.Compatibility,
@@ -270,5 +271,12 @@ func (s *Session) visionAsk(ctx context.Context, ref, question string) (string, 
 	s.mu.Lock()
 	cwd := s.cwd
 	s.mu.Unlock()
+	if filepath.IsAbs(ref) {
+		rel, err := filepath.Rel(cwd, ref)
+		if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			return "", fmt.Errorf("image path escapes the workspace: %q", ref)
+		}
+		ref = filepath.ToSlash(rel)
+	}
 	return s.mgr.visionAsk(ctx, cwd, ref, question)
 }

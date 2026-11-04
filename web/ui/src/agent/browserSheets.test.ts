@@ -19,6 +19,12 @@ describe("native browser Sheet identities", () => {
     expect(blank[0].favicon).toBeUndefined();
     expect(reconcileBrowserSheets(tabs, "s1", state)[0].favicon).toBeUndefined();
   });
+  it("shows a Skill document only in the session whose selection authorized it", () => {
+    const tab: DockTab = { id: "skill:s1:browser-use:SKILL.md", kind: "skill", label: "SKILL.md", skill: "browser-use", path: "SKILL.md", parentSession: "s1", closable: true };
+    expect(browserSheetVisible(tab, "s1")).toBe(true);
+    expect(browserSheetVisible(tab, "s2")).toBe(false);
+    expect(browserSheetVisible(tab, null)).toBe(false);
+  });
   it("binds independent Sheets to pages in one context and keeps unrelated Sheets", () => {
     const tabs = reconcileBrowserSheets([shell], "s1", state);
     expect(tabs).toHaveLength(3);

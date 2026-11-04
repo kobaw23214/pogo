@@ -89,6 +89,28 @@ Agent 链路：`browser 工具 → BrowserGate 任务授权 → Go 会话桥 →
 
 一次普通动作 batch 最多 12 步。执行过程中发生导航、标签切换、错误、取消或控制权变化时停止后续步骤，基于新观察继续。`devtools` 独立调用，不允许嵌入 batch。工具回执成功只表示动作完成，最终业务结果仍需核对。
 
+批次回执 `batch` 记录 `requested/executed/skipped/stop_reason`，`steps` 只列实际尝试的动作，逐步 `duration_ms` 随宿主 `step_results` 留存；未执行动作不伪装为成功。`observation_pending` 表示动作后的页面观察尚未完整，不能据此重复点击或提交。旧 worker 不提供这些字段时仍沿用原回执。
+
+同页短批次中，非末步的非提交 `type` 和 `select` 在页面未导航、未切页且相关请求已结束时，只延后不会返回的可选结构化证据；文本、元素引用、逐步等待和停止检查仍保留。最后一步保持完整观察；提前停止时，如需补齐证据，只对绑定页签做一次新的只读快照。文档或控制权变化导致无法核对时，明确返回待观察和证据不可用，不把新页证据拼到旧页文本，也不重放输入。显式读取、点击、按键和单动作不启用这项省略。
+
+普通单页动作以及同页 `batch` 可在最外层显式绑定 `tab_id/context_ref/control_epoch`。元素 `target` 保留 ref/CSS/调试目标含义，`tab` 动作仍以原 `target` 选择页签；二者不能混用。绑定操作在现有串行事务中核对当前页身份与 Agent 控制代次，并选择该页作为执行目标，省去模型额外切页调用；它不会隐式 claim 或转移人工租约，也不强制切换用户的 Sheet。同页交互继续串行，一个 `batch` 不混用不同页的绑定；页面变更、人工接管、取消和未知结果仍是停止边界。
+
+新应用在发送显式绑定或多页集合前读取 worker `state.agent_capabilities`，分别要求 `explicit_page_binding`、`page_collections` 明确可用。旧 worker 缺少对应标记时，宿主拒绝该新操作且不发送页面输入，不静默丢弃绑定字段或降级到活动页。上线这些能力需配套升级应用与 browser worker；旧的未绑定单页动作仍保留原执行路径，不能把它们视为新能力的等价替代。
+
+`open_pages` 和 `observe_pages` 是独立集合动作，不允许嵌入 `batch`。前者接收 1–8 个完整 HTTP(S) `urls`，新建 Agent 页并加载/观察；后者接收 1–8 个 `pages` 绑定对象（各含 `tab_id/context_ref/control_epoch`），只观察已有 Agent 页，可设 `full:true`。二者默认并发 3，可用 `concurrency` 设为 1–3，`seconds` 默认或 0 为 60 秒、最大 60 秒；输入、提交和相互依赖的业务步骤仍顺序执行。集合内部保留有界页面读取，不把整个浏览器工具改为任意并行。同会话页签仍共享网站的 cookie/登录态，并非独立账号环境。
+
+集合回执 `data.kind=browser-pages-v1` 的 `pages` 保留输入顺序的 `index` 及每页身份、URL、版本、观察时间、正文/证据、错误和 `observed|failed|pending|not_started` 状态，`coverage` 提供 `requested/observed/failed/pending/skipped`。顶层不冒充任意一张活动页；部分失败保留成功行，未启动页面不伪装为已访问。宿主工具详情仅保留逐页身份/状态摘要与覆盖范围，完整 JSON 和正文进入同一已保存结果/Spill 链路，可按记录恢复，恢复不重新访问网站。计时和完成范围属于运行诊断，不是网站业务成功证据。
+
+引用注册将整个集合记为一个 `tool://browser-pages/<callID>` 来源，避免多页正文错误归属到全局活动页 URL；这个标签表示已记录的观察集合，不证明失败或未读页面的内容。每页 `index` 仅用于定位，不是新的引用编号或 PDF 页码。正文使用独立的浏览器页签分区，不复用 `=== Page N ===` 文档页标记。
+
+并发子页完成时不逐个抢焦点。`open_pages` 的首个成功观察页可提供一次 `focus` 建议，宿主再核对对应当前页面后，前端按主会话、调用 ID、context、generation、页签和控制代次选择 Sheet；此展示不改变 Agent 执行目标，手工选页会撤销待处理的自动选择。焦点建议未能通过当时的绑定/观察核对时，保留原选页而不强制展示，不能把它当作开页失败。`observe_pages` 以及普通显式绑定动作不触发自动选页，历史重放和子任务事件也不自动抢焦点。
+
+以上新增集合与批次优化为源码能力说明；运行验收和实际吞吐收益需另行验证，不能把文档更新当作已部署或通过交互验收。
+
+worker 的 `timing` 只保存动作名对应的次数和单调时钟耗时，不增加页面内容、输入值或凭据：包括 `total_ms/queue_ms/execution_ms/dispatch_ms/navigation_ms/condition_wait_ms/settle_ms/snapshot_ms/evidence_ms`、快照与证据次数及 `intermediate_evidence_skipped`。宿主将其保留在工具详情，不追加到模型正文或逐步进度提示。总耗时包含排队与执行；`dispatch_ms` 是动作观察前阶段，包含 Playwright 自动等待，不是纯输入传输耗时。`navigation_ms` 统计显式导航、返回和新开页准备，是 `dispatch_ms` 的子阶段，不代表每个点击触发的所有网络活动。`condition_wait_ms` 统计 `wait` 的条件等待和观察重试时的 DOMContentLoaded 等待，属于执行耗时；正常 `wait` 同时也属于动作观察前阶段，不能重复相加。各阶段有嵌套，`snapshot_ms` 包含其内部证据采集，`evidence_ms` 还统计 `extract` 的直接证据，不能把所有阶段直接相加。这些指标不包含模型推理或提供方等待耗时。
+
+集合动作的各页加载和读取会重叠，逐页阶段耗时或计数的合计描述的是完成工作量，可能大于实际墙钟耗时；不能把并发阶段相加后当成总耗时或模型延迟。分析整次调用时使用其外层 `total_ms/queue_ms/execution_ms`，再结合每页结果和阶段分布定位开销。
+
 模型收到的声明只包含当前原生能力；`api_read`、`auth_status`、`eval` 及旧面板执行链路已退役。未知或旧版执行器不能派发动作。每个 batch 子项都有完整字段类型与 `action` 枚举，整批参数在执行任何动作前校验。`type` 必须明确提供 `text`，空字符串表示清空；`select` 的选项放在 `text`，不猜测别名。
 
 图像能力取决于完整调用链路：直接视觉模型获得像素；有 `analyze_image` 的文本模型先使用辅助工具；没有图像解析路径时使用页面文本和协议结果，不列出截图或坐标动作。模型切换会更新工具声明和 token 开销估计。子 Agent 通过私有 FD 同时继承后端标识与原生调试能力，但当前 CLI/FD 没有图像解析器；用户查看画面和评测截图归档不受此限制。后端元数据仅描述能力，不改变任务授权、人工控制或租约。

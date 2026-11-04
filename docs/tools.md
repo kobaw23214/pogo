@@ -169,7 +169,7 @@ web 会话里 subagent **默认后台跑**：调用立即返回一个 task id，
 
 ### analyze_image（仅 web，配置了 vision_model 才注册）
 
-providers.json 里写了 `vision_model` 的部署，web 会话会多注册一个 `analyze_image`（`tools/image.go`、`web/vision.go`）：文本模型把图片——截图、上传的附件——连同一句话问题交给配置的视觉模型描述，描述作为工具结果回到会话里。它存在的原因是主力模型不收图：与其整个会话迁去一个收图但更贵的模型，不如让「看一眼」成为一个可以按需调用的工具。配置细节见[「模型」](configuration.md#模型)。
+providers.json 里写了 `vision_model` 的部署，web 会话会多注册一个 `analyze_image`（`tools/image.go`、`web/vision.go`）：文本模型把用户附件或当前工作区里的图片连同一句话问题交给配置的视觉模型描述，描述作为工具结果回到会话里。图片可用附件名、引用或工作区内的相对/绝对路径指定。它存在的原因是主力模型不收图：与其整个会话迁去一个收图但更贵的模型，不如让「看一眼」成为一个可以按需调用的工具。配置细节见[「模型」](configuration.md#模型)。
 
 
 ---
@@ -322,7 +322,7 @@ The terminal has none of this: a one-shot process has no "later" to deliver a re
 
 ### analyze_image (web only; registered when a vision_model is configured)
 
-Deployments whose providers.json declares a `vision_model` get one more web-session tool, `analyze_image` (`tools/image.go`, `web/vision.go`): the text model hands an image — a screenshot, an uploaded attachment — plus a one-line question to the configured vision model, and the description comes back as a tool result. The reason it exists is that the main model does not take images: rather than move the whole session to a costlier model that does, "look at this" becomes a tool called on demand. Configuration is in [Models](configuration.md#models).
+Deployments whose providers.json declares a `vision_model` get one more web-session tool, `analyze_image` (`tools/image.go`, `web/vision.go`): the text model hands an attached image or any image in the session workspace, plus a one-line question, to the configured vision model, and the description comes back as a tool result. Images can be named by attachment reference or by a workspace-relative/absolute path. The reason it exists is that the main model does not take images: rather than move the whole session to a costlier model that does, "look at this" becomes a tool called on demand. Configuration is in [Models](configuration.md#models).
 
 ### Agent 私有快捷方式（Web）
 

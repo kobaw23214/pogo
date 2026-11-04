@@ -1,4 +1,6 @@
 import MarkdownIt from "markdown-it";
+import { fileRawURL } from "@/api/client";
+import { attachmentWorkspacePath } from "./officeFiles";
 import { resolvedWorkspaceFileTarget, workspaceFileMatches, workspaceFileTarget, type WorkspaceFileContext, type WorkspaceFileTarget } from "./workspaceFileLinks";
 import type { WorkspaceFileScope } from "./workspaceFileNavigation";
 
@@ -53,6 +55,13 @@ export function workspaceFileCardKind(path: string): WorkspaceFileCardKind | nul
     if (extensions.includes(extension)) return kind;
   }
   return null;
+}
+
+export function workspaceMarkdownImageURL(href: string, origin: WorkspaceFileScope | null): string | null {
+  if (!origin) return null;
+  const target = workspaceFileTarget(href, origin, "href");
+  if (!target || workspaceFileCardKind(target.path) !== "image") return null;
+  return fileRawURL(attachmentWorkspacePath(origin.workspace, target.path));
 }
 
 /** Extend tokens rather than rewriting Markdown or scanning fenced code. */

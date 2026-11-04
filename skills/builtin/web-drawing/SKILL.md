@@ -98,8 +98,14 @@ is only for when they did not.
   for callouts, and `:::details 摘要` followed by `:::` for collapsible detail.
   Task-list checkboxes are read-only status, not an editing interface.
 - Use `diff` fences for before/after changes. Link only to workspace files that
-  actually exist; a standalone PDF, Office, image, audio or video Markdown link
-  opens a file card through the existing preview. Never invent file paths.
+  actually exist; use `![alt](workspace/path.png)` to inline an existing image,
+  while a standalone PDF, Office, image, audio or video Markdown link opens a
+  file card through the existing preview. Never invent file paths. Never run
+  Python or create Base64/HTML embeds solely to display an image.
+- For an interactive HTML artifact, save a real `.html` or `.htm` workspace file,
+  then use a `html-preview` fence containing only JSON with `path` and an optional
+  `title`. Never paste executable HTML into the answer; ordinary `html` fences
+  remain source code.
 - Do not use raw HTML, JavaScript, iframes or external embeds. Rich formatting
   should clarify the answer, not decorate every response.
 

@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref } from "vue";
+import { useResizeObserver } from "@vueuse/core";
 import { recentTailLines } from "@/agent/textTail";
 
 /** A recent fragment of the stream, never a delayed playback of every line. */
@@ -12,14 +13,35 @@ const props = withDefaults(
     /** Accepted for older callers; recent previews no longer queue playback. */
     paceMs?: number;
   }>(),
-  { streaming: true, lines: 3, maxUnits: 72, paceMs: 420 },
+  { streaming: true, lines: 3, paceMs: 420 },
 );
-const visible = computed(() => recentTailLines(props.text, props.maxUnits, props.lines));
+const root = ref<HTMLElement | null>(null);
+const measuredMaxUnits = ref<number>();
+let measureContext: CanvasRenderingContext2D | null | undefined;
+
+function updateMaxUnits(width: number) {
+  const el = root.value;
+  if (!el || width <= 0) { measuredMaxUnits.value = undefined; return; }
+  if (measureContext === undefined) measureContext = document.createElement("canvas").getContext("2d");
+  if (!measureContext) return;
+  const style = getComputedStyle(el);
+  measureContext.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+  const unitWidth = measureContext.measureText("0").width;
+  if (!Number.isFinite(unitWidth) || unitWidth <= 0) return;
+  measuredMaxUnits.value = Math.max(1, Math.floor(width / unitWidth) - 1);
+}
+
+useResizeObserver(root, entries => {
+  const entry = entries[0];
+  if (entry) updateMaxUnits(entry.contentRect.width);
+});
+const effectiveMaxUnits = computed(() => props.maxUnits ?? measuredMaxUnits.value ?? 72);
+const visible = computed(() => recentTailLines(props.text, effectiveMaxUnits.value, props.lines));
 </script>
 
 <template>
   <!-- Fixed height preserves the surrounding layout as the latest rows change. -->
-  <div class="stw" :style="{ '--stw-lines': lines }" :data-streaming="streaming">
+  <div ref="root" class="stw" :style="{ '--stw-lines': lines }" :data-streaming="streaming">
     <TransitionGroup name="stwroll">
       <p v-for="l in visible" :key="l.key" class="stw-line">{{ l.text }}</p>
     </TransitionGroup>

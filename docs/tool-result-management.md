@@ -264,6 +264,20 @@ identity/status. Mandatory identity, citations, unavailable storage and expired
 references can exceed a target. The host never drops a call/result pair or
 destroys the only copy of a page merely to satisfy an estimated budget.
 
+A successful `read` whose only file is a registered Skill's `SKILL.md` is the
+one exception to the per-result and per-batch limits. The model loads it to
+follow it word for word, and a preview would be a partial rule set it cannot
+tell from the real one: the built-in `browser-use` document (33 KB, about 8,300
+estimated tokens) exceeds the per-result limit, and as a preview it lost 14 of its
+166 substantive lines at a 1M window and 88 at 128K. Such a result is
+allocated its full cost first; the read tool's own 2000-line/50 KB page still
+bounds it, and only the measured remaining headroom can cut it short, never below
+its identity allowance. The other results share the batch target as before,
+within what is left. Attribution is the registry's trusted Skill attribution
+(`SkillDocumentReadAlone`, the same evidence compaction uses to restore a loaded
+Skill): a same-named copy, a multi-file read or a failed read is budgeted as an
+ordinary page. Documents read through `skill_read` keep the ordinary limits.
+
 Budgeting changes a copy sent to the model. UI cards, transcript bodies and their
 line/body offsets stay whole. An ID-less file/search page is saved before its
 view is reduced. An existing ID reads the saved original; it is never replaced

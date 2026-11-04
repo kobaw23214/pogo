@@ -82,6 +82,9 @@ type providerFile struct {
 	// merge, custom key wins a collision: an override here was configured
 	// knowingly, and there is no silently-more-correct side to prefer.
 	ExtraBody map[string]any `json:"extra_body,omitempty"`
+	// TimeoutSeconds bounds one model request. Zero preserves compatibility with
+	// older provider files and selects the client's default timeout.
+	TimeoutSeconds int64 `json:"timeout_seconds,omitempty"`
 	// AllowInsecureHTTP is the explicit opt-out for the plain-http-to-a-remote-
 	// host refusal. Loopback and private-network addresses are exempt without
 	// it; a gateway on an address that is neither — reachable only over a
@@ -478,7 +481,7 @@ func merge(baseProviders map[string]Provider, baseModels []Model, f fileConfig) 
 		// on one machine, a gateway in CI) without editing the file.
 		ps[name] = Provider{
 			Name: name, BaseURL: pf.BaseURL, KeyEnv: pf.KeyEnv, BaseURLEnv: pf.BaseURLEnv,
-			Headers: pf.Headers, ExtraBody: pf.ExtraBody, pinnedBaseURL: pf.BaseURLEnv == "",
+			Headers: pf.Headers, ExtraBody: pf.ExtraBody, TimeoutSeconds: pf.TimeoutSeconds, pinnedBaseURL: pf.BaseURLEnv == "",
 		}
 	}
 
@@ -593,6 +596,9 @@ func validateProvider(name string, p providerFile) error {
 	}
 	if strings.TrimSpace(name) == "" {
 		return fmt.Errorf("a provider has an empty name")
+	}
+	if p.TimeoutSeconds < 0 {
+		return fmt.Errorf("provider %q: timeout_seconds must be >= 0", name)
 	}
 	// Empty key_env is legitimate: the endpoint needs no credential. A non-empty
 	// value must be a variable *name* — deliberately not echoed on failure,

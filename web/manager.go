@@ -1746,21 +1746,15 @@ func (m *Manager) Delete(id string) error {
 // roots.
 //
 // usage/delegated are the totals recovered from the transcript's stats
-// SetMaxTurnsOverride applies the settings dialog's turn cap. n <= 0 restores
-// the startup flag's value. The stored value covers sessions created later;
-// the loop below pushes the effective cap into every cached session's agent
-// too, so the next run of an already-open conversation obeys the save without
-// a reload. SetMaxTurns is an atomic store, so a run that is between turns
-// simply reads the new cap at its next boundary.
+// SetMaxTurnsOverride applies the settings dialog's turn cap. n <= 0 explicitly
+// disables it. The stored value covers sessions created later; the loop below
+// pushes the choice into every cached session's agent too, so the next run of an
+// already-open conversation obeys the save without a reload.
 func (m *Manager) SetMaxTurnsOverride(n int) {
 	if n < 0 {
 		n = 0
 	}
 	m.maxTurnsOverride.Store(int64(n))
-	effective := n
-	if effective <= 0 {
-		effective = m.cfg.MaxTurns
-	}
 	m.mu.Lock()
 	sessions := make([]*Session, 0, len(m.sessions))
 	for _, s := range m.sessions {
@@ -1772,7 +1766,7 @@ func (m *Manager) SetMaxTurnsOverride(n int) {
 		a := s.agent
 		s.mu.Unlock()
 		if a != nil {
-			a.SetMaxTurns(effective)
+			m.applyMaxTurns(a)
 		}
 	}
 }
@@ -1791,13 +1785,17 @@ func (m *Manager) MemoryAutoEnabled() bool {
 	return m.memoryAuto.Load()
 }
 
-// effectiveMaxTurns is the cap a newly created session starts with: the
-// settings override when one is set, else the -max-turns flag value.
+// effectiveMaxTurns is the cap a newly created session starts with. Zero means unlimited.
 func (m *Manager) effectiveMaxTurns() int {
-	if n := int(m.maxTurnsOverride.Load()); n > 0 {
-		return n
+	return int(m.maxTurnsOverride.Load())
+}
+
+func (m *Manager) applyMaxTurns(a *agent.Agent) {
+	if n := m.effectiveMaxTurns(); n > 0 {
+		a.SetMaxTurns(n)
+	} else {
+		a.SetUnlimitedTurns()
 	}
-	return m.cfg.MaxTurns
 }
 
 // records (zero for a fresh session). They seed three places that must agree:
@@ -1864,6 +1862,8 @@ func (m *Manager) newSession(store *session.Store, cfg config.Resolved, history 
 	}
 	hub := NewHub()
 	hub.Seed(history)
+	hub.SetCompactions(store.Compactions(""))
+	modelHistory := store.PromptTimedMessages("")
 	hub.SetRunInfo(cfg.Model, cfg.Provider, cfg.ContextWindow)
 	hub.SetUsage(usage)
 
@@ -1917,7 +1917,7 @@ func (m *Manager) newSession(store *session.Store, cfg config.Resolved, history 
 		root:         root,
 		owner:        owner,
 		shadow:       ws.shadow,
-		persisted:    len(history),
+		persisted:    len(modelHistory),
 		recorded:     session.Recorded{Usage: usage, Delegated: delegated},
 		lastUsed:     time.Now(),
 		mcpReserved:  sessionTools,
@@ -2006,9 +2006,8 @@ func (m *Manager) newSession(store *session.Store, cfg config.Resolved, history 
 		}
 	}
 	// Attachments first: the tool registration below (Options.Images) resolves
-	// against this list, and a reloaded session's history already carries the
-	// image blocks.
-	s.seedImages(history)
+	// against the images still present in model context.
+	s.seedImages(modelHistory)
 	s.seedManagedOfficeAttachments()
 	// The background runner's context is the session's own: independent of any
 	// run, cancelled when the session closes or is evicted. The hooks are the
@@ -2080,8 +2079,8 @@ func (m *Manager) newSession(store *session.Store, cfg config.Resolved, history 
 	if informationErr == nil && informationStore != nil {
 		informationRoot, informationScope = informationStore.Root(), informationStore.ScopeID()
 	}
-	msgs := make([]llm.Message, 0, len(history))
-	for _, t := range history {
+	msgs := make([]llm.Message, 0, len(modelHistory))
+	for _, t := range modelHistory {
 		msgs = append(msgs, t.Message)
 	}
 	var legacyResultPaths []string
@@ -2234,9 +2233,17 @@ func (m *Manager) newSession(store *session.Store, cfg config.Resolved, history 
 		Citations: m.cfg.Citations,
 		Cwd:       cwd,
 	})
+	m.applyMaxTurns(s.agent)
 	s.agent.SetMessages(msgs)
 	s.agent.SetUsage(usage, delegated)
 	hub.SetOverhead(s.agent.OverheadBreakdown())
+	legacyCompaction := false
+	if len(msgs) > 0 {
+		_, legacyCompaction = agent.CompactionContinuationSummary(msgs[0])
+	}
+	if len(store.Compactions("")) > 0 || legacyCompaction {
+		hub.EstimateContext(newContextPrompt(msgs, s.agent.OverheadTokens()))
+	}
 	hub.SetClearTrigger(s.agent.ContextEditTrigger())
 	if err := s.loadInboxLocked(); err != nil {
 		hub.Publish(Event{Type: EvError, Error: "无法读取待处理消息：" + err.Error()})
@@ -2275,6 +2282,7 @@ func (s *Session) client(cfg config.Resolved) llm.Client {
 		APIKey:        cfg.APIKey,
 		Model:         cfg.Model,
 		MaxTokens:     cfg.MaxTokens,
+		Timeout:       cfg.Timeout,
 		Headers:       cfg.Headers,
 		ExtraBody:     cfg.ExtraBody,
 		Compatibility: cfg.Compatibility,

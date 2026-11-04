@@ -37,6 +37,7 @@ FROM node:24-bookworm-slim AS code-runtime
 # ---- Stage 3: 运行时 ----
 FROM debian:bookworm-slim
 # git:checkpoint 影子仓库;bwrap:OS 沙箱(seccomp profile 见 compose);curl:调试。
+# file: 校验下载产物和二进制文件类型。
 # python venv 固定在 /opt/venv:内置 docs 技能的脚本(docx-info/pdf-info 等)
 # shebang 就是这个路径——基座镜像必须自带自己技能的运行时,精简掉 python 的
 # 代价是技能脚本全部 127(实测)。pymupdf 是 docs 的 PDF 引擎;numpy/pandas/
@@ -50,7 +51,7 @@ RUN if [ -n "$APT_MIRROR" ]; then \
         sed -i "s|deb.debian.org|${APT_MIRROR}|g" /etc/apt/sources.list.d/debian.sources; \
     fi \
     && apt-get update && apt-get install -y --no-install-recommends \
-      ca-certificates git curl bubblewrap python3 python3-venv libstdc++6 libatomic1 zlib1g \
+      ca-certificates git curl bubblewrap file python3 python3-venv libstdc++6 libatomic1 zlib1g \
     && python3 -m venv /opt/venv \
     && /opt/venv/bin/pip install --no-cache-dir pymupdf openpyxl numpy pandas matplotlib \
     && rm -rf /var/lib/apt/lists/* \

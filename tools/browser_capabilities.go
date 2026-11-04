@@ -43,7 +43,7 @@ func (b *Browser) actions(includeBatch bool) []string {
 	if BrowserBackendOf(b.Link) == BrowserBackendNative {
 		actions = append(actions, BrowserActionCalculate)
 		if includeBatch {
-			actions = append(actions, BrowserActionDevTools, BrowserActionBookmarks, BrowserActionDownloads, BrowserActionUpload)
+			actions = append(actions, BrowserActionDevTools, BrowserActionBookmarks, BrowserActionDownloads, BrowserActionUpload, BrowserActionOpenPages, BrowserActionObservePages)
 		}
 	}
 	if b.ImageMode != BrowserImageNone {
@@ -98,6 +98,10 @@ func (b *Browser) validateCapabilities(raw json.RawMessage, inBatch bool) error 
 		}
 	}
 	switch action {
+	case BrowserActionOpenPages:
+		add("urls", "concurrency", "seconds")
+	case BrowserActionObservePages:
+		add("pages", "concurrency", "seconds", "full")
 	case BrowserActionUpload:
 		add("target", "files", "upload_mode")
 	case BrowserActionBookmarks:
@@ -150,12 +154,29 @@ func (b *Browser) validateCapabilities(raw json.RawMessage, inBatch bool) error 
 	case BrowserActionBatch:
 		add("actions")
 	}
+	if !inBatch && BrowserBackendOf(b.Link) == BrowserBackendNative && browserPageBindable(action) {
+		add("tab_id", "context_ref", "control_epoch")
+		_, tab := fields["tab_id"]
+		_, context := fields["context_ref"]
+		_, epoch := fields["control_epoch"]
+		if tab || context || epoch {
+			var binding BrowserPageBinding
+			if !tab || !context || !epoch || json.Unmarshal(raw, &binding) != nil || !validBrowserPageBinding(binding) {
+				return fmt.Errorf("browser %s: tab_id/context_ref/control_epoch must be supplied together from the same fresh Agent-owned page", action)
+			}
+		}
+	}
 	for name, value := range fields {
 		if !allowed[name] {
 			return fmt.Errorf("browser %s: field %q is not supported; use the declared action fields", action, name)
 		}
 		if string(value) == "null" {
 			return fmt.Errorf("browser %s: field %q cannot be null", action, name)
+		}
+	}
+	if browserPagesAction(action) {
+		if err := validateBrowserPagesFields(fields); err != nil {
+			return err
 		}
 	}
 	if action == BrowserActionDownloads {

@@ -60,6 +60,17 @@ func TestImageAnalyzeDefaultsToLatest(t *testing.T) {
 	}
 }
 
+func TestImageAnalyzeAcceptsWorkspacePathWithoutAttachments(t *testing.T) {
+	tool := &ImageAnalyze{Ask: fixedAsk("autumn forest")}
+	res, err := tool.Execute(context.Background(), json.RawMessage(`{"image":"downloads/autumn.png","question":"what is shown?"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(res.Text, "autumn forest") || !strings.Contains(res.Text, "downloads/autumn.png") {
+		t.Errorf("workspace path did not reach the vision helper: %q", res.Text)
+	}
+}
+
 // A name the model half-remembers still resolves by suffix, because the note
 // quotes the original filename and models drop directories and counters.
 func TestImageAnalyzeResolvesNameSuffix(t *testing.T) {

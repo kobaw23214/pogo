@@ -27,13 +27,14 @@ import (
 )
 
 type Record struct {
-	ID       string       `json:"id"`
-	ParentID string       `json:"parentId,omitempty"`
-	Type     string       `json:"type"` // "meta" | "message" | "stats" | "fork"
-	Time     int64        `json:"time"`
-	Message  *llm.Message `json:"message,omitempty"`
-	Meta     *Meta        `json:"meta,omitempty"`
-	Stats    *Stats       `json:"stats,omitempty"`
+	ID         string       `json:"id"`
+	ParentID   string       `json:"parentId,omitempty"`
+	Type       string       `json:"type"` // "meta" | "message" | "stats" | "fork" | "compaction"
+	Time       int64        `json:"time"`
+	Message    *llm.Message `json:"message,omitempty"`
+	Meta       *Meta        `json:"meta,omitempty"`
+	Stats      *Stats       `json:"stats,omitempty"`
+	Compaction *Compaction  `json:"compaction,omitempty"`
 	// Batch members stay ordinary records so existing exports remain readable.
 	// A reader commits them only when all contiguous members are present.
 	BatchID    string `json:"batchId,omitempty"`
@@ -805,10 +806,12 @@ func (s *Store) ExchangeSpan(k int) (question, answer string, ok bool) {
 	return question, strings.Join(parts, "\n\n"), true
 }
 
-// visible reports whether a message carries anything other than tool results.
-// A tool-result-only user message never appears on a timeline, so it must not
-// count toward a rewind ordinal either.
+// visible reports whether a message is a person-visible timeline entry rather
+// than a tool-result carrier or a legacy model-only compaction continuation.
 func visible(m *llm.Message) bool {
+	if llm.IsCompactionContinuation(m) {
+		return false
+	}
 	for _, b := range m.Content {
 		if b.Type != llm.BlockToolResult {
 			return true

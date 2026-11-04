@@ -18,17 +18,25 @@ import { browserFavicon } from "@/agent/browserFavicon";
 // are still running — at a glance. A dropdown hides exactly that; see the
 // opencode and Claude Code tab requests for how the complaint reads when it
 // does.
-export type SheetId = "files" | "hub" | "shortcuts" | "tasks" | "skills" | "workflows";
+export type SheetId = "files" | "hub" | "shortcuts" | "tasks" | "memory" | "skills" | "workflows";
 
 export const PANEL_PREFIX = "panel:";
 export const SUBAGENT_PREFIX = "subagent:";
 export const BROWSER_PREFIX = "browser:";
 export const PREVIEW_PREFIX = "preview:";
+export const SKILL_PREFIX = "skill:";
 export const HTML_PREFIX = "html:";
 export const SENTINEL_PREFIX = "sentinel:";
 export const TASK_PREFIX = "task:";
 
-export type TabKind = "shell" | "panel" | "subagent" | "browser" | "preview" | "html" | "sentinel" | "task";
+export type TabKind = "shell" | "panel" | "subagent" | "browser" | "preview" | "skill" | "html" | "sentinel" | "task";
+
+export interface OpenFileTarget {
+  path: string;
+  name: string;
+  skill?: string;
+  skillPath?: string;
+}
 
 export interface DockTab {
   /** "shell", "panel:<name>", "subagent:<child session id>", "browser:<n>", or
@@ -37,8 +45,11 @@ export interface DockTab {
   label: string;
   kind: TabKind;
   /** Reverse-proxied path (/panels/<name>/) for panel tabs; the file the
-   * preview tab shows (root-relative, workspace included) for preview tabs. */
+   * preview tab shows (root-relative, workspace included) for preview tabs.
+   * Skill tabs instead carry a package-relative document path. */
   path?: string;
+  /** A Skill document is read through its selected session, never the workspace. */
+  skill?: string;
   /** The current file opened from a citation; not a historical snapshot. */
   citation?: boolean;
   lineStart?: number;
@@ -115,7 +126,7 @@ export interface SheetState {
  */
 export function migrateSheet(stored: StoredSheet): SheetState {
   const v = stored.sheet;
-  if (v === "files" || v === "hub" || v === "shortcuts" || v === "tasks" || v === "skills" || v === "workflows") return { sheet: v, tab: null };
+  if (v === "files" || v === "hub" || v === "shortcuts" || v === "tasks" || v === "memory" || v === "skills" || v === "workflows") return { sheet: v, tab: null };
   if (v === "shell") return { sheet: "hub", tab: "shell" };
   if (v && v.startsWith(PANEL_PREFIX)) return { sheet: "hub", tab: v };
   if (v) return { sheet: null, tab: null };
@@ -231,6 +242,11 @@ function normalizeStoredTab(t: DockTab): DockTab | null {
   if (t.kind === "browser" && validBrowserBinding(t.browserBinding)) return { id: t.id || `browser:${randomUUID()}`, label: t.label || "Browser", kind: "browser", url: t.url, ...(t.browserUnavailable ? { browserUnavailable: true } : {}), ...(t.url !== "about:blank" && browserFavicon(t.favicon) ? { favicon: browserFavicon(t.favicon) } : {}), ...(t.browserDraft ? { browserDraft: t.browserDraft } : {}), browserBinding: { ...t.browserBinding }, closable: true };
   if (t.kind === "browser" && (t.browserUnavailable || "browserBinding" in t)) return { ...t, id: t.id || `browser:${randomUUID()}`, browserUnavailable: true, closable: true };
   if (t.kind === "browser" || t.kind === "panel") return { id: BROWSER_VIEW_ID, label: t.label || "Browser", kind: "browser", url: t.url || t.path, closable: true };
+  if (t.kind === "skill" && typeof t.skill === "string" && t.skill && typeof t.path === "string" && t.path &&
+      typeof t.parentSession === "string" && /^[A-Za-z0-9_.-]{1,128}$/.test(t.parentSession)) {
+    return { id: `${SKILL_PREFIX}${t.parentSession}:${t.skill}:${t.path}`, label: t.label || t.path.split("/").pop() || t.path,
+      kind: "skill", skill: t.skill, path: t.path, parentSession: t.parentSession, closable: true };
+  }
   if (t.kind === "preview" && t.path) {
     const base = t.path.split("/").pop() ?? t.path;
     return { id: PREVIEW_PREFIX + t.path, label: t.label || base, kind: "preview", path: t.path, closable: true };

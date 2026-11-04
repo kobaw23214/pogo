@@ -9,7 +9,7 @@ import (
 
 func TestUICapabilitiesSection(t *testing.T) {
 	with := uiCapabilitiesSection([]skills.Skill{{Name: "web-drawing", Description: "draws"}})
-	for _, want := range []string{"```mermaid", "```echarts", "```math", "```csv", "```table", "```json-table", "[TOC]", "[^1]", ":::details", "web-drawing skill", "do not ask the user"} {
+	for _, want := range []string{"```mermaid", "```echarts", "```math", "```csv", "```table", "```json-table", "[TOC]", "[^1]", ":::details", "web-drawing skill", "do not ask the user", "![alt](workspace/path.png)", "```html-preview", "Ordinary html fences remain source code", "Never run scripts", "Base64/HTML"} {
 		if !strings.Contains(with, want) {
 			t.Errorf("section with the skill loaded is missing %q:\n%s", want, with)
 		}
@@ -19,7 +19,7 @@ func TestUICapabilitiesSection(t *testing.T) {
 	if strings.Contains(bare, "read the web-drawing") {
 		t.Errorf("section without the skill must not tell the model to read it:\n%s", bare)
 	}
-	for _, want := range []string{"only when the user asks", "Use the other rich formats when they help", "```math", "```csv"} {
+	for _, want := range []string{"only when the user asks", "Use the other rich formats when they help", "```math", "```csv", "![alt](workspace/path.png)", "```html-preview", "Ordinary html fences remain source code", "Never run scripts"} {
 		if !strings.Contains(bare, want) {
 			t.Errorf("bare variant is missing %q:\n%s", want, bare)
 		}

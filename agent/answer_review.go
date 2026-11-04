@@ -7,7 +7,7 @@ import (
 	"github.com/yosukeno/pogo/llm"
 )
 
-const DefaultAnswerReviewTimeout = 30 * time.Second
+const DefaultAnswerReviewTimeout = 5 * time.Minute
 
 type AnswerReviewStatus = llm.AnswerReviewStatus
 

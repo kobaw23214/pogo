@@ -17,7 +17,7 @@ import { summarizeArgs, type TimelineCall, type TurnItem } from "@/agent/timelin
 import { toolCallState } from "@/agent/toolPresentation";
 import { worklogRevealRow } from "@/agent/worklogPrefs";
 import type { Exchange } from "@/agent/exchanges";
-import type { OpenSheetRequest } from "./dockSheets";
+import type { OpenFileTarget, OpenSheetRequest } from "./dockSheets";
 
 const props = defineProps<{
   exchange: Exchange;
@@ -28,13 +28,17 @@ const props = defineProps<{
   todoPinned?: boolean;
   serverOffset?: number | null;
   revealId?: string;
+  /** The main timeline drops the per-turn label and rail; standalone TurnCard
+   * views (subagent and sentinel transcripts) keep them, because there the
+   * turn is the unit people navigate by. */
+  plainTurns?: boolean;
 }>();
 const emit = defineEmits<{
   suggest: [string];
   decide: [{ gateId: string; allow: boolean; args?: unknown; remember?: "tool" | "command" }];
   freeze: [string]; thaw: [string];
   "open-sheet": [OpenSheetRequest];
-  "open-file": [{ path: string; name: string }];
+  "open-file": [OpenFileTarget];
 }>();
 
 const { t } = useI18n();
@@ -109,15 +113,20 @@ watch(worklogRevealRow, revealRow);
     <template v-for="node in nodes" :key="node.id">
       <SteeringMessage v-if="node.kind === 'steering'" :message="node.message" @open-file="emit('open-file', $event)" />
       <div v-else-if="node.kind === 'notice' && showAnswerReviewNotice(node.notice.text, exchange.turns)" v-show="!workFolded" class="activity-notice" :data-mid="node.notice.id">{{ answerReviewNoticeText(node.notice.text) }}</div>
-      <div v-else-if="node.kind === 'turn'" v-show="visibleTurn(node.turn)" class="turn activity-turn" :class="{ streaming: node.turn.streaming, folded: workFolded }" :data-mid="node.turn.id">
+      <div v-else-if="node.kind === 'turn'" v-show="visibleTurn(node.turn)" class="turn activity-turn" :class="{ streaming: node.turn.streaming, plain: plainTurns, folded: workFolded }" :data-mid="node.turn.id">
         <AnswerReviewStatus v-if="node.turn.answerReview" v-show="visibleProse(node.turn) || node.turn.answerReview.state === 'running'" :review="node.turn.answerReview" :server-offset="serverOffset" />
-        <div v-show="!workFolded" class="head turn-head">
+        <div v-if="!plainTurns" v-show="!workFolded" class="head turn-head">
           <span class="index">{{ t('turnCard.turnIndex', { n: node.turn.index }) }}</span>
           <span v-if="node.turn.streaming" class="live">{{ t('turnCard.streaming') }}</span>
         </div>
         <div v-if="node.turn.thinking" v-show="!workFolded || node.turn.streaming" class="thinking-row" :data-rid="`${node.turn.id}:thinking`">
           <ThinkingBlock :id="node.turn.id" :text="node.turn.thinking" :streaming="node.turn.streaming" :duration-ms="node.turn.thinkingMs" :compact="!!workFolded" />
         </div>
+        <!-- A model turn is stored as thinking, then text, then tool calls, so
+             the narration ("let me check the file:") goes above the calls it
+             introduces. Sources belong to the text they annotate. -->
+        <AnswerText v-if="node.turn.text" v-show="visibleProse(node.turn)" :source="node.turn.text" :streaming="node.turn.streaming" :sources="node.turn.sources" />
+        <SourcesPanel v-if="node.turn.text && node.turn.sources?.length" v-show="visibleProse(node.turn)" :sources="node.turn.sources" :text="node.turn.text" />
         <div
           v-for="group in node.groups"
           :key="group.id"
@@ -156,12 +165,11 @@ watch(worklogRevealRow, revealRow);
               @freeze="emit('freeze', $event)"
               @thaw="emit('thaw', $event)"
               @open-sheet="emit('open-sheet', $event)"
+              @open-file="emit('open-file', $event)"
             />
           </div>
         </div>
-        <IncomingArgs v-for="incoming in node.turn.incoming ?? []" :key="incoming.call_id" :incoming="incoming" />
-        <AnswerText v-if="node.turn.text" v-show="visibleProse(node.turn)" :source="node.turn.text" :streaming="node.turn.streaming" :sources="node.turn.sources" />
-        <SourcesPanel v-if="node.turn.sources?.length" v-show="visibleProse(node.turn)" :sources="node.turn.sources" :text="node.turn.text" />
+        <IncomingArgs v-for="incoming in node.turn.incoming ?? []" :key="incoming.call_id" :incoming="incoming" @open-file="emit('open-file', $event)" />
       </div>
     </template>
   </div>
@@ -170,8 +178,9 @@ watch(worklogRevealRow, revealRow);
 <style scoped lang="scss">
 .activity-turn { border-left: 2px solid var(--el-border-color-lighter); padding: 6px 0 8px 14px; margin: 14px 0; }
 .activity-turn.streaming { border-left-color: var(--el-color-primary); }
+.activity-turn.plain { border-left: 0; padding: 0; margin: 8px 0; }
 .activity-turn.folded { border-left: 0; padding: 0; margin: 12px 0 0; }
-.turn-head { display: flex; align-items: center; gap: 8px; color: var(--el-text-color-placeholder); font-size: 11px; font-variant-numeric: tabular-nums; }
+.turn-head { display: flex; align-items: center; gap: 8px; color: var(--el-text-color-secondary); font-size: 11px; font-variant-numeric: tabular-nums; }
 .live { color: var(--el-color-primary); }
 .activity-group { min-width: 0; }
 .activity-group.grouped { margin: 7px 0; border-left: 1px solid var(--el-border-color-lighter); padding-left: 9px; }

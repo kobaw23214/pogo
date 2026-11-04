@@ -52,7 +52,7 @@ type Options struct {
 	// never send. Shallow merge, custom key wins a collision.
 	ExtraBody map[string]any
 	// Timeout bounds a single request. Streaming a long agent turn is slow, so
-	// this is generous; cancellation is the real stop mechanism.
+	// this is generous; cancellation is the real stop mechanism. Zero uses 30 minutes.
 	Timeout time.Duration
 	// MaxRetries counts retries, not attempts. Negative disables them.
 	MaxRetries int
@@ -66,7 +66,7 @@ func New(o Options) *OpenAIClient {
 		o.MaxTokens = 16384
 	}
 	if o.Timeout == 0 {
-		o.Timeout = 10 * time.Minute
+		o.Timeout = 30 * time.Minute
 	}
 	if o.MaxRetries == 0 {
 		o.MaxRetries = DefaultMaxRetries
@@ -135,15 +135,20 @@ func (c *OpenAIClient) Stream(
 	// the one thing an HTTP-level retry in a generic SDK cannot get right for a
 	// streaming caller.
 	dirty := false
-	// Text compatibility waits for a complete envelope before displaying text.
-	// Thinking and native call previews still stream. Every received delta marks
-	// the attempt dirty, even when hidden, so transport retries cannot replay it.
+	// Text compatibility waits for a complete envelope before displaying prose.
+	// Tool arguments get a separate, safe preview instead of leaking the envelope.
 	bufferText := c.compatibility.textCalls() && len(tools) > 0
+	var preview *textToolPreview
+	if bufferText {
+		preview = newTextToolPreview(c.compatibility.ToolCalls, tools)
+	}
 	guarded := func(d Delta) {
 		dirty = true
-		if onDelta != nil && !(bufferText && d.Kind == DeltaText) {
-			onDelta(d)
+		if bufferText && d.Kind == DeltaText {
+			preview.Write(d.Text, func(fragment Delta) { emit(onDelta, fragment) })
+			return
 		}
+		emit(onDelta, d)
 	}
 
 	// callStart covers the whole call including retries; attemptStart is reset per
@@ -191,6 +196,9 @@ func (c *OpenAIClient) Stream(
 			lastOut = out
 			if streamErr == nil {
 				out = normalizeToolResponse(out, tools, c.compatibility)
+				if preview != nil {
+					preview.bind(&out.Message)
+				}
 				if bufferText && out.ProtocolIssue == nil && out.StopReason != StopAborted && out.Message.Text() != "" {
 					emit(onDelta, Delta{Kind: DeltaText, Text: out.Message.Text()})
 				}

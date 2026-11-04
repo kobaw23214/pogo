@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/yosukeno/pogo/llm"
 )
@@ -28,6 +29,7 @@ type Resolved struct {
 	// ExtraBody is merged over the request body's top level — the body-side
 	// sibling of Headers.
 	ExtraBody     map[string]any
+	Timeout       time.Duration
 	MaxTokens     int64
 	ContextWindow int
 	// Price is the declared per-million-token rate, or nil when nobody declared one
@@ -81,6 +83,7 @@ func Resolve(name string) (Resolved, error) {
 		APIKey:        key,
 		Headers:       p.Headers,
 		ExtraBody:     p.ExtraBody,
+		Timeout:       time.Duration(p.TimeoutSeconds) * time.Second,
 		Compatibility: m.Compatibility,
 		MaxTokens:     m.MaxTokens,
 		ContextWindow: m.ContextWindow,

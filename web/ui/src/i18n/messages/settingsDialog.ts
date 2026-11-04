@@ -98,8 +98,10 @@ export default {
       storageBadDays: "保留天数需为 0–3650 的整数",
       turnsTitle: "会话轮次",
       turnsField: "单次运行轮次上限",
+      turnsLimitEnabled: "限制轮次",
+      turnsUnlimited: "不限制",
       turnsHint:
-        "一次运行（你发一条消息到模型给出最终回答）最多进行的轮数，默认 {flag} 轮，可设置为 1–1000 轮。保存后立即生效：已打开会话的下一次运行即采用新值，重启后仍保留；定时任务有自己独立的上限，不受此影响。",
+        "一次运行（你发一条消息到模型给出最终回答）最多进行的轮数。开启限制后默认 {flag} 轮，可设置为 1–1000 轮；关闭则不限制。保存后立即生效并持久化；定时任务有自己独立的上限，不受此影响。",
       turnsBad: "轮次上限需为 1–1000 的整数",
       turnsEffective: "实际上限：{n} 轮",
       memoryTitle: "记忆",
@@ -475,8 +477,10 @@ export default {
       storageBadDays: "Retention must be an integer between 0 and 3650",
       turnsTitle: "Conversation turns",
       turnsField: "Turn cap per run",
+      turnsLimitEnabled: "Limit turns",
+      turnsUnlimited: "Unlimited",
       turnsHint:
-        "How many turns one run (your message through the final answer) may take. Defaults to {flag} turns; you can set 1–1000 turns. Applies immediately: the next run of an already-open conversation uses the new cap, and it survives restarts. Scheduled jobs keep their own independent cap.",
+        "How many turns one run (your message through the final answer) may take. Enabling the cap defaults to {flag} turns, adjustable to 1–1000; disabling it removes the limit. Applies immediately and persists across restarts. Scheduled jobs keep their own independent cap.",
       turnsBad: "Turn cap must be an integer between 1 and 1000",
       turnsEffective: "Actual limit: {n} turns",
       memoryTitle: "Memory",

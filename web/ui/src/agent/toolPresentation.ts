@@ -18,7 +18,7 @@ export interface ToolPresentation {
 }
 
 const BUILTIN_GLYPHS: Readonly<Record<string, ToolGlyphKind>> = {
-  read: "read", ls: "list", find: "explore", grep: "explore", write: "change", edit: "change", bash: "command", browser: "browser", docs_office: "office",
+  read: "read", ls: "list", find: "explore", grep: "explore", write: "change", edit: "change", bash: "command", browser: "browser", analyze_image: "read", docs_office: "office",
   shortcut_query: "shortcut", shortcut_manage: "shortcut", shortcut_search: "shortcut", shortcut_read: "shortcut", shortcut_create: "shortcut",
   shortcut_list: "shortcut", shortcut_folder_create: "shortcut", shortcut_update: "shortcut", shortcut_folder_rename: "shortcut",
   shortcut_move: "shortcut", shortcut_delete: "shortcut", shortcut_merge: "shortcut",

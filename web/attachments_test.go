@@ -222,6 +222,37 @@ func TestVisionAskMemoisesPerWorkspace(t *testing.T) {
 	}
 }
 
+func TestVisionAskAcceptsWorkspaceImagePaths(t *testing.T) {
+	calls := visionSeams2(t, "autumn forest", nil)
+	h := newHarness(t, func(int) (llm.Response, error) { return plainTurn() })
+	sid := h.createSession()
+	s := h.session(sid)
+	if err := os.MkdirAll(filepath.Join(s.cwd, "artifacts"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(s.cwd, "artifacts", "autumn.png"), pngBytes2(t, 4, 4), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, ref := range []string{"artifacts/autumn.png", filepath.Join(s.cwd, "artifacts", "autumn.png")} {
+		if _, err := s.visionAsk(context.Background(), ref, "what is shown?"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if *calls != 1 {
+		t.Errorf("relative and absolute paths should share one cached answer, got %d calls", *calls)
+	}
+	outside := filepath.Join(t.TempDir(), "outside.png")
+	if err := os.WriteFile(outside, pngBytes2(t, 4, 4), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.visionAsk(context.Background(), outside, "what is shown?"); err == nil {
+		t.Fatal("workspace-escape image path was accepted")
+	}
+	if *calls != 1 {
+		t.Errorf("rejected path reached the vision helper: %d calls", *calls)
+	}
+}
+
 // --- helpers shared with the previous suite shape ---
 
 // plainTurn is the minimal responder: one assistant text turn.

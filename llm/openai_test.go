@@ -99,6 +99,17 @@ func TestExtraBodyMergesOverTheWireRequest(t *testing.T) {
 	}
 }
 
+func TestDefaultRequestTimeoutIsThirtyMinutes(t *testing.T) {
+	c := New(Options{})
+	if c.http.Timeout != 30*time.Minute {
+		t.Errorf("default timeout = %v, want 30m", c.http.Timeout)
+	}
+	custom := New(Options{Timeout: 45 * time.Second})
+	if custom.http.Timeout != 45*time.Second {
+		t.Errorf("custom timeout = %v, want 45s", custom.http.Timeout)
+	}
+}
+
 // Argument fragments must stream out as they arrive, attributed to their call:
 // that is what lets a UI preview a large write instead of sitting silent until
 // the whole call has been generated.

@@ -2410,14 +2410,10 @@ func TestSessionWorkspaceConfinesToolWrites(t *testing.T) {
 	}
 }
 
-// Compaction replaces the whole conversation with a summary of it and every view
-// has to agree afterwards: the hub's timeline, the store's live branch and the
-// sidebar count. The abandoned records stay in the file, which is what makes this a
-// fork rather than an edit.
-func TestCompactReplacesTheConversationAndRebuildsEveryView(t *testing.T) {
-	// The answers have to be long enough that a summary is genuinely smaller,
-	// because ErrNotSmaller is a real refusal and a four-line conversation trips it:
-	// the pinned opening request plus the preamble outweigh the thing summarised.
+// Compaction replaces model context, not the visible conversation. The transcript,
+// checkpoint marker and sidebar stay intact while the Agent and a reopened prompt
+// resume from the summary.
+func TestCompactKeepsTranscriptAndRebuildsModelContext(t *testing.T) {
 	h := newHarness(t, scriptedTurns(
 		textTurn("answer one "+strings.Repeat("detail ", 500)),
 		textTurn("answer two "+strings.Repeat("detail ", 500)),
@@ -2436,8 +2432,6 @@ func TestCompactReplacesTheConversationAndRebuildsEveryView(t *testing.T) {
 		t.Fatalf("before: %d messages, want u1 m1 u2 m2 = 4", len(before.Messages))
 	}
 
-	// A watching client must hear about it: its timeline no longer describes the
-	// session's history at all.
 	s3 := h.stream(sid, "")
 	defer s3.close()
 	if first := s3.next(t); first.Type != EvSnapshot {
@@ -2448,39 +2442,45 @@ func TestCompactReplacesTheConversationAndRebuildsEveryView(t *testing.T) {
 	s3.wait(t, EvCompacted)
 
 	after := h.session(sid).Hub().Snapshot()
-	if len(after.Messages) != 1 {
-		t.Fatalf("after: %d messages, want the single replacement", len(after.Messages))
+	if len(after.Messages) != 4 || textOf(after.Messages[0]) != "first question" {
+		t.Fatalf("compaction removed visible history: %+v", after.Messages)
 	}
-	text := after.Messages[0].Content[0].Text
-	if !strings.Contains(text, "a summary") {
-		t.Errorf("the replacement does not carry the summary: %q", text)
+	if len(after.Compactions) != 1 || after.Compactions[0].Summary != "a summary" || after.Compactions[0].After != 4 {
+		t.Fatalf("compaction checkpoint missing or misplaced: %+v", after.Compactions)
 	}
-	// The opening request is pinned verbatim; it is where constraints get stated.
-	if !strings.Contains(text, "first question") {
-		t.Errorf("the opening request was not pinned: %q", text)
+	model := h.session(sid).agent.Messages()
+	if len(model) != 1 || !strings.Contains(model[0].Text(), "a summary") || !strings.Contains(model[0].Text(), "first question") {
+		t.Fatalf("model did not resume from the checkpoint: %+v", model)
 	}
-
-	// The store's live branch agrees, and so does the sidebar: the original records
-	// are still in the file but must not be reachable or counted.
-	if msgs := h.session(sid).store.Messages(""); len(msgs) != 1 {
-		t.Errorf("store branch: %d messages, want 1", len(msgs))
+	if msgs := h.session(sid).store.Messages(""); len(msgs) != 4 {
+		t.Errorf("store transcript: %d messages, want all 4", len(msgs))
 	}
 	list, err := h.mgr.List()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(list) != 1 || list[0].Messages != 1 {
-		t.Errorf("sidebar: %+v, want one session with 1 message", list)
+	if len(list) != 1 || list[0].Messages != 2 {
+		t.Errorf("sidebar: %+v, want both real user messages", list)
 	}
 
-	// The next turn continues from the replacement, and survives a reload from disk
-	// — which only happens if the persistence baseline moved with the fork instead
-	// of re-appending the branch or slicing past the end of it.
 	s4 := h.start(sid, "what next")
 	s4.wait(t, EvRunEnd)
 	s4.close()
-	if msgs := h.session(sid).store.Messages(""); len(msgs) != 3 {
-		t.Errorf("after the next turn: %d messages, want summary + user + assistant = 3", len(msgs))
+	if msgs := h.session(sid).store.Messages(""); len(msgs) != 6 {
+		t.Errorf("after the next turn: %d messages, want all 6", len(msgs))
+	}
+	if model := h.session(sid).agent.Messages(); len(model) != 3 {
+		t.Errorf("model after the next turn: %d messages, want summary + user + assistant = 3", len(model))
+	}
+	reopened, err := session.Open(h.session(sid).store.Path())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := len(reopened.Messages("")); got != 6 {
+		t.Errorf("reopened transcript: %d messages, want 6", got)
+	}
+	if got := len(reopened.PromptTimedMessages("")); got != 3 {
+		t.Errorf("reopened prompt: %d messages, want 3", got)
 	}
 }
 

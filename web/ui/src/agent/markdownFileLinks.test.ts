@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import MarkdownIt from "markdown-it";
-import { installMarkdownFileLinks, workspaceFileRenderScope, workspaceFileTargetFromButtonData } from "./markdownFileLinks";
+import { installMarkdownFileLinks, workspaceFileRenderScope, workspaceFileTargetFromButtonData, workspaceMarkdownImageURL } from "./markdownFileLinks";
 import type { WorkspaceFileScope } from "./workspaceFileNavigation";
 
 const scope: WorkspaceFileScope = { conversationId: "chat-a", cwd: "/home/pogo/users/alice/project", root: "/home/pogo", workspace: "users/alice/project" };
@@ -9,6 +9,22 @@ function engine(current: WorkspaceFileScope | null = scope) {
   installMarkdownFileLinks(md, { scope: () => current, openLabel: name => `Open ${name}`, tooltip: path => `Preview ${path}` });
   return { md, render: (source: string) => md.render(source, { [workspaceFileRenderScope]: current }) };
 }
+
+describe("Workspace Markdown images", () => {
+  it("resolves relative, absolute and workspace-prefixed paths through the authenticated raw endpoint", () => {
+    const expected = "/api/files/content?path=users%2Falice%2Fproject%2Fuploads%2Fchart.png&raw=1&token=";
+    for (const href of ["uploads/chart.png", "./uploads/chart.png", "/home/pogo/users/alice/project/uploads/chart.png", "users/alice/project/uploads/chart.png"]) {
+      expect(workspaceMarkdownImageURL(href, scope), href).toBe(expected);
+    }
+    expect(workspaceMarkdownImageURL("uploads/chart.png", { ...scope, workspace: "" })).toBe("/api/files/content?path=uploads%2Fchart.png&raw=1&token=");
+  });
+  it("leaves external URLs, non-images and unsafe paths to their existing handling", () => {
+    for (const href of ["https://example.invalid/chart.png", "uploads/report.pdf", "../outside.png", "file:///etc/passwd.png"]) {
+      expect(workspaceMarkdownImageURL(href, scope), href).toBeNull();
+    }
+    expect(workspaceMarkdownImageURL("uploads/chart.png", null)).toBeNull();
+  });
+});
 
 describe("Answer file paths share Markdown's token boundaries", () => {
   it("turns the historical Chinese download path into one compact preview action", () => {

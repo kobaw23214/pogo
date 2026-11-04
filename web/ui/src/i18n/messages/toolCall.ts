@@ -5,7 +5,7 @@ export default {
     "zh-CN": {
       runtimeSkill: "技能调用",
       names: {
-        read: "读取文件", ls: "列出目录", find: "查找文件", grep: "搜索内容", write: "写入文件", edit: "编辑文件", bash: "执行命令", browser: "浏览器", docs_office: "在线 Office 文档",
+        read: "读取文件", ls: "列出目录", find: "查找文件", grep: "搜索内容", write: "写入文件", edit: "编辑文件", bash: "执行命令", browser: "浏览器", analyze_image: "分析图片", docs_office: "在线 Office 文档",
         shortcut_query: "查询快捷方式", shortcut_manage: "管理快捷方式", shortcut_search: "查找快捷方式", shortcut_read: "读取快捷方式", shortcut_create: "创建快捷方式",
         shortcut_list: "列出快捷方式", shortcut_folder_create: "创建快捷方式文件夹", shortcut_update: "更新快捷方式", shortcut_folder_rename: "重命名快捷方式文件夹",
         shortcut_move: "移动快捷方式", shortcut_delete: "删除快捷方式", shortcut_merge: "合并快捷方式",
@@ -22,12 +22,13 @@ export default {
       notExecuted: "未执行",
       invalidArgumentsHint: "这次调用因参数格式错误未执行，Agent 可以重新生成参数后重试。",
       originalArguments: "查看原始参数",
+      openFile: "在工作区打开 {path}",
       correctsHint: "看起来是在纠正前面那次失败的调用",
     },
     en: {
       runtimeSkill: "Skill call",
       names: {
-        read: "Read file", ls: "List directory", find: "Find files", grep: "Search content", write: "Write file", edit: "Edit file", bash: "Run command", browser: "Browser", docs_office: "Online Office document",
+        read: "Read file", ls: "List directory", find: "Find files", grep: "Search content", write: "Write file", edit: "Edit file", bash: "Run command", browser: "Browser", analyze_image: "Analyze image", docs_office: "Online Office document",
         shortcut_query: "Query shortcuts", shortcut_manage: "Manage shortcuts", shortcut_search: "Find shortcuts", shortcut_read: "Read shortcut", shortcut_create: "Create shortcut",
         shortcut_list: "List shortcuts", shortcut_folder_create: "Create shortcut folder", shortcut_update: "Update shortcut", shortcut_folder_rename: "Rename shortcut folder",
         shortcut_move: "Move shortcuts", shortcut_delete: "Delete shortcuts", shortcut_merge: "Merge shortcuts",
@@ -44,6 +45,7 @@ export default {
       notExecuted: "Not executed",
       invalidArgumentsHint: "This call was not executed because its arguments are malformed. The Agent can regenerate them and retry.",
       originalArguments: "View original arguments",
+      openFile: "Open {path} in the workspace",
       correctsHint: "Looks like a correction of the earlier failed call",
     },
   },

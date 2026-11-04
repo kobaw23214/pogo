@@ -41,13 +41,14 @@ describe("thinking text presentation", () => {
     expect(html).toContain("正在"); expect(html).toContain("最近片段"); expect(html).toContain('data-tool-kind="thinking"');
     expect(html).toContain('aria-expanded="false"'); expect(html).not.toContain("每句话");
   });
-  it("renders the actual latest rows immediately on replay and after the stream stops", async () => {
+  it("renders the actual latest rows while streaming and settles to a single header line", async () => {
     const text = Array.from({ length: 25 }, (_, n) => `fixture row ${n}`).join("\n");
-    for (const streaming of [true, false]) {
-      const html = await render({ text, streaming });
-      expect(html).toContain("fixture row 24"); expect(html).not.toContain("fixture row 0");
-      expect(html).not.toContain('class="thinking-full"');
-    }
+    const live = await render({ text, streaming: true });
+    expect(live).toContain("fixture row 24"); expect(live).not.toContain("fixture row 0");
+    expect(live).not.toContain('class="thinking-full"');
+    const settled = await render({ text, streaming: false, durationMs: 3400 });
+    expect(settled).not.toContain("fixture row 24"); expect(settled).not.toContain("最近片段");
+    expect(settled).toContain('data-tool-kind="thinking"'); expect(settled).toContain("3.4s"); expect(settled).toContain('aria-expanded="false"');
   });
   it("exposes complete verbatim text in one expansion and escapes returned HTML", async () => {
     const state = createCardDisclosureState(() => "session-a"); state.set("m1:thinking", true);

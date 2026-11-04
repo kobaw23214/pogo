@@ -408,10 +408,9 @@ func TestAnalyzeCountsEachStatsRecordOnce(t *testing.T) {
 }
 
 // The batch report has to answer whether batching bought anything, not just whether
-// it happened. A batch of three that contains one sequential tool runs one call at a
-// time — see agent.parallelBatch — so the two parallel-capable calls in it were
-// serialized for a reason that had nothing to do with them, and that is the number a
-// finer-grained batch rule would be worth.
+// it happened. In read+bash+read the bash call is a barrier (agent.segments), so the
+// two reads run alone, one at a time, for a reason that had nothing to do with them,
+// and that is the number a finer-grained batch rule would be worth.
 func TestBatchReportNamesTheStalledCalls(t *testing.T) {
 	lines := []string{
 		`{"id":"r0","type":"meta","time":1000,"meta":{"cwd":"/w","model":"glm-5.2"}}`,

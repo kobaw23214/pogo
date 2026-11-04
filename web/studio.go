@@ -1312,12 +1312,14 @@ func (m *Manager) newStudioSession(store *session.Store, cfg config.Resolved, hi
 	cfg = applyStudioEffort(cfg)
 	hub := NewHub()
 	hub.Seed(history)
+	hub.SetCompactions(store.Compactions(""))
+	modelHistory := store.PromptTimedMessages("")
 	hub.SetRunInfo(cfg.Model, cfg.Provider, cfg.ContextWindow)
 	hub.SetUsage(usage)
 	policy := NewPolicy()
 	gate := NewWebGate(hub, policy, m.cfg.GateTimeout)
 	ctx, cancel := context.WithCancel(context.Background())
-	s := &Session{ID: strings.TrimSuffix(filepath.Base(store.Path()), ".jsonl"), mgr: m, hub: hub, policy: policy, gate: gate, store: store, cfg: cfg, cwd: m.cfg.Cwd, root: m.cfg.Cwd, owner: owner, studioID: a.ID, persisted: len(history), recorded: session.Recorded{Usage: usage, Delegated: delegated}, lastUsed: time.Now(), sessCtx: ctx, bgCancel: cancel, browserTool: m.browserAllowed(owner)}
+	s := &Session{ID: strings.TrimSuffix(filepath.Base(store.Path()), ".jsonl"), mgr: m, hub: hub, policy: policy, gate: gate, store: store, cfg: cfg, cwd: m.cfg.Cwd, root: m.cfg.Cwd, owner: owner, studioID: a.ID, persisted: len(modelHistory), recorded: session.Recorded{Usage: usage, Delegated: delegated}, lastUsed: time.Now(), sessCtx: ctx, bgCancel: cancel, browserTool: m.browserAllowed(owner)}
 	if binding, ok := m.studio.binding(s.ID); ok {
 		s.studioModels = binding.allowedModels()
 	}
@@ -1329,10 +1331,11 @@ func (m *Manager) newStudioSession(store *session.Store, cfg config.Resolved, hi
 	editCfg, _ := agent.ParseContextEdit(m.cfg.ContextEdit, cfg.ContextWindow)
 	compactCfg, _ := agent.ParseCompactSpec(m.cfg.Compact, cfg.ContextWindow)
 	instructions := "You are " + a.Name + ". Respond helpfully in the user's language. This conversation has no external tools, filesystem, or browsing access. Do not claim to have performed actions outside this conversation.\n\n" + a.Instructions
-	s.agent = agent.New(agent.Config{Client: s.client(cfg), Registry: tools.NewRegistry(), SystemPrompt: instructions, MaxTurns: m.cfg.MaxTurns, ContextEdit: editCfg, Compact: compactCfg, Gate: gate,
+	s.agent = agent.New(agent.Config{Client: s.client(cfg), Registry: tools.NewRegistry(), SystemPrompt: instructions, MaxTurns: m.effectiveMaxTurns(), ContextEdit: editCfg, Compact: compactCfg, Gate: gate,
 		ToolOutputBudget: agent.ToolOutputBudgetConfig{ContextWindow: cfg.ContextWindow, MaxOutputTokens: cfg.MaxTokens}})
-	msgs := make([]llm.Message, 0, len(history))
-	for _, message := range history {
+	m.applyMaxTurns(s.agent)
+	msgs := make([]llm.Message, 0, len(modelHistory))
+	for _, message := range modelHistory {
 		msgs = append(msgs, message.Message)
 	}
 	s.agent.SetMessages(msgs)

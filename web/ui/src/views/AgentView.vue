@@ -69,6 +69,7 @@ import SessionPulse from "@/components/SessionPulse.vue";
 import TodoBar from "@/components/TodoBar.vue";
 import TaskTodoCard from "@/components/TaskTodoCard.vue";
 import ContextMeter from "@/components/ContextMeter.vue";
+import CompactionCard from "@/components/CompactionCard.vue";
 import ImmersiveChatControls from "@/components/ImmersiveChatControls.vue";
 import MinimizedSessionBar from "@/components/MinimizedSessionBar.vue";
 import DockArea from "@/components/DockArea.vue";
@@ -133,10 +134,11 @@ import { buildTimeline, formatDuration, isTaskNotification, parseTaskNotificatio
 import { describeSource, numberCitations, rewriteCitations } from "@/agent/cite";
 import { citationFileTarget, informationCitationTarget, citeNavigationKey } from "@/agent/citeNavigation";
 import { workspaceFileNavigationKey, type WorkspaceFileScope } from "@/agent/workspaceFileNavigation";
+import type { WorkspaceFileTarget } from "@/agent/workspaceFileLinks";
 import { createAnswerFileNavigation } from "@/agent/answerFileNavigation";
 import { requestedSentinelId, sentinelDeepLink, sentinelTab } from "@/agent/sentinelNavigation";
 import { sentinelSessionsApi } from "@/api/sentinelSessions";
-import { buildExchanges, type Exchange } from "@/agent/exchanges";
+import { buildConversationExchanges, type Exchange } from "@/agent/exchanges";
 import { announcement } from "@/agent/announcer";
 import { invalidateIndex, invalidateTree } from "@/components/fileTreeStore";
 import {
@@ -144,6 +146,7 @@ import {
   migrateSheet,
   openTab,
   PREVIEW_PREFIX,
+  SKILL_PREFIX,
   HTML_PREFIX,
   restoreTabs,
   SHEET_KEY,
@@ -151,6 +154,7 @@ import {
   TABS_KEY,
   TENANT_KEY,
   type DockTab,
+  type OpenFileTarget,
   type OpenSheetRequest,
   type StoredTabs,
 } from "@/components/dockSheets";
@@ -165,6 +169,7 @@ import { applySearchHighlight, clearSearchHighlight, findAnchorMessages, firstHi
 import { worklogRevealId } from "@/agent/worklogPrefs";
 import { api, token, sessionExportMarkdownURL } from "@/api/client";
 import { isDelegatedEmbed, getDelegatedUi } from "@/api/delegated";
+import { emptyLive } from "@/api/types";
 import type {
   Block,
   InputLayout,
@@ -250,6 +255,8 @@ const studioModelTip = computed(() => locale.value === "zh-CN"
   : (studioCapabilities.value ? "This conversation has one enabled model" : "Loading this conversation's models"));
 const cwd = ref("");
 const current = ref<string | null>(null);
+const NEW_SESSION_DRAFT_KEY = "__new_session__";
+const pendingWorkspace = ref<string | null>(localStorage.getItem(storeKey("pogo:new-session-workspace")));
 const inboxChanges = ref<string[]>([]);
 const inboxErrors = ref<Record<string, string>>({});
 // Keep the same id after an uncertain HTTP result: retry must not duplicate a
@@ -316,7 +323,71 @@ interface ComposerDraftSnapshot {
   input: string; parts: ComposerPart[]; layout: InputLayout;
   attachments: Attachment[]; picks: ElementPick[]; catalog: Map<string, Attachment>;
 }
-const composerDrafts = new Map<string, ComposerDraftSnapshot>();
+interface StoredComposerDraftSnapshot extends Omit<ComposerDraftSnapshot, "catalog"> { catalog: [string, Attachment][] }
+const composerDraftStorageKey = storeKey("pogo:composer-drafts");
+function readComposerDrafts(): Map<string, ComposerDraftSnapshot> {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(composerDraftStorageKey) ?? "{}") as Record<string, StoredComposerDraftSnapshot>;
+    return new Map(Object.entries(parsed).map(([key, draft]) => [key, { ...draft, catalog: new Map(draft.catalog ?? []) }]));
+  } catch { return new Map(); }
+}
+const composerDrafts = readComposerDrafts();
+let composerDraftTimer: ReturnType<typeof setTimeout> | undefined;
+function activeDraftKey(): string | null { return current.value ?? (pendingWorkspace.value !== null ? NEW_SESSION_DRAFT_KEY : null); }
+function durableAttachment(a: Attachment): Attachment | null {
+  if (!a.path && !a.members?.some(member => member.path)) return null;
+  const durable = { ...a };
+  delete durable.file;
+  delete durable.preview;
+  if (durable.members) durable.members = durable.members.filter(member => member.path).map(member => {
+    const copy = { ...member };
+    delete copy.file;
+    return copy;
+  });
+  return durable;
+}
+function durableDraft(draft: ComposerDraftSnapshot): StoredComposerDraftSnapshot {
+  const attachments = draft.attachments.map(durableAttachment).filter((a): a is Attachment => a !== null);
+  const catalog = [...draft.catalog.entries()].flatMap(([key, file]) => {
+    const durable = durableAttachment(file);
+    return durable ? [[key, durable] as [string, Attachment]] : [];
+  });
+  const keys = new Set(catalog.map(([key]) => key));
+  return {
+    input: draft.input,
+    parts: draft.parts.filter(part => part.type !== "file" || keys.has(String(part.key))),
+    layout: draft.layout,
+    attachments,
+    picks: draft.picks,
+    catalog,
+  };
+}
+function persistComposerDrafts() {
+  if (composerDraftTimer !== undefined) { clearTimeout(composerDraftTimer); composerDraftTimer = undefined; }
+  try {
+    const stored = Object.fromEntries([...composerDrafts.entries()].map(([key, draft]) => [key, durableDraft(draft)]));
+    localStorage.setItem(composerDraftStorageKey, JSON.stringify(stored));
+  } catch { /* storage quota/privacy mode: keep the in-memory draft */ }
+}
+function saveComposerDraft(key = activeDraftKey()) {
+  if (!key) return;
+  composerDrafts.set(key, { input: input.value, parts: normalizeComposerParts(composerParts.value), layout: composerLayout.value, attachments: [...attachments.value], picks: [...elementPicks.value], catalog: new Map(composerFileCatalog) });
+  if (composerDraftTimer !== undefined) clearTimeout(composerDraftTimer);
+  composerDraftTimer = setTimeout(persistComposerDrafts, 150);
+}
+function restoreComposerDraft(key = activeDraftKey()) {
+  const draft = key ? composerDrafts.get(key) : undefined;
+  syncingComposer = true;
+  try {
+    input.value = draft?.input ?? "";
+    composerParts.value = normalizeComposerParts(draft?.parts ?? []);
+    composerLayout.value = draft?.layout ?? "top";
+    attachments.value = [...(draft?.attachments ?? [])];
+    elementPicks.value = [...(draft?.picks ?? [])];
+    composerFileCatalog.clear();
+    for (const [fileKey, file] of draft?.catalog ?? []) composerFileCatalog.set(fileKey, file);
+  } finally { syncingComposer = false; }
+}
 const attachInput = ref<HTMLInputElement | null>(null);
 const folderInput = ref<HTMLInputElement | null>(null);
 // The attach menu's open state: the single attach button asks "file or
@@ -387,10 +458,30 @@ function workspaceFileUrl(path: string): string {
 let cancelPendingAnswerFile = () => {};
 let cancelPendingSentinelNavigation = () => {};
 let cancelPendingTaskNavigation = () => {};
-function openAttachmentPreview(a: { path: string; name: string; lineStart?: number; lineEnd?: number; citation?: boolean }) {
+function openAttachmentPreview(a: OpenFileTarget & { lineStart?: number; lineEnd?: number; citation?: boolean }) {
   cancelPendingAnswerFile();
   if (!canUse("attachments")) return unsupported();
   browserFocusPolicy.manual();
+  if (a.skill) {
+    const sessionId = current.value;
+    if (!sessionId) return;
+    const path = a.skillPath || "SKILL.md";
+    const id = `${SKILL_PREFIX}${sessionId}:${a.skill}:${path}`;
+    hubTabs.value = openTab(hubTabs.value, {
+      id,
+      label: a.name,
+      kind: "skill",
+      skill: a.skill,
+      path,
+      parentSession: sessionId,
+      closable: true,
+    });
+    hubActiveTab.value = id;
+    hubAt.value = null;
+    activeSheet.value = "hub";
+    attachPop.value = false;
+    return;
+  }
   const ws = currentWorkspace.value;
   const full = attachmentWorkspacePath(ws, a.path);
   const existing = hubTabs.value.find(tab => tab.kind === "preview" && sameWorkspaceFile(tab.path, full));
@@ -1277,7 +1368,7 @@ watch(followupPick, (pick) => {
 // exchanges with a conclusion render as a work log (folded line + answer),
 // the live one stays flat. The timeline itself is untouched — the rail, the
 // todo bar and the follow-up chips all still read it.
-const exchanges = computed(() => buildExchanges(timeline.value, busy.value));
+const exchanges = computed(() => buildConversationExchanges(timeline.value, stream.compactions.value, busy.value));
 
 // runStartedAt backs the live header's clock for exchanges whose user message
 // carries no ts; the exchange's own startedAt wins whenever it exists.
@@ -1426,8 +1517,8 @@ async function loadDelegatedPage() {
     sessions.value = res.sessions;
     cwd.value = res.cwd;
     adoptActivity(res.sessions.filter((s) => s.busy).map((s) => s.id));
-    if (sessions.value.length > 0) open(sessions.value[0].id);
-    else await createSession();
+    if (pendingWorkspace.value === null && sessions.value.length > 0) open(sessions.value[0].id);
+    else if (sessions.value.length === 0 && pendingWorkspace.value === null) await createSession();
   } catch (err) {
     if (!viewClosed && epoch === delegatedBootEpoch) delegatedUiError.value = (err as Error).message;
   }
@@ -1482,14 +1573,16 @@ async function retryStudio() {
   await restoreDock();
   const requestedTaskResult = requestedTaskSessionId();
   if (requestedTaskResult) { await openTaskResultEntry(requestedTaskResult); return; }
-  const sid = chooseBootSession(
-    sessions.value,
-    requestedSessionId(location.search),
-    localStorage.getItem(storeKey(STUDIO_LAST_SESSION)),
-  );
-  if (await openLegacySentinelEntry(requestedSessionId(location.search) || localStorage.getItem(storeKey(STUDIO_LAST_SESSION)))) return;
-  if (sid) open(sid);
-  else await createSession();
+  if (pendingWorkspace.value === null) {
+    const sid = chooseBootSession(
+      sessions.value,
+      requestedSessionId(location.search),
+      localStorage.getItem(storeKey(STUDIO_LAST_SESSION)),
+    );
+    if (await openLegacySentinelEntry(requestedSessionId(location.search) || localStorage.getItem(storeKey(STUDIO_LAST_SESSION)))) return;
+    if (sid) open(sid);
+    else await createSession();
+  }
   const sentinel = requestedSentinelId(location.search);
   if (sentinel) await openSentinelSession(sentinel);
 }
@@ -1539,25 +1632,27 @@ onMounted(async () => {
     // row. A candidate absent from THIS Agent's list is ignored (never adopt
     // another Agent's memory), and a requested one that failed validation is
     // said out loud instead of silently opening an unrelated conversation.
-    const requested = requestedSessionId(location.search);
-    const remembered = localStorage.getItem(storeKey(STUDIO_LAST_SESSION));
-    if (await openLegacySentinelEntry(requested || remembered)) return;
-    const sid = chooseBootSession(sessions.value, requested, remembered);
-    if (requested && requested !== sid) {
-      showFlash(
-        locale.value === "zh-CN"
-          ? "这段对话不存在或不属于当前 Agent。"
-          : "That conversation does not exist or belongs to another Agent.",
-        "error",
-      );
-      if (!sid) history.replaceState(null, "", conversationPath());
+    if (pendingWorkspace.value === null) {
+      const requested = requestedSessionId(location.search);
+      const remembered = localStorage.getItem(storeKey(STUDIO_LAST_SESSION));
+      if (await openLegacySentinelEntry(requested || remembered)) return;
+      const sid = chooseBootSession(sessions.value, requested, remembered);
+      if (requested && requested !== sid) {
+        showFlash(
+          locale.value === "zh-CN"
+            ? "这段对话不存在或不属于当前 Agent。"
+            : "That conversation does not exist or belongs to another Agent.",
+          "error",
+        );
+        if (!sid) history.replaceState(null, "", conversationPath());
+      }
+      if (sid) open(sid);
+      else await createSession();
     }
-    if (sid) open(sid);
-    else await createSession();
     const sentinel = requestedSentinelId(location.search);
     if (sentinel) await openSentinelSession(sentinel);
-  } else if (sessions.value.length > 0) open(sessions.value[0].id);
-  else await createSession();
+  } else if (pendingWorkspace.value === null && sessions.value.length > 0) open(sessions.value[0].id);
+  else if (sessions.value.length === 0 && pendingWorkspace.value === null) await createSession();
 });
 
 // A session's workspace relative to the server root; "" means the root
@@ -1718,7 +1813,14 @@ const answerFileNavigation = createAnswerFileNavigation({
 });
 const answerFileChoice = answerFileNavigation.choice;
 cancelPendingAnswerFile = () => { answerFileNavigation.cancel(); cancelPendingSentinelNavigation(); cancelPendingTaskNavigation(); };
-provide(workspaceFileNavigationKey, { scope: answerFileScope, open: answerFileNavigation.open });
+async function openAnswerHTMLPreview(target: WorkspaceFileTarget, origin: Pick<WorkspaceFileScope, "conversationId" | "cwd">) {
+  const scope = answerFileScope();
+  if (!scope || scope.conversationId !== origin.conversationId || scope.cwd !== origin.cwd || !/\.html?$/i.test(target.path)) return;
+  const fullPath = attachmentWorkspacePath(scope.workspace, target.path);
+  const preview = await api.createHTMLPreview(scope.conversationId, fullPath);
+  await openCurrentHTMLPreviewBrowser({ url: preview.url, id: preview.id, sessionId: scope.conversationId, path: fullPath });
+}
+provide(workspaceFileNavigationKey, { scope: answerFileScope, open: answerFileNavigation.open, openHTML: openAnswerHTMLPreview });
 watch(() => {
   const scope = answerFileScope();
   return scope ? JSON.stringify([scope.conversationId, scope.cwd, scope.workspace, scope.root]) : "";
@@ -2216,7 +2318,7 @@ const COMMANDS: { name: string; labelKey: string; hintKey: string; noAbbrev?: bo
 //
 // noAbbrev entries are exempt from the prefix pass for the same reason, one step
 // further: "/c" matches nothing else, so without this it would expand to /compact
-// and replace the conversation off two keystrokes. They still appear in the hint
+// and replace model context off two keystrokes. They still appear in the hint
 // row, which is the version of the shortcut that shows the full name first.
 function resolveCommand(word: string): string | null {
   const exact = COMMANDS.find((c) => c.name === word);
@@ -2474,6 +2576,7 @@ function open(sid: string) {
   // keeps a stray id (a stale schedule row, a forged ?c=) from ever
   // reaching the stream.
   if (isStudio && !sessions.value.some((s) => s.id === sid)) return;
+  pendingWorkspace.value = null;
   current.value = sid;
   stream.connect(sid);
   if (isStudio) {
@@ -2487,11 +2590,9 @@ function open(sid: string) {
   void nextTick(scheduleRailCompute);
 }
 
-// Opening a session from the sidebar auto-creates at the workspace root. The
-// main workbench's button routes through the workspace picker so the choice
-// is explicit; a Studio chat's new session goes straight to the Agent's own
-// default workspace (decided server side) — the picker's user-tree browsing
-// has no business offering one Agent another Agent's desk.
+// A new session starts as a local draft at the workspace root. The real session
+// is created only after the first question is accepted, so no empty transcript
+// appears just because someone clicked the button. The workspace choice stays explicit.
 const pickerOpen = ref(false);
 function startNewSession() {
   if (!canUse("conversation")) return;
@@ -2507,30 +2608,43 @@ async function onCreateWorkspace(workspace: string) {
   await createSession(workspace);
 }
 
-async function createSession(workspace = "") {
+async function createSession(workspace = pendingWorkspace.value ?? "") {
   if (viewClosed || !canUse("conversation")) return;
+  current.value = null;
+  pendingWorkspace.value = workspace;
+  stream.disconnect();
+  stream.pendingUser.value = [];
+  stream.uploads.value = [];
+  stream.apply({ seq: 0, type: "snapshot", ts: Date.now(), snapshot: {
+    seq: 0, messages: [], results: {}, live: emptyLive(), run: { active: false },
+    policy: { mode: "standard" }, usage: { input: 0, output: 0 }, context_tokens: 0,
+  } });
+  if (isStudio) history.replaceState(null, "", conversationPath());
+}
+
+async function createSessionForFirstMessage(): Promise<string | null> {
+  if (current.value) return current.value;
+  const workspace = pendingWorkspace.value;
+  if (workspace === null) return null;
+  sending.value = true;
   try {
-    if (isStudio) {
-      // The new conversation uses the Agent's default model, allowed model
-      // set, Skill/MCP selection and instructions. No creation-time override.
-      const res = await platformApi.createSession(studioAgentId, workspace ? { workspace } : undefined);
-      if (viewClosed) return;
-      await loadSessions();
-      if (viewClosed) return;
-      open(res.id);
-      return;
-    }
-    const res = await api.createSession(undefined, workspace);
-    if (isDelegatedEmbed && viewClosed) return;
+    const sid = isStudio
+      ? (await platformApi.createSession(studioAgentId, workspace ? { workspace } : undefined)).id
+      : (await api.createSession(undefined, workspace)).session_id;
+    if (viewClosed || current.value || pendingWorkspace.value !== workspace) return null;
     await loadSessions();
-    if (isDelegatedEmbed && viewClosed) return;
-    open(res.session_id);
+    if (viewClosed || current.value || pendingWorkspace.value !== workspace) return null;
+    open(sid);
+    return sid;
   } catch (err) {
     if ((err as { status?: number }).status === 401 || (isDelegatedEmbed && (err as { status?: number }).status === 403)) {
       tokenRejected.value = true;
-      return;
+      return null;
     }
     showFlash(t("agentView.flash.createFailed", { msg: (err as Error).message }), "error");
+    return null;
+  } finally {
+    sending.value = false;
   }
 }
 
@@ -3134,8 +3248,7 @@ async function send() {
   const prefix = composerToken.value?.kind === "skill" ? composerToken.value.prefix : "";
   const submittedSkill = skillInvocation.value;
   const sendable = sendableAttachments.value;
-  if ((!text && !elementPicks.value.length && !sendable.length && !composerSkills.value.length && !composerShortcuts.value.length && !composerOffices.value.length) || !current.value) return;
-  const submittedSession = current.value;
+  if ((!text && !elementPicks.value.length && !sendable.length && !composerSkills.value.length && !composerShortcuts.value.length && !composerOffices.value.length) || (!current.value && pendingWorkspace.value === null)) return;
   if (composerSkillError.value) {
     showFlash(composerSkillError.value, "error");
     return;
@@ -3162,10 +3275,13 @@ async function send() {
   // A command runs on the typed text alone; picks stay put, because a command
   // like /model never consumed context in the first place.
   if (!submittedSkill && text.startsWith("/") && !text.startsWith("/skill:")) {
+    if (!current.value && pendingWorkspace.value !== null) return;
     input.value = "";
     await runCommand(text);
     return;
   }
+  const submittedSession = await createSessionForFirstMessage();
+  if (!submittedSession) return;
   const sentKeys = new Set(sendable.map(file => String(file.key)));
   let submittedParts = draftParts.filter(part => part.type !== "file" || sentKeys.has(part.key));
   const buildParts = () => composerInputParts(submittedParts, key => {
@@ -3174,6 +3290,7 @@ async function send() {
   }, prefix);
   const message = text;
   const clearSubmitted = () => {
+    composerDrafts.delete(NEW_SESSION_DRAFT_KEY);
     const ids = new Set(submittedParts.filter(part => part.type !== "text").map(part => part.id));
     if (current.value !== submittedSession) {
       const cached = composerDrafts.get(submittedSession);
@@ -3185,12 +3302,14 @@ async function send() {
         cached.attachments = cached.attachments.filter(file => files.has(file.key));
         cached.picks = cached.parts.flatMap(part => part.type === "element" && part.pick ? [part.pick] : []);
       }
+      persistComposerDrafts();
       return;
     }
     const unchangedText = input.value === draft;
     const remaining = composerParts.value.filter(part => part.type === "text" ? !unchangedText : !ids.has(part.id));
     updateComposerParts(remaining);
     if (unchangedText) input.value = "";
+    persistComposerDrafts();
   };
   sending.value = true;
   try {
@@ -3240,6 +3359,7 @@ async function send() {
         composerDrafts.set(sid, { input: prefix + composerTypedText(parts), parts, layout: draftLayout,
           attachments: [...sendable, ...(newer?.attachments ?? []).filter(file => !sentKeys.has(String(file.key)))],
           picks: parts.flatMap(part => part.type === "element" && part.pick ? [part.pick] : []), catalog: new Map([...(newer?.catalog ?? new Map()), ...sendable.map(file => [String(file.key), file] as const)]) });
+        persistComposerDrafts();
         return;
       }
       syncingComposer = true;
@@ -3953,7 +4073,7 @@ async function runCommand(line: string) {
   try {
     switch (name) {
       case "/compact":
-        return void (await compactSession());
+        return void (await compactSession(line.slice(word.length).trim()));
     }
   } catch (err) {
     showFlash(t("agentView.flash.commandFailed", { msg: (err as Error).message ?? err }), "error");
@@ -3963,53 +4083,64 @@ async function runCommand(line: string) {
 // compacting is exposed to the meter so the button can show progress: this is a
 // model call on the whole conversation and takes about as long as a turn does.
 const compacting = ref(false);
+interface CompactionView {
+  sessionId: string;
+  state: "running" | "done" | "info" | "error";
+  startedAt: number;
+  finishedAt?: number;
+  instructions?: string;
+  result?: string;
+  message?: string;
+  summary?: string;
+}
+const compaction = ref<CompactionView | null>(null);
 
-// compactSession replaces the conversation with a summary of it.
-//
-// Confirmed first, unlike every other command here, because it is the only one
-// that throws work away: the model stops being able to see the conversation and
-// can only see what the summary chose to keep. The transcript survives on disk,
-// which the dialog says, because "can I get it back" is the question being asked
-// at that moment and the answer is more reassuring than people expect.
-async function compactSession() {
+function compactionResult(c: NonNullable<Exchange["compaction"]>): string | undefined {
+  if (!c.before) return undefined;
+  return t("agentView.compact.result", { before: c.before });
+}
+
+async function compactSession(instructions = "") {
   if (isDelegatedEmbed) return unsupported();
   if (!current.value || compacting.value) return;
-  try {
-    await ElMessageBox.confirm(
-      t("agentView.compact.confirmMessage"),
-      t("agentView.compact.confirmTitle"),
-      {
-        confirmButtonText: t("agentView.compact.confirmButton"),
-        cancelButtonText: t("common.cancel"),
-        type: "warning",
-      },
-    );
-  } catch {
-    return; // dismissed
-  }
-
+  const sessionId = current.value;
+  const focus = instructions.trim();
+  const transcriptLength = stream.messages.value.length;
+  const card: CompactionView = { sessionId, state: "running", startedAt: Date.now(), instructions: focus || undefined };
+  compaction.value = card;
   compacting.value = true;
+  stickToBottom.value = true;
   try {
-    const res = await api.compact(current.value);
-    showFlash(
-      t("agentView.compact.done", {
+    const res = await api.compact(sessionId, focus);
+    const persisted = stream.compactions.value.some(c => !c.id.startsWith("local-") && c.after === transcriptLength && c.summary === res.summary);
+    if (!persisted) {
+      const finishedAt = Date.now();
+      stream.acceptCompaction({
+        id: `local-${card.startedAt}`,
+        after: transcriptLength,
+        ts: finishedAt,
+        summary: res.summary,
+        instructions: card.instructions,
         before: res.before,
-        beforeTokens: tok(res.before_tokens),
-        afterTokens: tok(res.after_tokens),
-      }),
-    );
+        before_tokens: res.before_tokens,
+        after_tokens: res.after_tokens,
+        started_at: card.startedAt,
+        finished_at: finishedAt,
+      });
+    }
+    compaction.value = null;
   } catch (err) {
     const e = err as Error & { status?: number };
-    // 422 is the server saying this would not help, which is not a failure and
-    // reads badly as one — its message already explains which case it was.
-    showFlash(
-      e.status === 409
+    compaction.value = {
+      ...card,
+      state: e.status === 422 ? "info" : "error",
+      finishedAt: Date.now(),
+      message: e.status === 409
         ? t("agentView.compact.busy")
         : e.status === 422
           ? e.message
           : t("agentView.compact.failed", { msg: e.message }),
-      e.status === 422 ? "info" : "error",
-    );
+    };
   } finally {
     compacting.value = false;
   }
@@ -4275,20 +4406,18 @@ watch([composerLayout, composerToken, composerComposing], () => {
 }, { flush: "post" });
 watch([attachments, elementPicks], syncComposerReferences, { deep: true, flush: "sync" });
 watch(current, (sid, previous) => {
-  if (previous) composerDrafts.set(previous, { input: input.value, parts: normalizeComposerParts(composerParts.value),
-    layout: composerLayout.value, attachments: [...attachments.value], picks: [...elementPicks.value], catalog: new Map(composerFileCatalog) });
-  const draft = sid ? composerDrafts.get(sid) : undefined;
-  syncingComposer = true;
-  try {
-    input.value = draft?.input ?? "";
-    composerParts.value = normalizeComposerParts(draft?.parts ?? []);
-    composerLayout.value = draft?.layout ?? "top";
-    attachments.value = [...(draft?.attachments ?? [])];
-    elementPicks.value = [...(draft?.picks ?? [])];
-    composerFileCatalog.clear();
-    for (const [key, file] of draft?.catalog ?? []) composerFileCatalog.set(key, file);
-  } finally { syncingComposer = false; }
+  if (previous) saveComposerDraft(previous);
+  else if (pendingWorkspace.value !== null) saveComposerDraft(NEW_SESSION_DRAFT_KEY);
+  restoreComposerDraft(sid ?? (pendingWorkspace.value !== null ? NEW_SESSION_DRAFT_KEY : null));
 }, { flush: "sync" });
+watch(pendingWorkspace, (workspace, previous) => {
+  if (previous != null) saveComposerDraft(NEW_SESSION_DRAFT_KEY);
+  if (workspace === null) localStorage.removeItem(storeKey("pogo:new-session-workspace"));
+  else localStorage.setItem(storeKey("pogo:new-session-workspace"), workspace);
+  restoreComposerDraft(workspace !== null ? NEW_SESSION_DRAFT_KEY : current.value);
+}, { flush: "sync", immediate: true });
+watch([input, composerParts, composerLayout, attachments, elementPicks], () => saveComposerDraft(), { deep: true, flush: "post" });
+onBeforeUnmount(() => { saveComposerDraft(); persistComposerDrafts(); });
 
 function restoreOrderedDraft(blocks: Block[], layout: InputLayout = "inline") {
   const parts = blocksComposerParts(blocks);
@@ -4569,7 +4698,7 @@ onBeforeUnmount(() => {
   if (railRaf) cancelAnimationFrame(railRaf);
 });
 
-watch([timeline, () => stream.liveVersion.value], async () => {
+watch([timeline, compaction, () => stream.liveVersion.value], async () => {
   if (!stickToBottom.value || (floatingConversationActive.value && chatMinimized.value)) return;
   await nextTick();
   // The follow-scroll must not win against whoever claimed the position while
@@ -4650,13 +4779,6 @@ function onChipKey(e: KeyboardEvent, i: number) {
   e.preventDefault();
   elementPicks.value.splice(i, 1);
   nextTick(() => focusComposer());
-}
-
-// tok() groups digits and names the unit. A bare "12463" reads as tokens, bytes
-// or characters depending on who is looking, and for Chinese text those differ by
-// several times over — enough to misjudge the cost badly.
-function tok(n: number) {
-  return `${n.toLocaleString("en-US")} tok`;
 }
 
 // fmtTime renders a message's send time via the locale's short date-time
@@ -5238,7 +5360,7 @@ function rewindStatusLabel(status: string) {
             <!-- The empty state is where a deployment says what it is for. With
                  no skill-provided cards this is the original one-line hint, so
                  a plain pogo looks exactly as before. -->
-            <template v-if="!timeline.length">
+            <template v-if="!timeline.length && !stream.compactions.value.length">
               <!-- The card grid is always mounted now: with no cards at all
                    it still carries the add/import/sample toolbar, which is the
                    way back from an emptied set. -->
@@ -5276,6 +5398,18 @@ function rewindStatusLabel(status: string) {
               />
             </template>
             <template v-for="ex in exchanges" :key="`${stream.displaySessionId.value ?? 'unbound'}:${ex.id}`">
+              <CompactionCard
+                v-if="ex.compaction"
+                state="done"
+                :started-at="ex.compaction.started_at ?? ex.compaction.ts"
+                :finished-at="ex.compaction.finished_at ?? ex.compaction.ts"
+                :instructions="ex.compaction.instructions"
+                :result="compactionResult(ex.compaction)"
+                :summary="ex.compaction.summary"
+                :before-tokens="ex.compaction.before_tokens"
+                :after-tokens="ex.compaction.after_tokens"
+              />
+              <template v-else>
               <div v-if="ex.user" class="ask" :data-mid="ex.user.id">
                 <!-- WeChat/iMessage pattern: the send time sits centred above
                      the message. The row below the bubble carries
@@ -5453,7 +5587,19 @@ function rewindStatusLabel(status: string) {
                   <el-icon><Share /></el-icon>
                 </button>
               </div>
+              </template>
             </template>
+            <CompactionCard
+              v-if="compaction && compaction.sessionId === current && compaction.state !== 'done'"
+              :key="`${compaction.sessionId}:${compaction.startedAt}`"
+              :state="compaction.state"
+              :started-at="compaction.startedAt"
+              :finished-at="compaction.finishedAt"
+              :instructions="compaction.instructions"
+              :result="compaction.result"
+              :message="compaction.message"
+              :summary="compaction.summary"
+            />
             <!-- The gap between sending and the first token, and the same gap
                  between turns: the run is active but nothing new is on screen
                  yet. Tools and gate cards are their own feedback. -->
@@ -5783,18 +5929,17 @@ function rewindStatusLabel(status: string) {
             ref="inputBox"
             v-model="composerBody"
             data-testid="composer-input"
-            :readonly="composerToken?.kind === 'command'"
             aria-autocomplete="list"
             :aria-haspopup="suggestionMenuVisible ? 'listbox' : undefined"
             :aria-controls="suggestionMenuVisible && tokenPickerQuery === null ? suggestionMenuId : undefined"
             :aria-activedescendant="tokenPickerQuery === null ? selectedSuggestionOption : undefined"
             :aria-describedby="composerSkillError || composerSkillWaiting ? `${suggestionMenuId}-status` : undefined"
             :placeholder="
-              composerToken?.kind === 'command' ? t('agentView.commands.commandReady') : composerToken?.kind === 'skill' ? t('agentView.commands.skillTaskPlaceholder') : busy
+              composerToken?.kind === 'command' ? t('agentView.commands.compactFocusPlaceholder') : composerToken?.kind === 'skill' ? t('agentView.commands.skillTaskPlaceholder') : busy
                 ? t('agentView.composer.placeholderBusy')
                 : t('agentView.composer.placeholder')
             "
-            :rows="composerToken?.kind === 'command' ? 1 : 3"
+            :rows="composerToken?.kind === 'command' ? 2 : 3"
             @focus="composerFocused = true; updateTextareaSelection()"
             @input="updateTextareaSelection"
             @select="updateTextareaSelection"
@@ -5831,6 +5976,8 @@ function rewindStatusLabel(status: string) {
               :overhead-breakdown="stream.overheadBreakdown.value"
               :messages="stream.messages.value"
               :results="stream.results.value"
+              :context-messages="stream.contextPrompt.value?.messages"
+              :latest-compaction="stream.compactions.value[stream.compactions.value.length - 1] ?? null"
               :clear-trigger="stream.clearTrigger.value"
               :usage="stream.usage.value"
               :disabled="busy || isDelegatedEmbed"

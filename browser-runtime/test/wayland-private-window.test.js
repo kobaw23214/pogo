@@ -124,25 +124,39 @@ test('a failed Chrome dispatch cannot retain an issued private URL capability', 
 function viewportFixture() {
   const h = fixture(), gate = deferred(), entered = deferred(), page = h.page('about:blank');
   const proof = { marker: 'must-not-be-replaced' }, record = { page, pageId: 't7', viewport: { width: 1280, height: 800 }, scale: 1.5, proof, peers: new Map(), peerClosures: new Set(), gate: Promise.resolve() };
+  const meta = { id: record.pageId, page, documentIdentityReady: true }, counters = { resizes: 0, layoutReads: 0 };
+  h.host.session.pages = new Map([[meta.id, meta]]);
+  h.host.session.frameIdentity = () => 'viewport-document';
   h.host.records.set(page, record);
-  h.host.rpc.request = async op => op === 'resize' ? { width: 1280, height: 800, scale: 1.5, pixel_width: 1920, pixel_height: 1200 } : { ack: true };
-  page.evaluate = () => { entered.resolve(); return gate.promise; };
+  h.host.rpc.request = async op => {
+    if (op !== 'resize') return { ack: true };
+    counters.resizes++;
+    return { width: 1280, height: 800, scale: 1.5, pixel_width: 1920, pixel_height: 1200 };
+  };
+  page.evaluate = () => { counters.layoutReads++; entered.resolve(); return gate.promise; };
   h.host.setViewport = WaylandSessionHost.prototype.setViewport.bind(h.host);
-  return { ...h, gate, entered, page, record, proof };
+  return { ...h, gate, entered, page, record, proof, counters };
 }
 
-test('one unresolved SDK viewport predicate hits the original 15s budget and closes its owned host', async t => {
+test('one unresolved SDK viewport predicate hits the original 15s budget without granting pixels or closing other Sheets', async t => {
   t.mock.timers.enable({ apis: ['Date', 'setTimeout', 'setInterval'] });
   const h = viewportFixture(); let finished = false;
   const resizing = h.host.setViewport(h.page, { width: 1280, height: 800 });
   resizing.then(() => { finished = true; }, () => { finished = true; });
-  const rejected = assert.rejects(resizing, /resource did not become ready/);
+  const rejected = assert.rejects(resizing, error => {
+    assert.equal(error.status, 409); assert.equal(error.code, 'LIVE_NAVIGATION_TRANSITION');
+    assert.match(error.cause?.message, /resource did not become ready/);
+    return true;
+  });
   await h.entered.promise;
   t.mock.timers.tick(14999); await Promise.resolve(); assert.equal(finished, false);
   t.mock.timers.tick(1); await rejected;
-  assert.equal(h.host.failed, true); assert.equal(h.host.closed, true);
+  assert.notEqual(h.host.failed, true); assert.equal(h.host.closed, false);
+  assert.deepEqual(h.counters, { resizes: 1, layoutReads: 1 }, 'a pending display read must not repeat the native resize or enqueue another SDK read');
+  assert.equal(h.record.proof, null); assert.equal(h.record.layoutPending, true);
   h.gate.resolve({ width: 1280, height: 800, scale: 1.5 }); await h.host.close(); await Promise.resolve();
-  assert.equal(h.record.proof, h.proof, 'a late SDK success cannot publish a resized source');
+  assert.equal(h.record.proof, null, 'a late SDK success cannot restore the old coordinate authority');
+  assert.equal(h.record.layoutPending, true, 'a timed-out caller cannot publish late layout confirmation');
 });
 
 for (const signal of ['host-closed', 'runtime-failed', 'page-closed']) test('an unresolved viewport predicate cancels on ' + signal, async t => {
@@ -156,8 +170,9 @@ for (const signal of ['host-closed', 'runtime-failed', 'page-closed']) test('an 
   t.mock.timers.tick(25); await rejected;
   assert.notEqual(h.host.failed, true, 'a confirmed close must not fail other human Sheets');
   if (signal === 'page-closed') assert.equal(h.host.closed, false);
+  assert.deepEqual(h.counters, { resizes: 1, layoutReads: 1 });
   h.gate.resolve({ width: 1280, height: 800, scale: 1.5 }); await h.host.close(); await Promise.resolve();
-  assert.equal(h.record.proof, h.proof); assert.equal(h.host.closed, true);
+  assert.equal(h.record.proof, null); assert.equal(h.record.layoutPending, true); assert.equal(h.host.closed, true);
 });
 
 for (const stage of ['before-native-bind', 'after-native-bind', 'after-native-register']) test('public observePage preserves another Sheet when the Page closes ' + stage, async () => {

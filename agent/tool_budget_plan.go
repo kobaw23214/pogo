@@ -48,6 +48,18 @@ const (
 // its citation fit in exactly 128 tokens. The rendering layer must retain those
 // fields even when its measured minimum is larger and report that overflow.
 func planToolResultBudget(cfg ToolOutputBudgetConfig, promptTokens int64, costs []int64, isError []bool) toolResultBudgetPlan {
+	return planToolResultBudgetWhole(cfg, promptTokens, costs, isError, nil)
+}
+
+// planToolResultBudgetWhole is planToolResultBudget with results that are to
+// reach the model whole: registered Skill instructions (see skillInstructions).
+// A preview of one is a partial rule set, which is worse than no preview, so
+// each is allocated its full cost before anything else, outside the per-result
+// and batch limits. Only a known headroom can cut it short, and then never
+// below its identity allowance. The other results are planned exactly as
+// before within the headroom the whole results left; TargetTokens includes the
+// whole allocations, so batch accounting still compares like with like.
+func planToolResultBudgetWhole(cfg ToolOutputBudgetConfig, promptTokens int64, costs []int64, isError, whole []bool) toolResultBudgetPlan {
 	plan := toolResultBudgetPlan{
 		PerResult: make([]int64, len(costs)),
 		Headroom:  -1,
@@ -85,6 +97,9 @@ func planToolResultBudget(cfg ToolOutputBudgetConfig, promptTokens int64, costs 
 	caps := make([]int64, len(costs))
 	priorityCaps := make([]int64, len(costs))
 	var total, cappedTotal int64
+	// free is the headroom the whole results leave (-1 while the window is
+	// unknown); required is the identity floor of the other results.
+	free, required, wholeTotal := plan.Headroom, int64(0), int64(0)
 	for i, rawCost := range costs {
 		cost := rawCost
 		if cost < 0 {
@@ -100,6 +115,19 @@ func planToolResultBudget(cfg ToolOutputBudgetConfig, promptTokens int64, costs 
 			plan.PerResult[i] = cost
 			continue
 		}
+		if i < len(whole) && whole[i] {
+			allocation := cost
+			if free >= 0 && allocation > free {
+				allocation = max(free, minimum)
+			}
+			if free >= 0 {
+				free = toolBudgetRemaining(free, allocation)
+			}
+			plan.PerResult[i] = allocation
+			wholeTotal = toolBudgetAdd(wholeTotal, allocation)
+			continue // zero caps: the water-fill below never touches it
+		}
+		required = toolBudgetAdd(required, minimum)
 
 		cap := cost
 		if cap > perResult {
@@ -123,14 +151,15 @@ func planToolResultBudget(cfg ToolOutputBudgetConfig, promptTokens int64, costs 
 		return plan
 	}
 
-	plan.TargetTokens = batch
-	if plan.Headroom >= 0 && plan.TargetTokens > plan.Headroom {
-		plan.TargetTokens = plan.Headroom
+	target := batch
+	if free >= 0 && target > free {
+		target = free
 	}
-	if plan.TargetTokens > cappedTotal {
-		plan.TargetTokens = cappedTotal
+	if target > cappedTotal {
+		target = cappedTotal
 	}
-	remaining := plan.TargetTokens - plan.RequiredTokens
+	plan.TargetTokens = toolBudgetAdd(wholeTotal, target)
+	remaining := target - required
 	if remaining <= 0 {
 		return plan
 	}

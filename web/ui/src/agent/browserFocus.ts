@@ -15,6 +15,10 @@ export interface BrowserFocusRequest {
   contextRef?: string;
   tabId?: string;
   generation?: number;
+  /** Bulk opening can reveal a background Sheet without selecting the
+   * browser's global Agent target. Explicit tab actions keep the old rule. */
+  displayOnly?: boolean;
+  controlEpoch?: number;
 }
 
 let focusHook: ((request: BrowserFocusRequest) => void) | null = null;
@@ -37,9 +41,13 @@ function tabIntent(value: unknown): boolean {
   return (args.tab_action === undefined || args.tab_action === "" || args.tab_action === "switch")
     && typeof args.target === "string" && tabPattern.test(args.target);
 }
-interface FocusCall { action: "tab" | "batch"; firstStep: number; steps: number; claim?: { context: string; tab: string; epoch: number } }
+interface FocusCall { action: "tab" | "batch" | "open_pages"; firstStep: number; steps: number; claim?: { context: string; tab: string; epoch: number } }
 function focusCall(value: unknown): FocusCall | undefined {
   const args = record(value);
+  if (args?.action === "open_pages" && Array.isArray(args.urls) && args.urls.length >= 1 && args.urls.length <= 8
+    && args.urls.every(url => typeof url === "string" && url.length > 0 && url.length <= 4096)) {
+    return { action: "open_pages", firstStep: 0, steps: args.urls.length };
+  }
   if (args?.action === "tab" && args.tab_action === "claim" && typeof args.target === "string" && tabPattern.test(args.target)
     && typeof args.context_ref === "string" && contextPattern.test(args.context_ref)
     && Number.isSafeInteger(args.control_epoch) && (args.control_epoch as number) >= 0) {
@@ -129,7 +137,27 @@ export function createBrowserFocusObserver() {
       session.inflight.delete(event.call_id);
       const details = record(event.details);
       if (!call || delivery.replay || (event.is_error !== undefined && event.is_error !== false)
-        || details?.ok !== true || details.backend !== "native" || details.action !== call.action
+        || details?.backend !== "native" || details.action !== call.action) return;
+      if (call.action === "open_pages") {
+        const focus = record(details.focus);
+        if (details.content_source !== "pogo_browser_pages" || !focus || typeof focus.context_ref !== "string"
+          || !contextPattern.test(focus.context_ref) || typeof focus.tab_id !== "string" || !tabPattern.test(focus.tab_id)
+          || typeof focus.version !== "string" || !Number.isSafeInteger(focus.generation) || (focus.generation as number) < 1
+          || !Number.isSafeInteger(focus.control_epoch) || (focus.control_epoch as number) < 0 || !Array.isArray(details.pages)) return;
+        const observed = details.pages.map(record).filter((page): page is Record<string, unknown> => !!page
+          && page.ok === true && page.status === "observed" && page.observation_pending !== true && Number.isSafeInteger(page.index)
+          && (page.index as number) >= 0 && (page.index as number) < call.steps).sort((a, b) => (a.index as number) - (b.index as number));
+        const first = observed[0];
+        if (!first || first.tab_id !== focus.tab_id || first.context_ref !== focus.context_ref || first.version !== focus.version
+          || first.generation !== focus.generation || first.control_epoch !== focus.control_epoch) return;
+        const version = /^([1-9]\d*):(t[1-9]\d*):/.exec(focus.version);
+        if (!version || version[2] !== focus.tab_id || Number(version[1]) !== focus.generation) return;
+        focusHook?.({ phase: "complete", sessionId: sid, runId: session.runId, callId: event.call_id, seq: event.seq,
+          contextRef: focus.context_ref, tabId: focus.tab_id, generation: focus.generation as number,
+          controlEpoch: focus.control_epoch as number, displayOnly: true });
+        return;
+      }
+      if (details.ok !== true
         || details.content_source === "pogo_bookmarks" || typeof details.context_ref !== "string"
         || !contextPattern.test(details.context_ref) || typeof details.active_tab !== "string"
         || !tabPattern.test(details.active_tab) || typeof details.version !== "string") return;
@@ -220,7 +248,12 @@ export class BrowserFocusPolicy {
       this.pending = undefined;
       return;
     }
-    if (state.active_tab !== pending.tabId || !state.tabs.some(page => page.id === pending.tabId)) return;
+    const page = state.tabs.find(page => page.id === pending.tabId);
+    if (!page || !pending.displayOnly && state.active_tab !== pending.tabId) return;
+    if (pending.displayOnly && (page.control !== "agent" || page.control_epoch !== pending.controlEpoch)) {
+      this.pending = undefined;
+      return;
+    }
     const sheet = tabs.find(tab => tab.kind === "browser" && !tab.browserUnavailable
       && tab.browserBinding?.sessionId === sid && tab.browserBinding.context_ref === pending.contextRef
       && tab.browserBinding.tab_id === pending.tabId);

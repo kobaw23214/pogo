@@ -3,15 +3,17 @@ import { computed, onBeforeUnmount, onMounted, provide, ref, watch } from "vue";
 import { agentWorkflowCanvasSize, isAgentWorkflowWorkspace } from "@/agent/agentWorkflowWorkspace";
 import { agentWorkflowRunStatusKey, useAgentWorkflowRunStatus } from "@/agent/useAgentWorkflowRunStatus";
 import { useI18n } from "vue-i18n";
-import { List, ArrowLeft, ArrowRight, Close, Plus } from "@element-plus/icons-vue";
+import { List, ArrowLeft, ArrowRight, Close, Document, Plus } from "@element-plus/icons-vue";
 import { Icon } from "@iconify/vue";
 import FilesPanel from "./FilesPanel.vue";
 import FilePreview from "./FilePreview.vue";
+import SkillDocumentPreview from "./SkillDocumentPreview.vue";
 import HTMLBrowserPane from "./HTMLBrowserPane.vue";
 import ShellPanel from "./ShellPanel.vue";
 import ShortcutWorkspace from "./ShortcutWorkspace.vue";
 import type { InformationEntry } from "@/api/information";
 import SkillsPanel from "./SkillsPanel.vue";
+import MemoryPanel from "./MemoryPanel.vue";
 import CommandTokenIcon from "./CommandTokenIcon.vue";
 import type { ShortcutSnapshot } from "@/api/shortcuts";
 import SubagentSheet from "./SubagentSheet.vue";
@@ -305,7 +307,7 @@ const agentIcon = {
 };
 
 const tab = computed(() => resolveTab(props.tabs, props.activeTab));
-const canImmerse = computed(() => tab.value && ["browser", "panel", "preview", "html"].includes(tab.value.kind));
+const canImmerse = computed(() => tab.value && ["browser", "panel", "preview", "skill", "html"].includes(tab.value.kind));
 // A preview tab wears the file's own type icon — the strip says what the tab
 // is before anyone reads its label, same contract as the shell's terminal and
 // the browser's globe.
@@ -316,7 +318,7 @@ const tabIcon = (tb: DockTab) =>
       ? globeIcon
       : tb.kind === "panel"
         ? panelIcon
-        : tb.kind === "preview"
+        : tb.kind === "preview" || tb.kind === "skill"
           ? fileIcon(tb.label)
           : agentIcon;
 
@@ -611,6 +613,14 @@ function startDrag(e: MouseEvent) {
           @intent="emit('intent', $event)"
           @close="emit('update:active', null)"
         />
+        <MemoryPanel
+          v-if="mountedSheets.has('memory') && sessionId"
+          :key="sessionId"
+          v-show="active === 'memory'"
+          :active="active === 'memory'"
+          :session-id="sessionId"
+          @close="emit('update:active', null)"
+        />
         <SkillsPanel
           v-if="mountedSheets.has('skills') && (!studioBound || sessionId)"
           :key="studioBound ? `${agentId || ''}:${sessionId || ''}` : 'workspace-skills'"
@@ -805,6 +815,12 @@ function startDrag(e: MouseEvent) {
                 :active="hubOpen && tab?.id === tb.id"
                 @claim-capability="emit('claimHtmlCapability', tb.id, $event)"
               />
+              <SkillDocumentPreview
+                v-else-if="tb.kind === 'skill' && tb.skill && tb.path && tb.parentSession"
+                :skill="tb.skill"
+                :session-id="tb.parentSession"
+                :path="tb.path"
+              />
               <FilePreview
                 v-else-if="tb.kind === 'preview' && tb.path"
                 :path="tb.path"
@@ -877,6 +893,18 @@ function startDrag(e: MouseEvent) {
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="3" width="7" height="6" rx="1.5" stroke="currentColor" stroke-width="1.7"/><rect x="14" y="15" width="7" height="6" rx="1.5" stroke="currentColor" stroke-width="1.7"/><path d="M6.5 9v8a1 1 0 0 0 1 1H14m-2-3 3 3-3 3" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
         <span v-if="workflowRailState.show" class="workflow-rail-count" aria-hidden="true" data-testid="workflow-rail-run-status">{{ workflowRailState.badge }}</span>
         <span class="workflow-rail-announcement" role="status" aria-live="polite" aria-atomic="true">{{ workflowRailState.label }}</span>
+      </button>
+      <button
+        class="rail-btn"
+        :class="{ on: active === 'memory' }"
+        :title="sessionId ? t('memoryPanel.title') : t('memoryPanel.awaitSession')"
+        :aria-label="t('memoryPanel.title')"
+        :aria-expanded="active === 'memory'"
+        :disabled="!sessionId"
+        data-testid="memory-open"
+        @click="toggle('memory')"
+      >
+        <el-icon><Document /></el-icon>
       </button>
       <button
         class="rail-btn skills-entry"

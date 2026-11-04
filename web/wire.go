@@ -15,6 +15,7 @@ import (
 
 	"github.com/yosukeno/pogo/agent"
 	"github.com/yosukeno/pogo/llm"
+	"github.com/yosukeno/pogo/session"
 	"github.com/yosukeno/pogo/skills"
 	"github.com/yosukeno/pogo/tools"
 	"github.com/yosukeno/pogo/wire"
@@ -100,11 +101,8 @@ const (
 	EvShellTaskOutput EventType = "shell_task_output"
 	EvShellTaskEnd    EventType = "shell_task_end"
 
-	// EvCompacted tells subscribers the conversation was replaced by a summary of
-	// itself. Structurally the same news as EvRewound — everything held is stale and
-	// only a fresh snapshot rebuilds it — and deliberately not the same name: one is
-	// a branch the user abandoned and the other is the whole history condensed, and a
-	// client that wanted to say so could not if they shared a type.
+	// EvCompacted appends a durable checkpoint marker. Model context moved to the
+	// checkpoint; the visible transcript remains intact, so this is not a rewind.
 	EvCompacted EventType = "compacted"
 
 	// EvFollowups carries the generated follow-up suggestion chips for the run
@@ -200,13 +198,17 @@ type Event struct {
 	ShortcutID       string `json:"shortcut_id,omitempty"`
 	// Office reveal events contain public document identity only. Editor
 	// capabilities and configuration are fetched by the authenticated UI.
-	OfficeDocumentSessionID string    `json:"document_session_id,omitempty"`
-	OfficeConversationID    string    `json:"conversation_id,omitempty"`
-	OfficePath              string    `json:"path,omitempty"`
-	OfficeFileType          string    `json:"file_type,omitempty"`
-	Seq                     int64     `json:"seq"`
-	Type                    EventType `json:"type"`
-	TS                      int64     `json:"ts"`
+	OfficeDocumentSessionID string                  `json:"document_session_id,omitempty"`
+	OfficeConversationID    string                  `json:"conversation_id,omitempty"`
+	OfficePath              string                  `json:"path,omitempty"`
+	OfficeFileType          string                  `json:"file_type,omitempty"`
+	Seq                     int64                   `json:"seq"`
+	Type                    EventType               `json:"type"`
+	TS                      int64                   `json:"ts"`
+	Compaction              *session.CompactionView `json:"compaction,omitempty"`
+	// ContextPrompt is the model-facing transcript used for context accounting,
+	// not the complete user-visible history. Present after a compaction.
+	ContextPrompt *ContextPrompt `json:"context_prompt,omitempty"`
 
 	// Run lifecycle.
 	RunID              string `json:"run_id,omitempty"`
@@ -252,10 +254,12 @@ type Event struct {
 	// Tool calls. CallID is the identity that ties tool_start, tool_end and any
 	// gate traffic together; the browser files everything by it, which is why
 	// out-of-order completion in a parallel batch needs no special handling.
-	CallID  string          `json:"call_id,omitempty"`
-	Name    string          `json:"name,omitempty"`
-	Args    json.RawMessage `json:"args,omitempty"`
-	IsError bool            `json:"is_error,omitempty"`
+	CallID         string          `json:"call_id,omitempty"`
+	Name           string          `json:"name,omitempty"`
+	Args           json.RawMessage `json:"args,omitempty"`
+	PreviewAdded   *int            `json:"preview_added,omitempty"`
+	PreviewRemoved *int            `json:"preview_removed,omitempty"`
+	IsError        bool            `json:"is_error,omitempty"`
 	// Details is a tool's structured payload (tools.EditDetails and friends). It
 	// never enters the conversation, which is why the diff can be full length
 	// here while the model only ever sees the truncated text.
@@ -438,11 +442,15 @@ type IncomingCall struct {
 	Bytes int `json:"bytes"`
 	// Lines counts content newlines seen so far (the two-character `\n` escape
 	// in the raw arguments), so the UI can show a live +N next to the path.
-	Lines int `json:"lines"`
+	Lines          int `json:"lines"`
+	PreviewAdded   int `json:"preview_added"`
+	PreviewRemoved int `json:"preview_removed"`
 	// escPending is the cross-fragment carry: a fragment may end with the lone
 	// backslash of an escape whose second char arrives in the next one. It is
 	// process-local state, never serialized.
 	escPending bool
+	raw        string
+	statAt     int64
 	TS         int64 `json:"ts,omitempty"`
 }
 
@@ -562,17 +570,59 @@ type Followups struct {
 	Chips     []skills.StarterCard `json:"chips"`
 }
 
+// ContextMessage contains only provider-conversation fields, not host-side
+// citation checkpoints or review receipts from llm.Message.
+type ContextMessage struct {
+	Role    string      `json:"role"`
+	Content []llm.Block `json:"content"`
+}
+
+// ContextPrompt is the model-facing transcript and its estimated composition.
+// It is emitted for compacted sessions, where visible history is not the prompt.
+type ContextPrompt struct {
+	Composition session.Composition `json:"composition"`
+	Messages    []ContextMessage    `json:"messages"`
+}
+
+func newContextPrompt(messages []llm.Message, overhead int64) *ContextPrompt {
+	prompt := &ContextPrompt{Composition: session.Compose(messages, overhead), Messages: make([]ContextMessage, len(messages))}
+	for i, message := range messages {
+		prompt.Messages[i] = ContextMessage{Role: string(message.Role), Content: append([]llm.Block(nil), message.Content...)}
+	}
+	return prompt
+}
+
+func cloneContextPrompt(prompt *ContextPrompt) *ContextPrompt {
+	if prompt == nil {
+		return nil
+	}
+	out := *prompt
+	out.Messages = append([]ContextMessage(nil), prompt.Messages...)
+	for i := range out.Messages {
+		out.Messages[i].Content = append([]llm.Block(nil), prompt.Messages[i].Content...)
+	}
+	if prompt.Composition.Tools != nil {
+		out.Composition.Tools = make(map[string]int64, len(prompt.Composition.Tools))
+		for name, tokens := range prompt.Composition.Tools {
+			out.Composition.Tools[name] = tokens
+		}
+	}
+	return &out
+}
+
 // Snapshot is the whole session state as of Seq.
 type Snapshot struct {
 	// StreamInstance distinguishes sequence counters across process/session
 	// reconstructions. It is a replay cursor hint, never an access credential.
 	StreamInstance string `json:"stream_instance"`
 
-	AnswerReview *llm.AnswerReviewStatus `json:"answer_review,omitempty"`
-	Inbox        []InboxItem             `json:"inbox"`
-	Seq          int64                   `json:"seq"`
-	Messages     []Message               `json:"messages"`
-	Results      map[string]ToolResult   `json:"results"`
+	AnswerReview  *llm.AnswerReviewStatus  `json:"answer_review,omitempty"`
+	Inbox         []InboxItem              `json:"inbox"`
+	Seq           int64                    `json:"seq"`
+	Messages      []Message                `json:"messages"`
+	Compactions   []session.CompactionView `json:"compactions,omitempty"`
+	ContextPrompt *ContextPrompt           `json:"context_prompt,omitempty"`
+	Results       map[string]ToolResult    `json:"results"`
 	// Async question answers are session history, not a live run's pending call.
 	UserInputAnswers map[string]tools.UserInputDetails `json:"user_input_answers,omitempty"`
 	Live             Live                              `json:"live"`

@@ -1,6 +1,7 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import { randomUUID } from 'node:crypto';
 import { HTTPError } from './session.js';
+import { isNavigationContextError, navigationObservationError } from './navigation-recovery.js';
 
 const MAX_BUFFER = 4 * 1024 * 1024;
 const integer = (value, min, max) => Number.isSafeInteger(value) && value >= min && value <= max;
@@ -12,7 +13,7 @@ const bounded = async (promise, ms = 2000) => {
   try { return await Promise.race([promise, new Promise((_, reject) => { timer = setTimeout(() => reject(new HTTPError(504, 'live browser operation is still pending; do not replay')), ms); })]); }
   finally { clearTimeout(timer); }
 };
-const errorCode = error => ['LIVE_BUSY', 'LIVE_FRAME_STALE'].includes(error.code) ? error.code : ({ 400: 'LIVE_INVALID', 403: 'LIVE_FORBIDDEN', 409: 'LIVE_FENCED', 410: 'LIVE_FENCED', 504: 'LIVE_PENDING' })[error.status] ?? 'LIVE_UNAVAILABLE';
+const errorCode = error => ['LIVE_BUSY', 'LIVE_FRAME_STALE', 'LIVE_NAVIGATION_TRANSITION'].includes(error.code) ? error.code : ({ 400: 'LIVE_INVALID', 403: 'LIVE_FORBIDDEN', 409: 'LIVE_FENCED', 410: 'LIVE_FENCED', 504: 'LIVE_PENDING' })[error.status] ?? 'LIVE_UNAVAILABLE';
 const elapsed = start => Math.round(Math.max(0, performance.now() - start) * 100) / 100;
 
 // This is an explicit, bounded input protocol. Clients cannot send arbitrary
@@ -52,6 +53,7 @@ export class LiveView {
     this.media = null; this.mediaEpoch = null; this.mediaScale = null;
     this.codecPreference = 'standard';
     this.mediaQueue = Promise.resolve();
+    this.navigationRecovery = null; this.navigationRetryAt = 0;
     this.viewVisible = true; this.visibilityEnabled = false; this.visibilityRevision = 0;
     this.visibilityTransition = false; this.visibilityQueue = Promise.resolve();
     this.viewportTransition = false;
@@ -301,7 +303,7 @@ export class LiveView {
     });
   }
   restartMedia() {
-    if (!this.client || this.closed || this.mediaScale === null || !this.viewVisible) return Promise.resolve();
+    if (!this.client || this.closed || this.mediaScale === null || !this.viewVisible || Date.now() < this.navigationRetryAt) return Promise.resolve();
     const stamp = this.identity(), revision = this.revision;
     this.stamp = stamp;
     const previousEpoch = this.mediaEpoch, epoch = randomUUID();
@@ -314,10 +316,11 @@ export class LiveView {
     this.mediaEpoch = epoch;
     this.frames.clear();
     if (previousEpoch) this.send({ type: 'media_reset', media_epoch: previousEpoch });
+    const ownsEpoch = () => !this.closed && this.mediaEpoch === epoch && revision === this.revision;
+    const current = () => ownsEpoch() && stamp === this.identity();
     this.mediaQueue = this.mediaQueue.catch(() => {}).then(async () => {
       await this.cleanup.catch(() => {});
       await this.media?.close(); this.media = null;
-      const current = () => !this.closed && this.mediaEpoch === epoch && revision === this.revision && stamp === this.identity();
       if (!current()) return;
       // Pogo's bookmark/new-tab UI is local. Do not run an encoder for an empty
       // Chromium document; a later navigation creates its own media epoch.
@@ -362,6 +365,30 @@ export class LiveView {
       this.send({ type: 'media_offer', frame, sdp: media.offer.sdp, ice_servers: [] });
       offered = true;
       for (const candidate of candidates) this.send(candidate);
+    }).catch(async error => {
+      // Only media preparation reads are retryable. This catch never encloses
+      // pointer, keyboard, text or form dispatch, so recovery cannot submit an
+      // action twice. An old document's rejection has no authority over a
+      // receiver which already belongs to a newer document/control revision.
+      if (error.code !== 'LIVE_NAVIGATION_TRANSITION' && !isNavigationContextError(error)) throw error;
+      if (!ownsEpoch()) return;
+      const media = this.media; this.media = null;
+      this.mediaEpoch = null; this.stamp = ''; this.frames.clear();
+      clearTimeout(this.presentationTimer);
+      this.send({ type: 'media_reset', media_epoch: epoch });
+      await media?.close();
+      if (this.closed || revision !== this.revision) return;
+      const key = `${this.session.generation}:${this.session.controlFor(this.meta).epoch}`;
+      if (this.navigationRecovery?.key !== key) this.navigationRecovery = { key, startedAt: Date.now(), attempts: 0 };
+      const recovery = this.navigationRecovery;
+      if (Date.now() - recovery.startedAt >= 8000 || recovery.attempts >= 12) {
+        throw new HTTPError(503, 'Browser display could not recover after repeated page navigations; reconnect the browser view');
+      }
+      recovery.attempts++;
+      this.navigationRetryAt = Date.now() + Math.min(1000, recovery.attempts * 150);
+      if (recovery.attempts === 1) this.sendError(navigationObservationError(error));
+      // publishState prepares only the next display epoch after the backoff;
+      // it does not replay the input which caused the page to navigate.
     });
     return this.mediaQueue;
   }
@@ -371,7 +398,7 @@ export class LiveView {
       const state = this.session.state(this.binding), value = JSON.stringify(state);
       if (force || value !== this.lastState) { this.lastState = value; this.send({ type: 'state', state }); }
       this.publishOverlay();
-      if (!this.viewportTransition && this.session.phase === 'ready' && this.session.controlFor(this.meta).phase === 'ready' && this.meta.documentIdentityReady !== false && this.mediaScale !== null && this.identity() !== this.stamp) {
+      if (!this.viewportTransition && Date.now() >= this.navigationRetryAt && this.session.phase === 'ready' && this.session.controlFor(this.meta).phase === 'ready' && this.meta.documentIdentityReady !== false && this.mediaScale !== null && this.identity() !== this.stamp) {
         const transition = this.viewVisible ? this.restartMedia() : this.mediaEpoch ? this.fence() : null;
         transition?.catch(error => { this.sendError(error); this.close(1011, 'WebRTC capture failed'); });
       }
@@ -430,6 +457,7 @@ export class LiveView {
       if (frame && frame.media_epoch === body.media_epoch && body.media_epoch === this.mediaEpoch && this.stamp === this.identity() && body.width === frame.pixel_width && body.height === frame.pixel_height) {
         if (!frame.acked && this.mediaStartedAt !== undefined) this.performance.setup_ms = elapsed(this.mediaStartedAt);
         frame.acked = true;
+        this.navigationRecovery = null; this.navigationRetryAt = 0;
         this.publishOverlay();
         clearTimeout(this.presentationTimer);
       }
@@ -467,8 +495,11 @@ export class LiveView {
             this.viewportTransition = true;
             try {
               await this.fence();
-              if (host?.setViewport) await host.setViewport(this.meta.page, { width: body.width, height: body.height, ...(body.preferred_scale === undefined ? {} : { preferred_scale: body.preferred_scale }) });
-              else await this.meta.page.setViewportSize({ width: body.width, height: body.height });
+              if (host?.setViewport) await host.setViewport(this.meta.page, { width: body.width, height: body.height, ...(body.preferred_scale === undefined ? {} : { preferred_scale: body.preferred_scale }) }, { observationTimeout: 1200 });
+              else {
+                try { await this.meta.page.setViewportSize({ width: body.width, height: body.height }); }
+                catch (error) { throw isNavigationContextError(error) ? navigationObservationError(error) : error; }
+              }
               this.session.invalidatePage(this.meta);
               const state = this.session.state(this.binding);
               this.lastState = JSON.stringify(state); this.send({ type: 'state', state });

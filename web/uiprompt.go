@@ -18,7 +18,9 @@ func uiCapabilitiesSection(list []skills.Skill) string {
 	var b strings.Builder
 	b.WriteString("The answers render in a web UI that draws ```mermaid diagrams and ```echarts interactive charts from JSON options. " +
 		"It also renders math ($...$, $$...$$ and ```math), data grids (```csv, ```table and ```json-table), " +
-		"and rich Markdown including [TOC], [^1] footnotes, task lists, > [!NOTE] callouts, :::details and diff.\n")
+		"and rich Markdown including [TOC], [^1] footnotes, task lists, > [!NOTE] callouts, :::details and diff.\n" +
+		"Use ![alt](workspace/path.png) to inline an existing workspace image. Never run scripts or create Base64/HTML embeds just to display an image.\n" +
+		"For an interactive HTML artifact, save a real .html or .htm workspace file, then use a ```html-preview fence containing only JSON like {\"path\":\"artifacts/app.html\",\"title\":\"App\"}. Ordinary html fences remain source code.\n")
 	if _, ok := skills.Find(list, uiSectionDrawingSkill); ok {
 		b.WriteString("When a diagram, chart, formula, data table or long structured document would communicate better than prose, read the " +
 			uiSectionDrawingSkill + " skill first and follow its routing; do not ask the user which format to use. Ordinary code examples remain fenced code.")

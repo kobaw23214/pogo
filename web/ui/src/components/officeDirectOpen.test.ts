@@ -11,7 +11,7 @@ vi.mock("./MarkdownView.vue", () => ({ default: {} }));
 vi.mock("./MermaidDiagram.vue", () => ({ default: {} }));
 import FilePreview from "./FilePreview.vue";
 
-type Controller = { officeEditing: Ref<boolean>; officeBinding: Ref<{ path: string; conversationId: string } | null>; failed: Ref<string>; officeEditor: Ref<unknown>; officeChecking: Ref<boolean>; officeCheckElapsed: Ref<number>; officeCheckAttempt: Ref<number>; prepareClose(): Promise<boolean>; refreshPreview(): Promise<boolean>; load(): Promise<void>; officeOpenFailed(message: string): void; officeFocusExisting(path: string): void };
+type Controller = { officeEditing: Ref<boolean>; officeBinding: Ref<{ path: string; conversationId: string; mode: "view" | "edit" } | null>; readOnlyOffice: Ref<boolean>; renderError: Ref<string>; failed: Ref<string>; officeEditor: Ref<unknown>; officeChecking: Ref<boolean>; officeCheckElapsed: Ref<number>; officeCheckAttempt: Ref<number>; editSavedOffice(): void; prepareClose(): Promise<boolean>; refreshPreview(): Promise<boolean>; load(): Promise<void>; officeOpenFailed(message: string): void; officeFocusExisting(path: string): void };
 const scopes: ReturnType<typeof effectScope>[] = [];
 async function flush() { for (let i = 0; i < 8; i++) await Promise.resolve(); await nextTick(); }
 function mount(path: string) {
@@ -22,7 +22,7 @@ function mount(path: string) {
   return { props, emit, controller };
 }
 beforeEach(() => { host.configuration.mockReset().mockResolvedValue({ enabled: true }); host.fileContent.mockReset().mockResolvedValue({ content: "text", binary: false }); host.fileRender.mockReset(); });
-afterEach(() => { for (const cleanup of host.cleanups.splice(0)) cleanup(); for (const scope of scopes.splice(0)) scope.stop(); vi.useRealTimers(); });
+afterEach(() => { for (const cleanup of host.cleanups.splice(0)) cleanup(); for (const scope of scopes.splice(0)) scope.stop(); vi.useRealTimers(); vi.unstubAllGlobals(); });
 
 describe("Workspace Office opens directly and preserves its only editor", () => {
   it("opens docx and xlsx directly without fetching the old preview or file bytes", async () => {
@@ -33,6 +33,12 @@ describe("Workspace Office opens directly and preserves its only editor", () => 
       expect(emit).toHaveBeenCalledWith("officeOpened", { path, conversationId: "conversation-a" });
     }
     expect(host.fileContent).not.toHaveBeenCalled(); expect(host.fileRender).not.toHaveBeenCalled();
+  });
+  it("uses view mode for quick previews and enters edit only after an explicit action", async () => {
+    const { controller } = mount("uploads/view-only.docx"); await flush();
+    expect(controller.officeBinding.value?.mode).toBe("view");
+    controller.editSavedOffice();
+    expect(controller.officeBinding.value?.mode).toBe("edit");
   });
   it("shows an unavailable error instead of falling back to a stale read-only document", async () => {
     host.configuration.mockResolvedValue({ enabled: false });
@@ -168,5 +174,37 @@ describe("Workspace Office opens directly and preserves its only editor", () => 
     const { controller } = mount("uploads/removed.txt"); await flush();
     expect(controller.failed.value).toBe("workspaceFiles.notFound");
     expect(controller.failed.value).not.toContain("private server path");
+  });
+});
+
+describe("Spreadsheet preview loading boundaries", () => {
+  it("skips files over 20 MiB without downloading their bytes", async () => {
+    const { controller } = mount("uploads/large.xlsm"); await flush();
+    controller.readOnlyOffice.value = true;
+    host.fileContent.mockResolvedValue({ binary: true, size: 21 * 1024 * 1024 });
+    const fetchMock = vi.fn(); vi.stubGlobal("fetch", fetchMock);
+    await controller.load();
+    expect(controller.renderError.value).toBe("filePreview.tooLarge");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+  it("aborts the previous spreadsheet read when the file changes", async () => {
+    const { controller, props } = mount("uploads/small.xlsm"); await flush();
+    controller.readOnlyOffice.value = true;
+    host.fileContent.mockResolvedValue({ binary: true, size: 1024 });
+    const signals: AbortSignal[] = [];
+    vi.stubGlobal("fetch", vi.fn((_url: string, init: { signal: AbortSignal }) => {
+      signals.push(init.signal);
+      return new Promise((_resolve, reject) => {
+        if (init.signal.aborted) reject(new Error("aborted"));
+        else init.signal.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
+      });
+    }));
+    const loading = controller.load();
+    await flush();
+    controller.officeEditing.value = false;
+    props.path = "uploads/replacement.xlsm";
+    await flush();
+    expect(signals[0].aborted).toBe(true);
+    await loading;
   });
 });

@@ -9,6 +9,7 @@ import { HTTPError } from './session.js';
 import { MEDIA_DEVICE_SCALE_FACTORS } from './media-config.js';
 import { connectNativeBootstrap } from './native-bootstrap.js';
 import { BrowserDownloads } from './downloads.js';
+import { isNavigationContextError, navigationObservationError } from './navigation-recovery.js';
 
 const runtimeRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -338,30 +339,85 @@ export class WaylandSessionHost {
     });
     this.pending.set(page, flight); return flight;
   }
-  async setViewport(page, value) {
+  async setViewport(page, value, { observationTimeout = 15000 } = {}) {
     const record = this.records.get(page); if (!record?.pageId) throw new Error('native page is not bound');
     const viewport = waylandViewport(value);
     const scale = this.getTargetCaptureScale(page, viewport, value.preferred_scale);
     const result = await this.rpc.request('resize', { page: record.pageId, ...viewport, scale });
     if (result.width !== viewport.width || result.height !== viewport.height || result.scale !== scale || result.pixel_width !== viewport.width * scale || result.pixel_height !== viewport.height * scale) throw new Error('native compositor resize did not match the Sheet viewport');
-    // Native output configure drives Chromium layout/DPR, no mobile emulation.
-    try {
-      await deadline(async () => { const actual = await page.evaluate(() => ({ width: innerWidth, height: innerHeight, scale: devicePixelRatio })); return actual.width === viewport.width && actual.height === viewport.height && actual.scale === scale; }, 15000, () => !this.closed && !this.failed && !this.runtime.closed && !this.runtime.failed && !page.isClosed());
-    } catch (error) {
-      if (!this.closed && !this.failed && !this.runtime.closed && !this.runtime.failed && !page.isClosed()) this.fail();
+    // These dimensions were acknowledged by the compositor. Keep them even if
+    // the document changes during confirmation, but withhold a new display's
+    // pixel proof until its corresponding DOM layout has also been observed.
+    record.viewport = viewport; record.scale = scale; record.proof = null; record.layoutPending = true;
+    try { await this.confirmViewport(page, record, observationTimeout); }
+    catch (error) {
+      if (isNavigationContextError(error)) throw error;
+      if (!this.closed && !this.failed && !this.runtime.closed && !this.runtime.failed && !page.isClosed() && this.records.get(page) === record && record.viewport === viewport) this.fail();
       throw error;
     }
-    record.viewport = viewport; record.scale = scale; record.proof = null; return viewport;
+    return viewport;
+  }
+  async confirmViewport(page, record, observationTimeout = 15000) {
+    const viewport = record.viewport, scale = record.scale;
+    const meta = this.session?.pages.get(record.pageId);
+    const documentIdentity = meta ? this.session.frameIdentity(meta) : null;
+    // Native output configure drives Chromium layout/DPR, no mobile emulation.
+    // Resize is dispatched once. Only its read-only layout confirmation can
+    // repeat if navigation replaces the evaluated document in the meantime.
+    const current = () => !this.closed && !this.failed && !this.runtime.closed && !this.runtime.failed && !page.isClosed() && this.records.get(page) === record && !record.removing && record.viewport === viewport && record.scale === scale;
+    let navigationError;
+    try {
+      await deadline(async () => {
+        try {
+          // A transport deadline cannot cancel Chromium's evaluate. Share one
+          // in-flight layout read across recovery attempts rather than queue
+          // more scripts in a temporarily unresponsive renderer.
+          let reading = record.layoutRead;
+          if (!reading) {
+            reading = Promise.resolve().then(() => page.evaluate(() => ({ width: innerWidth, height: innerHeight, scale: devicePixelRatio })));
+            record.layoutRead = reading;
+            reading.finally(() => { if (record.layoutRead === reading) record.layoutRead = undefined; }).catch(() => {});
+          }
+          const actual = await reading;
+          navigationError = undefined;
+          return actual.width === viewport.width && actual.height === viewport.height && actual.scale === scale;
+        } catch (error) {
+          if (!isNavigationContextError(error)) throw error;
+          navigationError = error;
+          return false;
+        }
+      }, observationTimeout, current);
+    } catch (error) {
+      // A replaced JavaScript context is not a failed compositor or browser.
+      // The caller can prepare a fresh display; it must not replay user input.
+      const changing = meta && (meta.pageLoading || meta.documentIdentityReady === false || this.session.frameIdentity(meta) !== documentIdentity);
+      const timedOut = error.message === 'native browser resource did not become ready';
+      if (current() && (navigationError || isNavigationContextError(error) || changing || timedOut)) throw navigationObservationError(navigationError ?? error);
+      throw error;
+    }
+    record.layoutPending = false;
   }
   async sourceFence(record, sourceKey, documentKey, paused) {
+    const meta = this.session?.pages.get(record.pageId);
+    const documentIdentity = meta ? this.session.frameIdentity(meta) : null;
+    const checkDocument = () => {
+      if (!record.page.isClosed() && meta && (meta.documentIdentityReady === false || this.session.frameIdentity(meta) !== documentIdentity)) {
+        throw navigationObservationError();
+      }
+    };
     // Pause all production capture before injecting the private pixel probe.
     // Existing viewers hold their previous frame; marker frames never enter RTP.
     await this.rpc.request('capture_stop', { page: record.pageId });
+    // A resize interrupted by navigation has already reached the compositor.
+    // Recover only its read-only confirmation, never another native resize or
+    // user gesture, before issuing pixels and coordinate authority again.
+    if (record.layoutPending) await this.confirmViewport(record.page, record, 1200);
+    checkDocument();
     if (record.proof?.key === sourceKey) return record.proof.seq;
     if (paused && record.proof?.documentKey === documentKey) return record.proof.seq;
     if (paused) throw new Error('current paused document has no verified native pixels; resume before displaying it');
     const nonce = randomBytes(8).toString('hex'), key = `__pogoPixels_${id()}`;
-    let seen;
+    let seen, failure;
     try {
       await record.page.evaluate(({ nonce, key, scale }) => {
         scale = devicePixelRatio;
@@ -373,11 +429,22 @@ export class WaylandSessionHost {
         document.documentElement.append(canvas); globalThis[key] = canvas; canvas.showPopover?.();
       }, { nonce, key, scale: this.getCaptureScale(record.page) });
       seen = await this.rpc.request('probe_present', { page: record.pageId, nonce, pixel_x: 2, pixel_y: 2 });
+    } catch (error) {
+      failure = error;
     } finally {
-      await record.page.evaluate(key => { globalThis[key]?.remove(); delete globalThis[key]; }, key);
+      // A navigation already removes the old document's marker. Cleanup must
+      // not replace an earlier failure, or turn that normal transition into a
+      // permanently failed media source.
+      if (!record.page.isClosed()) {
+        try { await record.page.evaluate(key => { globalThis[key]?.remove(); delete globalThis[key]; }, key); }
+        catch (error) { failure ??= error; }
+      }
     }
+    checkDocument();
+    if (failure) throw isNavigationContextError(failure) ? navigationObservationError(failure) : failure;
     if (!Number.isSafeInteger(seen?.content_seq) || seen.content_seq < 1) throw new Error('native pixels did not confirm the current document');
     const clean = await this.rpc.request('probe_absent', { page: record.pageId, nonce, min_seq: seen.content_seq, pixel_x: 2, pixel_y: 2 });
+    checkDocument();
     if (!Number.isSafeInteger(clean?.content_seq) || clean.content_seq <= seen.content_seq) throw new Error('native pixels did not confirm probe removal');
     record.proof = { key: sourceKey, documentKey, seq: clean.content_seq }; return clean.content_seq;
   }

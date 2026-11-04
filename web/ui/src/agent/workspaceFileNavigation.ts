@@ -9,6 +9,7 @@ export interface WorkspaceFileScope extends WorkspaceFileContext {
 export interface WorkspaceFileNavigation {
   scope(): WorkspaceFileScope | null;
   open(target: WorkspaceFileTarget, origin: Pick<WorkspaceFileScope, "conversationId" | "cwd">): void | Promise<void>;
+  openHTML?(target: WorkspaceFileTarget, origin: Pick<WorkspaceFileScope, "conversationId" | "cwd">): void | Promise<void>;
 }
 
 export const workspaceFileNavigationKey: InjectionKey<WorkspaceFileNavigation> = Symbol("workspaceFileNavigation");

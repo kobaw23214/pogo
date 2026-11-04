@@ -863,6 +863,9 @@ func (s *Session) consume(events <-chan agent.Event, persister *agent.TurnPersis
 		if carryOverhead && we.Type == EvTurnStart {
 			we.OverheadTokens, we.OverheadBreakdown = &overheadTotal, overheadParts
 		}
+		if we.Type == EvRunEnd && s.hub.HasCompactions() {
+			we.ContextPrompt = newContextPrompt(s.agent.Messages(), s.agent.OverheadTokens())
+		}
 		if len(observe) > 0 && observe[0] != nil {
 			observe[0](we)
 		}
@@ -1109,9 +1112,10 @@ func (s *Session) Rewind(messageID string, mode RewindMode, paths []string) erro
 		return err
 	}
 	history := s.store.TimedMessages("")
+	promptHistory := s.store.PromptTimedMessages("")
 	usage, delegated := s.store.UsageTotals()
-	msgs := make([]llm.Message, 0, len(history))
-	for _, t := range history {
+	msgs := make([]llm.Message, 0, len(promptHistory))
+	for _, t := range promptHistory {
 		msgs = append(msgs, t.Message)
 	}
 	s.agent.SetMessages(msgs)
@@ -1136,22 +1140,27 @@ func (s *Session) Rewind(messageID string, mode RewindMode, paths []string) erro
 
 	// Reset before publishing, so the event only ever meets rebuilt state.
 	s.hub.Reset(history, usage)
+	s.hub.SetCompactions(s.store.Compactions(""))
+	if s.hub.HasCompactions() {
+		s.hub.EstimateContext(newContextPrompt(msgs, s.agent.OverheadTokens()))
+	}
 	s.hub.Publish(Event{Type: EvRewound})
 	return nil
 }
 
-// Compact replaces the conversation with a summary of it, writing the result as a
-// fresh branch the same way Rewind does: the original records stay in the file and
-// become unreachable, so the transcript is still append-only and the full history is
-// still auditable.
+// Compact replaces model context with a summary and appends a checkpoint to the
+// visible transcript. Unlike Rewind it never forks or hides real messages.
 //
-// Unlike every other operation here, this one holds a network call in the middle, so
-// it cannot run under s.mu — the snapshot endpoint takes that lock and the browser
-// would freeze for as long as the summary takes. A compacting reservation blocks
-// competing mutations while snapshots remain readable. The commit hook writes
-// the replacement branch before Agent swaps history; failures keep both unchanged.
+// The summarising network call cannot run under s.mu — the snapshot endpoint takes
+// that lock and the browser would freeze. A compacting reservation blocks competing
+// mutations while snapshots remain readable. The commit hook persists the checkpoint
+// before Agent swaps context; failures leave both the transcript and context unchanged.
 func (s *Session) Compact(ctx context.Context) (agent.CompactResult, error) {
-	return s.compact(ctx, 0)
+	return s.compact(ctx, 0, "")
+}
+
+func (s *Session) CompactWithInstructions(ctx context.Context, instructions string) (agent.CompactResult, error) {
+	return s.compact(ctx, 0, instructions)
 }
 
 // CompactAuto is the pre-run check's shape: the same summary of the head plus a
@@ -1159,10 +1168,10 @@ func (s *Session) Compact(ctx context.Context) (agent.CompactResult, error) {
 // automatic path keeps one — the /compact button is a trade a person chose, a
 // threshold is not, and the automatic path errs on keeping more.
 func (s *Session) CompactAuto(ctx context.Context) (agent.CompactResult, error) {
-	return s.compact(ctx, agent.CompactKeepRecent)
+	return s.compact(ctx, agent.CompactKeepRecent, "")
 }
 
-func (s *Session) compact(ctx context.Context, keep int64) (agent.CompactResult, error) {
+func (s *Session) compact(ctx context.Context, keep int64, instructions string) (agent.CompactResult, error) {
 	s.mu.Lock()
 	if s.closing {
 		s.mu.Unlock()
@@ -1216,7 +1225,11 @@ func (s *Session) compact(ctx context.Context, keep int64) (agent.CompactResult,
 			_, _ = s.SyncStudioToolPolicy()
 		}
 	}()
-	res, err := a.CompactWithCommit(ctx, keep, func(msgs []llm.Message) error {
+	before := a.Messages()
+	beforeTokens := llm.EstimateTokens(before)
+	startedAt := time.Now().UnixMilli()
+	var compaction session.CompactionView
+	res, err := a.CompactWithCommitInstructions(ctx, keep, func(msgs []llm.Message) error {
 		s.mu.Lock()
 		defer s.mu.Unlock()
 		if s.closing {
@@ -1225,8 +1238,18 @@ func (s *Session) compact(ctx context.Context, keep int64) (agent.CompactResult,
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		return s.store.ForkWithMessages("", msgs)
-	})
+		summary := ""
+		if len(msgs) > 0 {
+			summary, _ = agent.CompactionContinuationSummary(msgs[0])
+		}
+		var err error
+		compaction, err = s.store.AppendCompaction(session.Compaction{
+			Summary: summary, Instructions: instructions,
+			Before: len(before), BeforeTokens: beforeTokens, AfterTokens: llm.EstimateTokens(msgs),
+			StartedAt: startedAt, FinishedAt: time.Now().UnixMilli(), Messages: msgs,
+		})
+		return err
+	}, instructions)
 	s.mu.Lock()
 	msgs := a.Messages()
 	if err != nil {
@@ -1236,25 +1259,20 @@ func (s *Session) compact(ctx context.Context, keep int64) (agent.CompactResult,
 		s.mu.Unlock()
 		return res, errors.Join(err, costErr)
 	}
-	// The persistence baseline moves with the agent, for the same reason it does in
-	// Rewind: the next finish() slices the history at this offset, and a stale one
-	// past the end of a much shorter history is a panic.
+	// The persistence baseline follows model context; new real messages still append
+	// to the complete visible transcript after its checkpoint.
 	s.persisted = len(msgs)
 	// The summarising call is spend that already happened, so it is recorded now
 	// rather than left for the next finish(): a session compacted and then closed or
 	// evicted would otherwise lose it. The CLI's /compact does the same.
 	costErr := s.recordCostLocked(msgs)
-	history := s.store.TimedMessages("")
-	usage, _ := s.store.UsageTotals()
 	s.lastUsed = time.Now()
-	// The view follows the compacted history: restored Skills keep their
+	// The tool view follows the compacted context: restored Skills keep their
 	// tools, selections whose describe results were summarised are gone.
 	s.hub.SetOverhead(a.OverheadBreakdown())
 	s.mu.Unlock()
 
-	// Reset before publishing, so the event only ever meets rebuilt state.
-	s.hub.Reset(history, usage)
-	s.hub.Publish(Event{Type: EvCompacted})
+	s.hub.Publish(Event{Type: EvCompacted, Compaction: &compaction, ContextPrompt: newContextPrompt(msgs, a.OverheadTokens())})
 	return res, costErr
 }
 

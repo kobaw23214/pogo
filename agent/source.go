@@ -238,6 +238,15 @@ func (s *SourceStore) Next(toolName string, details any, callID, rawOutput strin
 		src.Title = "浏览器下载状态（主机记录）"
 		src.Locator = "tool://browser-downloads/" + url.PathEscape(callID)
 	}
+	if toolName == "browser" && (browserAction == "open_pages" || browserAction == "observe_pages") {
+		// One call can observe several independently bound pages. Its stamp
+		// identifies the collection, never whichever tab happened to be active.
+		// Page indices locate entries inside this recorded result; they are not
+		// separate citation labels or evidence that failed pages were observed.
+		src.Type = SourceTool
+		src.Title = "浏览器多页观察集合"
+		src.Locator = "tool://browser-pages/" + url.PathEscape(callID)
+	}
 
 	s.mu.Lock()
 	defer s.mu.Unlock()

@@ -83,7 +83,8 @@ describe("shared activity list", () => {
     props.workFolded = true; await nextTick();
     expect(shown(turns[0])).toBe(false); expect(shown(turns[1])).toBe(false); expect(shown(turns[2])).toBe(true);
     expect(shown(find(root, node => node.props["data-sources"] === "S1"))).toBe(false);
-    expect(shown(find(root, node => node.props["data-sources"] === "S2"))).toBe(false);
+    // A tool-only turn has no text for a sources panel to annotate.
+    expect(flat(root).some(node => node.props["data-sources"] === "S2")).toBe(false);
     expect(shown(find(root, node => node.props["data-sources"] === "S1 S2"))).toBe(true);
     expect(shown(find(root, node => node.text === "final result [S1]"))).toBe(true);
     expect(shown(find(root, node => node.text === "intermediate harness reminder"))).toBe(false);
@@ -91,6 +92,18 @@ describe("shared activity list", () => {
     expect(shown(turns[0])).toBe(true); expect(shown(turns[1])).toBe(true);
     expect(find(root, node => node.props["data-call"] === "a")).toBe(originalCall); expect(mounts.get("a")).toBe(1);
     expect(flat(root).filter(node => node.props["data-mid"] && node.props["data-mid"] !== "n1")).toEqual(turns);
+  });
+
+  it("puts narration above the calls it introduces and drops turn labels only in the plain timeline", () => {
+    const exchange = sample([call("a")]);
+    exchange.turns[0].text = "先看一下文件：";
+    const { root } = mount(exchange);
+    const nodes = flat(root);
+    const narration = nodes.findIndex(node => node.props.class === "answer");
+    expect(narration).toBeGreaterThanOrEqual(0);
+    expect(narration).toBeLessThan(nodes.findIndex(node => node.props["data-call"] === "a"));
+    expect(text(root)).toContain("第 1 轮");
+    expect(text(mount(sample([call("b")]), { plainTurns: true }).root)).not.toContain("第 1 轮");
   });
 
   it("shows the current tool and approval without leaking its settled narration and sources through the fold", () => {

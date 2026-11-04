@@ -1,15 +1,19 @@
 <script setup lang="ts">
+import { useI18n } from "vue-i18n";
 import WorkLogGlyph from "./WorkLogGlyph.vue";
 import Chevron from "./Chevron.vue";
 import type { ToolPresentation } from "@/agent/toolPresentation";
+import type { OpenFileTarget } from "./dockSheets";
 
 defineProps<{
   presentation: ToolPresentation;
   expandable?: boolean;
   open?: boolean;
   controls?: string;
+  fileTarget?: OpenFileTarget;
 }>();
-const emit = defineEmits<{ toggle: [] }>();
+const emit = defineEmits<{ toggle: []; "open-file": [OpenFileTarget] }>();
+const { t } = useI18n();
 </script>
 
 <template>
@@ -28,7 +32,8 @@ const emit = defineEmits<{ toggle: [] }>();
     <span class="tool-identity">
       <span class="tool-name" :title="presentation.protocolName">{{ presentation.name }}</span>
       <span v-if="presentation.secondary" class="tool-secondary">{{ presentation.secondary }}</span>
-      <span v-if="presentation.target" class="tool-target">{{ presentation.target }}</span>
+      <button v-if="fileTarget" type="button" class="tool-target tool-file-link" :title="t('toolCall.openFile', { path: fileTarget.path })" :data-open-file="fileTarget.path" :data-skill="fileTarget.skill" :data-skill-path="fileTarget.skillPath" @click.stop="emit('open-file', fileTarget)">{{ fileTarget.path }}</button>
+      <span v-else-if="presentation.target" class="tool-target">{{ presentation.target }}</span>
       <slot />
     </span>
     <span v-if="presentation.meta" class="tool-meta">{{ presentation.meta }}</span>
@@ -64,6 +69,9 @@ const emit = defineEmits<{ toggle: [] }>();
 .tool-name { font-weight: 600; overflow-wrap: anywhere; }
 .tool-secondary { color: var(--el-text-color-secondary); font-size: 11px; overflow-wrap: anywhere; }
 .tool-target { color: var(--el-text-color-secondary); font-family: var(--pg-mono); white-space: pre-wrap; overflow-wrap: anywhere; min-width: 0; }
+.tool-file-link { padding: 0; border: 0; background: transparent; color: var(--pg-link-color); text-align: left; cursor: pointer; }
+.tool-file-link:hover { text-decoration: underline; text-underline-offset: 2px; }
+.tool-file-link:focus-visible { outline: 2px solid var(--el-color-primary); outline-offset: 2px; border-radius: 2px; }
 .tool-meta { color: var(--el-text-color-secondary); white-space: nowrap; font-size: 11px; font-variant-numeric: tabular-nums; padding-top: 1px; }
 .tool-status { font-size: 10px; white-space: nowrap; padding: 1px 7px; border-radius: 999px; background: var(--el-fill-color-light); color: var(--el-text-color-secondary); }
 .running .tool-status { color: var(--el-color-primary); background: var(--el-color-primary-light-9); }

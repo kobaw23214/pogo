@@ -47,6 +47,7 @@ const props = defineProps<{
   sessionId?: string | null;
   officeSessionId?: string;
   immersive?: boolean;
+  officeMode?: "view" | "edit";
 }>();
 const emit = defineEmits<{ back: []; focusOffice: [path: string]; openCopy: [path: string]; openCurrentBrowser: [request: { url: string; id: string; sessionId: string; path: string }]; openBrowser: [request: { url: string; id: string; sessionId: string }]; officeClosed: [id: string]; officeEditing: [context: OfficeViewContext | null]; officeOpened: [context: OfficeViewContext]; officeReference: [snapshot: OfficeReferenceSnapshot] }>();
 const { t, d } = useI18n();
@@ -77,12 +78,14 @@ const officeCheckElapsed = ref(0);
 const officeCheckAttempt = ref(1);
 let officeCheckController: AbortController | null = null;
 let officeCheckTimer: ReturnType<typeof setInterval> | undefined;
-const officeBinding = ref<{ path: string; conversationId: string; id?: string; mtime?: number; size?: number } | null>(null);
+const officeBinding = ref<{ path: string; conversationId: string; id?: string; mtime?: number; size?: number; mode: "view" | "edit" } | null>(null);
 const officeEditor = ref<{ prepareClose(): Promise<boolean>; refreshStatus(): Promise<void> } | null>(null);
 const officeNotice = ref("");
 const officeVersionObserved = ref(false);
 const closedOfficeSessions = new Set<string>();
+const MAX_SHEET_PREVIEW_BYTES = 20 * 1024 * 1024;
 let releaseOfficeFile: (() => void) | null = null;
+let sheetController: AbortController | null = null;
 const officeDuplicate = ref(false);
 const readOnlyOffice = ref(false);
 const officeClaim = ref<{ claim: OfficeOpen; instanceId: string } | null>(null);
@@ -95,7 +98,7 @@ watch(officeEditing, active => {
   emit("officeEditing", context);
   if (context) emit("officeOpened", context);
 }, { flush: "sync" });
-onBeforeUnmount(() => { ++loadVersion; clearHTMLRequests(); cancelOfficeCheck(); releaseOfficeFile?.(); if (officeEditing.value) emit("officeEditing", null); });
+onBeforeUnmount(() => { ++loadVersion; sheetController?.abort(); clearHTMLRequests(); cancelOfficeCheck(); releaseOfficeFile?.(); if (officeEditing.value) emit("officeEditing", null); });
 
 // A Markdown heading's rendered row is not its source line. Every citation
 // navigation starts in source mode, even when the same tab was already open.
@@ -201,7 +204,7 @@ function cancelOfficeCheck() {
   officeChecking.value = false;
 }
 
-function startOffice() {
+function startOffice(mode: "view" | "edit" = props.officeMode ?? "view") {
   if (!officeEnabled.value || !supportsOfficeEditing.value || !props.sessionId || officeEditing.value) return;
   const path = workspaceFilePath(props.path);
   const reserved = officePathMounted(path, props.sessionId) ? null : reserveOfficeFile(path, props.sessionId);
@@ -211,7 +214,7 @@ function startOffice() {
   releaseOfficeFile = reserved;
   ++loadVersion;
   const id = props.officeSessionId && !closedOfficeSessions.has(props.officeSessionId) ? props.officeSessionId : undefined;
-  officeBinding.value = { path, conversationId: props.sessionId, id, mtime: content.value?.mtime_ms, size: content.value?.size };
+  officeBinding.value = { path, conversationId: props.sessionId, id, mtime: content.value?.mtime_ms, size: content.value?.size, mode };
   readOnlyOffice.value = false; officeEditing.value = true; officeNotice.value = "";
 }
 async function viewSavedOffice() {
@@ -223,9 +226,18 @@ async function viewSavedOffice() {
   readOnlyOffice.value = true; failed.value = "";
   await load();
 }
-function editSavedOffice() { officeClaim.value = null; startOffice(); }
+function enableOfficeEdit() {
+  if (officeBinding.value) officeBinding.value = { ...officeBinding.value, mode: "edit" };
+}
+function editSavedOffice() {
+  officeClaim.value = null;
+  if (officeBinding.value) { enableOfficeEdit(); return; }
+  startOffice("edit");
+}
 function installOfficeClaim(value: { claim: OfficeOpen; instanceId: string }) {
-  officeClaim.value = value; startOffice();
+  officeClaim.value = value;
+  if (officeBinding.value) { enableOfficeEdit(); return; }
+  startOffice("edit");
   if (!officeEditing.value) { officeClaim.value = null; void officeApi.release(value.claim, value.instanceId).catch(() => {}); }
 }
 async function endOffice() {
@@ -370,6 +382,8 @@ async function load(keepHTMLSource?: unknown) {
   const version = ++loadVersion;
   clearHTMLRequests();
   cancelOfficeCheck();
+  sheetController?.abort();
+  sheetController = null;
   const path = props.path;
   const conversationId = props.sessionId;
   const current = () => version === loadVersion && path === props.path && conversationId === props.sessionId;
@@ -428,13 +442,22 @@ async function load(keepHTMLSource?: unknown) {
 // The spreadsheet component takes the file's bytes; the fetch is ours so the
 // loading and failure states are ours too.
 async function loadSheet(path: string, current: () => boolean) {
+  const size = content.value?.size;
+  if (size !== undefined && size > MAX_SHEET_PREVIEW_BYTES) {
+    renderError.value = t("filePreview.tooLarge");
+    return;
+  }
+  const controller = new AbortController();
+  sheetController = controller;
   try {
-    const res = await fetch(fileDownloadURL(path), { headers: authHeaders() });
+    const res = await fetch(fileDownloadURL(path), { headers: authHeaders(), signal: controller.signal });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const bytes = await res.arrayBuffer();
     if (current()) sheetBytes.value = bytes;
   } catch (e) {
     if (current()) renderError.value = e instanceof Error ? e.message : String(e);
+  } finally {
+    if (sheetController === controller) sheetController = null;
   }
 }
 
@@ -566,10 +589,11 @@ async function discard() {
     </div>
 
     <p v-if="officeEditing && officeNotice" class="note office-notice" role="status">{{ officeNotice }}</p>
-    <OfficeEditor v-if="officeEditing && officeBinding" ref="officeEditor" :path="officeBinding.path" :conversation-id="officeBinding.conversationId" :current-conversation-id="sessionId || undefined" :office-session-id="officeBinding.id" :initial-open="officeClaim?.claim" :initial-instance-id="officeClaim?.instanceId" :immersive="immersive" @preview="showPreview" @closed="endOffice" @closed-previous="officeClosedPrevious" @saved="officeSaved" @status="officeStatus" @open-failed="officeOpenFailed" @view-saved="viewSavedOffice" @focus-existing="officeFocusExisting" @reference="emit('officeReference', $event)">
+    <OfficeEditor v-if="officeEditing && officeBinding" :key="`${officeBinding.path}:${officeBinding.mode}`" ref="officeEditor" :path="officeBinding.path" :conversation-id="officeBinding.conversationId" :current-conversation-id="sessionId || undefined" :office-session-id="officeBinding.id" :initial-open="officeClaim?.claim" :initial-instance-id="officeClaim?.instanceId" :immersive="immersive" :view-only="officeBinding.mode === 'view'" @preview="showPreview" @closed="endOffice" @closed-previous="officeClosedPrevious" @saved="officeSaved" @status="officeStatus" @open-failed="officeOpenFailed" @view-saved="viewSavedOffice" @focus-existing="officeFocusExisting" @reference="emit('officeReference', $event)">
       <template #document-details>
         <code class="office-detail-path">{{ displayPath }}</code>
         <div class="office-detail-actions">
+          <button v-if="officeBinding.mode === 'view'" type="button" class="ghost" @click="enableOfficeEdit"><el-icon><EditPen /></el-icon>{{ t('officeEditor.edit') }}</button>
           <button type="button" class="ghost" :title="t('filePreview.copyPath')" @click="copyPath"><el-icon><Check v-if="copied" /><CopyDocument v-else /></el-icon>{{ t('filePreview.copyPath') }}</button>
           <button type="button" class="ghost" :title="backClose ? t('common.close') : t('filePreview.back')" @click="back"><el-icon><Close v-if="backClose" /><ArrowLeft v-else /></el-icon>{{ backClose ? t('common.close') : t('filePreview.back') }}</button>
         </div>

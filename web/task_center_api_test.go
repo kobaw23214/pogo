@@ -25,8 +25,18 @@ import (
 // transitions directly, using the same durable store as the real runtime.
 func taskCenterTestQueue(t *testing.T, m *Manager) *taskqueue.Store {
 	t.Helper()
+	// NewServer starts a callback reader of this same runtime. Drain it before
+	// replacing the fixture's ledger, just as we drain its admission dispatcher.
+	// API tests below drive durable transitions directly, without callbacks.
+	m.mu.Lock()
+	stopCallbacks := m.workflowCallbackStop
+	m.mu.Unlock()
+	if stopCallbacks != nil {
+		stopCallbacks()
+	}
 	if m.taskRuns != nil {
 		m.taskRuns.stop()
+		<-m.taskRuns.done
 	}
 	r := newTaskRunRuntime(m)
 	db, err := taskqueue.Open(filepath.Join(t.TempDir(), "runs.db"))
@@ -436,11 +446,11 @@ func TestTaskCenterCancelledScheduleClearsOnlyCancellationErrorAttention(t *test
 	scheduleEnv(t)
 	h, _ := newStudioHarness(t, nil)
 	a := createStudioAgent(t, h, "Background Agent", "No model execution expected", "ready")
+	db := taskCenterTestQueue(t, h.mgr)
 	s, err := NewServer(h.mgr, ServerOptions{Token: "test-token"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	db := taskCenterTestQueue(t, h.mgr)
 	front := taskCenterTestFront(t, s)
 	for _, kind := range []string{"ordinary", "unavailable", "auto-paused", "expired", "human"} {
 		aid, wid := a.ID, ""
@@ -520,11 +530,11 @@ func TestTaskCenterCancelledSentinelRetriesOnlyItsInterruptedNativeBatch(t *test
 	h, capture := newSentinelHarness(t, nil)
 	sess := sentinelTestSession(t, h)
 	w := sentinelTestCreate(t, h, sess)
+	queue := taskCenterTestQueue(t, h.mgr)
 	s, err := NewServer(h.mgr, ServerOptions{Token: "test-token"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	queue := taskCenterTestQueue(t, h.mgr)
 	front := taskCenterTestFront(t, s)
 	native, err := h.mgr.sentinels.database(true)
 	if err != nil {

@@ -9,3 +9,7 @@ is `../../test/*.test.js`. Product recovery restarts the same Wayland runtime.
 
 W1 accepted Docker image and release evidence remain available independently;
 reverting a complete release is a deliberate transaction, not a second live path.
+
+The `history/` directory preserves the final W1 latency experiment documents from
+commit `62bc2eb5`, including the second density A/B round and its limitations.
+Those measurements apply to the retired implementation and are not W2 validation.

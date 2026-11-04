@@ -3,10 +3,13 @@ package wire_test
 import (
 	"encoding/json"
 	"errors"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -44,12 +47,13 @@ func TestEventPackageDoesNotImportWeb(t *testing.T) {
 // what an event means, so the literals are counted there and required to appear
 // only in this package.
 //
-// The scan is scoped to the packages that put these names on a wire — main
+// The scan covers constant definitions in the packages that put these names on a wire — main
 // (-mode json), web (SSE) and wire itself — rather than the whole tree. Other
 // packages have their own vocabularies that happen to reuse the words: the loop's
 // internal agent.EventKind, the provider format in llm, the transcript record
 // types in session. Policing those would make this test fail on unrelated code
-// and teach people to delete it.
+// and teach people to delete it. Runtime fields and local data may also share
+// these words: a workflow phase "thinking" is not an SSE event definition.
 func TestLoopEventNamesAreDefinedOnceInSerialisingPackages(t *testing.T) {
 	where := map[string][]string{}
 	for _, dir := range []string{"..", "../web", "."} {
@@ -67,18 +71,11 @@ func TestLoopEventNamesAreDefinedOnceInSerialisingPackages(t *testing.T) {
 			if err != nil {
 				t.Fatalf("read %s: %v", path, err)
 			}
-			for _, n := range loopNames {
-				// A definition, not any mention: `X = "token"` counts, while
-				// web/server.go's `given = r.URL.Query().Get("token")` does not.
-				// The property under test is "one definition", and a plain
-				// substring scan cannot tell an event name from a URL parameter
-				// that happens to share the word. The leading group keeps
-				// comparisons out too: `!= "message"` and `== "message"` are
-				// mentions of a value, not assignments of the name, and the
-				// transcript reader compares record types that merely share the
-				// word with a loop event.
-				if regexp.MustCompile(`(^|[^!=])=\s*"` + regexp.QuoteMeta(string(n)) + `"`).Match(b) {
-					where[string(n)] = append(where[string(n)], path)
+			for _, literal := range constantStringDefinitions(t, path, b) {
+				for _, n := range loopNames {
+					if literal == string(n) {
+						where[literal] = append(where[literal], path)
+					}
 				}
 			}
 		}
@@ -87,6 +84,59 @@ func TestLoopEventNamesAreDefinedOnceInSerialisingPackages(t *testing.T) {
 		files := where[string(n)]
 		if len(files) != 1 || filepath.Base(files[0]) != "wire.go" {
 			t.Errorf("event name %q appears as a literal in %v, want only wire/wire.go", n, files)
+		}
+	}
+}
+
+func constantStringDefinitions(t *testing.T, path string, source []byte) []string {
+	t.Helper()
+	file, err := parser.ParseFile(token.NewFileSet(), path, source, 0)
+	if err != nil {
+		t.Fatalf("parse %s: %v", path, err)
+	}
+	var definitions []string
+	ast.Inspect(file, func(node ast.Node) bool {
+		declaration, ok := node.(*ast.GenDecl)
+		if !ok || declaration.Tok != token.CONST {
+			return true
+		}
+		var previous []ast.Expr
+		for _, specification := range declaration.Specs {
+			value := specification.(*ast.ValueSpec)
+			if len(value.Values) > 0 {
+				previous = value.Values
+			}
+			for _, expression := range previous {
+				literal, ok := expression.(*ast.BasicLit)
+				if !ok || literal.Kind != token.STRING {
+					continue
+				}
+				if text, err := strconv.Unquote(literal.Value); err == nil {
+					definitions = append(definitions, text)
+				}
+			}
+		}
+		return false
+	})
+	return definitions
+}
+
+func TestEventDefinitionScanSeparatesConstantsFromBusinessValues(t *testing.T) {
+	source := []byte("package web\n" +
+		"const EvThinking EventType = \"thinking\"\n" +
+		"const (EvMessage = `message`; EvMessageCopy)\n" +
+		"var source = \"message\"\n" +
+		"func activity() { node.Phase = \"thinking\"; source := \"message\"; _ = source == \"message\" }\n" +
+		"type row struct { Message string `json:\"message\"` }\n" +
+		"// const NotAnEvent = \"tool_end\"\n")
+	got := constantStringDefinitions(t, "fixture.go", source)
+	want := []string{"thinking", "message", "message"}
+	if len(got) != len(want) {
+		t.Fatalf("definition scan = %q, want %q", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("definition scan = %q, want %q", got, want)
 		}
 	}
 }

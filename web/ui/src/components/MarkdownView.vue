@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, inject, ref } from "vue";
 import MarkdownIt from "markdown-it";
+import { ElImageViewer } from "element-plus";
 import "katex/dist/katex.min.css";
 import CiteCard from "./CiteCard.vue";
 import CodeBlock from "./CodeBlock.vue";
@@ -11,12 +12,13 @@ import { installMarkdownMath } from "./markdownMath";
 
 const DataTable = defineAsyncComponent(() => import("./DataTable.vue"));
 const MathBlock = defineAsyncComponent(() => import("./MathBlock.vue"));
+const HTMLArtifact = defineAsyncComponent(() => import("./HTMLArtifact.vue"));
 import { canonicalCiteLabel, planCitations, type CitePlanItem } from "@/agent/cite";
 import { citeIconSvg } from "@/agent/citeIcons";
 import { citePresentation } from "@/agent/citePresentation";
 import { useCitePopover } from "@/agent/useCitePopover";
 import { useInlineCiteFavicons } from "@/agent/useInlineCiteFavicons";
-import { installMarkdownFileLinks, workspaceFileRenderScope, workspaceFileTargetFromButtonData } from "@/agent/markdownFileLinks";
+import { installMarkdownFileLinks, workspaceFileRenderScope, workspaceFileTargetFromButtonData, workspaceMarkdownImageURL } from "@/agent/markdownFileLinks";
 import { workspaceFileNavigationKey } from "@/agent/workspaceFileNavigation";
 import { gt } from "@/i18n";
 import type { CiteSource } from "@/api/types";
@@ -35,7 +37,7 @@ import type { CiteSource } from "@/api/types";
 // slots stayed empty and the diagram was never visible in the document.
 interface Segment {
   id: string;
-  kind: "html" | "mermaid" | "echarts" | "math" | "table" | "code";
+  kind: "html" | "mermaid" | "echarts" | "math" | "table" | "html-preview" | "code";
   // Set for kind "html"; empty otherwise.
   html: string;
   // Set for the fence kinds; empty otherwise.
@@ -106,8 +108,14 @@ const defaultText = md.renderer.rules.text;
 const defaultImage = md.renderer.rules.image;
 md.renderer.rules.image = (tokens, idx, options, env, self) => {
   if (props.passive) return `<span class="markdown-image-alt">${esc(tokens[idx].content)}</span>`;
+  const source = String(tokens[idx].attrGet("src") ?? "");
+  const workspaceSource = workspaceMarkdownImageURL(source, fileScope());
+  if (workspaceSource) tokens[idx].attrSet("src", workspaceSource);
   tokens[idx].attrSet("loading", "lazy");
   tokens[idx].attrSet("decoding", "async");
+  tokens[idx].attrJoin("class", "markdown-image");
+  tokens[idx].attrSet("data-markdown-image-preview", "true");
+  tokens[idx].attrSet("tabindex", "0");
   return defaultImage ? defaultImage(tokens, idx, options, env, self) : self.renderToken(tokens, idx, options);
 };
 
@@ -216,6 +224,7 @@ md.renderer.rules.link_close = (tokens, idx, options, env, self) => {
 
 const fileNavigation = inject(workspaceFileNavigationKey, null);
 const markdownRoot = ref<HTMLElement | null>(null);
+const previewImage = ref("");
 function fileScope() {
   const element = markdownRoot.value;
   if (props.passive || !props.fileLinks || !element?.closest(".conv-inner") || element.closest(".subsheet, .share-page")) return null;
@@ -229,7 +238,23 @@ installMarkdownFileLinks(md, {
   cardAction: gt("workspaceFiles.openCard"),
 });
 
-function onWorkspaceFileClick(event: MouseEvent) {
+function previewMarkdownImage(target: EventTarget | null): boolean {
+  const image = (target as Element | null)?.closest?.("img[data-markdown-image-preview]");
+  if (!(image instanceof HTMLImageElement) || image.closest("a, button") || !markdownRoot.value?.contains(image)) return false;
+  const source = image.getAttribute("src");
+  if (!source) return false;
+  previewImage.value = source;
+  return true;
+}
+function onMarkdownImageKeydown(event: KeyboardEvent) {
+  if (event.key !== "Enter" && event.key !== " ") return;
+  if (previewMarkdownImage(event.target)) event.preventDefault();
+}
+function onMarkdownClick(event: MouseEvent) {
+  if (previewMarkdownImage(event.target)) {
+    event.preventDefault();
+    return;
+  }
   if (props.documentLinks) {
     const link = (event.target as Element | null)?.closest?.("button[data-document-href]");
     if (link instanceof HTMLButtonElement && markdownRoot.value?.contains(link)) {
@@ -322,6 +347,7 @@ const segments = computed<Segment[]>(() => {
       else if (lang === "echarts") kind = "echarts";
       else if (lang === "math") kind = "math";
       else if (lang === "csv" || lang === "table" || lang === "json-table") kind = "table";
+      else if (lang === "html-preview") kind = "html-preview";
     }
     out.push({
       id: `s${out.length}`,
@@ -349,7 +375,7 @@ useInlineCiteFavicons(markdownRoot, () => props.passive ? undefined : props.sour
 </script>
 
 <template>
-  <div :ref="bindMarkdownRoot" class="markdown-view" @click="onWorkspaceFileClick">
+  <div :ref="bindMarkdownRoot" class="markdown-view" @click="onMarkdownClick" @keydown="onMarkdownImageKeydown">
     <template v-for="segment in segments" :key="segment.id">
       <!-- html:false escapes source HTML; fences never reach this branch. -->
       <div v-if="segment.kind === 'html'" class="markdown-content" v-html="segment.html" />
@@ -397,6 +423,19 @@ useInlineCiteFavicons(markdownRoot, () => props.passive ? undefined : props.sour
         :format="segment.lang === 'csv' ? 'csv' : 'json'"
       />
       <CodeBlock
+        v-else-if="segment.kind === 'html-preview' && streaming"
+        class="block"
+        :code="segment.source"
+        lang="json"
+        :collapsed-height="420"
+      />
+      <HTMLArtifact
+        v-else-if="segment.kind === 'html-preview'"
+        class="block"
+        :source="segment.source"
+        :scope="fileScope()"
+      />
+      <CodeBlock
         v-else
         class="block"
         :code="segment.source"
@@ -425,6 +464,14 @@ useInlineCiteFavicons(markdownRoot, () => props.passive ? undefined : props.sour
       @locate="onLocate"
       @open-file="onOpenFile"
       @resize="positionCard"
+    />
+    <ElImageViewer
+      v-if="previewImage"
+      :url-list="[previewImage]"
+      :infinite="false"
+      hide-on-click-modal
+      teleported
+      @close="previewImage = ''"
     />
   </div>
 </template>
@@ -513,6 +560,14 @@ useInlineCiteFavicons(markdownRoot, () => props.passive ? undefined : props.sour
 :deep(.workspace-file-card-action) { flex: 0 0 auto; margin-left: auto; color: var(--el-color-primary); font-size: 12px; white-space: nowrap; }
 
 :deep(.markdown-content) {
+  .markdown-image {
+    max-width: 100%;
+    max-height: 560px;
+    object-fit: contain;
+    border-radius: 8px;
+    cursor: zoom-in;
+    &:focus-visible { outline: 2px solid var(--el-color-primary); outline-offset: 2px; }
+  }
   h1, h2, h3, h4, h5, h6 { scroll-margin-top: 24px; }
   .heading-anchor {
     margin-left: 0.45em;

@@ -1,0 +1,1 @@
+import{d as e,f as t,m as n}from"./get-z12M7s8T.js";function r(e,t,r){t==`__proto__`&&n?n(e,t,{configurable:!0,enumerable:!0,value:r,writable:!0}):e[t]=r}var i=Object.prototype.hasOwnProperty;function a(e,n,a){var o=e[n];(!(i.call(e,n)&&t(o,a))||a===void 0&&!(n in e))&&r(e,n,a)}var o=e(Object.getPrototypeOf,Object);export{a as n,r,o as t};

@@ -12,7 +12,7 @@ import { announce } from "@/agent/announcer";
 import { trackWorklog, worklogExpandAll, worklogRevealId, worklogRevealRow } from "@/agent/worklogPrefs";
 import type { Exchange } from "@/agent/exchanges";
 import type { Live } from "@/api/types";
-import type { OpenSheetRequest } from "./dockSheets";
+import type { OpenFileTarget, OpenSheetRequest } from "./dockSheets";
 
 const props = defineProps<{
   exchange: Exchange;
@@ -30,7 +30,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   suggest: [string];
   decide: [{ gateId: string; allow: boolean; args?: unknown; remember?: "tool" | "command" }];
-  freeze: [string]; thaw: [string]; "open-sheet": [OpenSheetRequest]; "open-file": [{ path: string; name: string }];
+  freeze: [string]; thaw: [string]; "open-sheet": [OpenSheetRequest]; "open-file": [OpenFileTarget];
 }>();
 const { t } = useI18n();
 const disclosure = useCardDisclosureState();
@@ -111,7 +111,7 @@ onMounted(() => trackWorklog("worklog.shown"));
     <!-- The same ActivityList stays mounted while live data settles. It folds
          completed process rows while retaining the conclusion and live work. -->
     <div ref="body" :id="bodyId" class="activity-content">
-      <ActivityList :exchange="exchange" :run-active="runActive" :work-folded="!open" :reveal-id="bodyId" :skills="skills" :cwd="cwd" :todo-pinned="todoPinned" :server-offset="serverOffset"
+      <ActivityList :exchange="exchange" :run-active="runActive" :work-folded="!open" :reveal-id="bodyId" :skills="skills" :cwd="cwd" :todo-pinned="todoPinned" :server-offset="serverOffset" plain-turns
         @suggest="emit('suggest', $event)" @decide="emit('decide', $event)" @freeze="emit('freeze', $event)" @thaw="emit('thaw', $event)" @open-sheet="emit('open-sheet', $event)" @open-file="emit('open-file', $event)" />
     </div>
   </div>

@@ -718,6 +718,16 @@ export function targetOf(name: ToolName, args: unknown): string {
   if (shortcutName !== name) return `${name}:${shortcutName}:${targetOf(shortcutName, args)}`;
   const a = (args ?? {}) as Record<string, unknown>;
   if (name === "bash") return String(a.command ?? "");
+  if (name === "browser" && a.action === "open_pages") {
+    return JSON.stringify([a.action, Array.isArray(a.urls) ? a.urls.filter(url => typeof url === "string").slice(0, 8) : []]);
+  }
+  if (name === "browser" && a.action === "observe_pages") {
+    const pages = Array.isArray(a.pages) ? a.pages.slice(0, 8).map(page => {
+      const bound = page && typeof page === "object" && !Array.isArray(page) ? page as Record<string, unknown> : {};
+      return [bound.context_ref ?? "", bound.tab_id ?? "", bound.control_epoch ?? ""];
+    }) : [];
+    return JSON.stringify([a.action, pages, a.full === true]);
+  }
   if (name.startsWith("agent_workflow_")) return JSON.stringify([a.workflow_id || "", a.run_id || "", a.action || "", a.expected_revision || "", a.request_id || ""]);
   if (name.startsWith("workflow_")) return JSON.stringify([a.workflow_id || "", a.action || "", a.expected_revision || "", a.request_id || ""]);
   if (name === "background_task") return JSON.stringify([a.source || "", a.action || "", a.task_id || a.script_path || a.title || ""]);
@@ -751,6 +761,13 @@ export function summarizeArgs(name: ToolName, args: unknown): string {
   if (shortcutName !== name) return summarizeArgs(shortcutName, args);
   const a = (args ?? {}) as Record<string, unknown>;
   if (name === "bash") return String(a.command ?? "");
+  if (name === "analyze_image") return String(a.image || "latest");
+  if (name === "browser" && (a.action === "open_pages" || a.action === "observe_pages")) {
+    const items = a.action === "open_pages" ? a.urls : a.pages;
+    const action = a.action === "open_pages" ? "browserOpenPages" : "browserObservePages";
+    return Array.isArray(items) && items.length >= 1 && items.length <= 8
+      ? gt(`timeline.${action}`, { n: items.length }) : gt(`timeline.${action}Pending`);
+  }
   if (name.startsWith("agent_workflow_")) return [a.name, a.workflow_id, a.run_id, a.action].filter(Boolean).map(String).join(" · ");
   if (name.startsWith("workflow_")) return [a.name, a.workflow_id, a.query].filter(Boolean).map(String).join(" · ");
   if (name === "background_task") {
@@ -1225,11 +1242,45 @@ export function matchSkillRead(
   skills: { name: string; path: string }[],
   cwd: string,
 ): string | null {
+  const read = skillRead(name, args, skills, cwd);
+  return read && normalizePath(read.skill.path) === read.target ? read.skill.name : null;
+}
+
+// The catalog identifies an authorized package; the content endpoint rechecks
+// both its session selection and the package-relative path before reading it.
+export function matchSkillFile(
+  name: ToolName,
+  args: unknown,
+  skills: { name: string; path: string }[],
+  cwd: string,
+): { skill: string; skillPath: string } | null {
+  const read = skillRead(name, args, skills, cwd);
+  if (!read) return null;
+  const rootDocument = normalizePath(read.skill.path);
+  if (rootDocument === read.target) return { skill: read.skill.name, skillPath: "SKILL.md" };
+  const root = rootDocument.slice(0, rootDocument.lastIndexOf("/")) || "/";
+  const prefix = root === "/" ? root : `${root}/`;
+  if (!read.target.startsWith(prefix)) return null;
+  return { skill: read.skill.name, skillPath: read.target.slice(prefix.length) };
+}
+
+function skillRead(
+  name: ToolName,
+  args: unknown,
+  skills: { name: string; path: string }[],
+  cwd: string,
+): { skill: { name: string; path: string }; target: string } | null {
   if (name !== "read" || skills.length === 0) return null;
   const raw = (args as { path?: unknown } | null)?.path;
   if (typeof raw !== "string" || raw === "") return null;
   const target = normalizePath(raw.startsWith("/") ? raw : `${cwd}/${raw}`);
-  return skills.find((s) => normalizePath(s.path) === target)?.name ?? null;
+  const matches = skills.filter(skill => {
+    const document = normalizePath(skill.path);
+    const root = document.slice(0, document.lastIndexOf("/")) || "/";
+    return target === document || target.startsWith(root === "/" ? root : `${root}/`);
+  });
+  const skill = matches.sort((a, b) => b.path.length - a.path.length)[0];
+  return skill ? { skill, target } : null;
 }
 
 // normalizePath resolves . and .. textually. Enough for comparing two paths the

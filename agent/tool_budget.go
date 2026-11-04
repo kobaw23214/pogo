@@ -167,7 +167,11 @@ func (a *Agent) cacheToolResults(ctx context.Context, calls, results []llm.Block
 		a.toolResultViews = make(map[toolResultPosition]cachedToolResultView)
 	}
 	costs, failures := make([]int64, len(results)), make([]bool, len(results))
+	whole := make([]bool, len(results))
 	for i, result := range results {
+		if i < len(calls) {
+			whole[i] = a.skillInstructions(calls[i], result)
+		}
 		position := toolResultPosition{messageIndex, positions[i]}
 		if _, cached := a.resultViewAt(position, result); !cached && a.registry != nil && result.ResultID != "" && i < len(calls) {
 			prefix, body := toolCitationPrefix(result)
@@ -188,7 +192,7 @@ func (a *Agent) cacheToolResults(ctx context.Context, calls, results []llm.Block
 			costs[i] = estimatedToolText(cached.text)
 		}
 	}
-	plan := planToolResultBudget(a.toolOutputBudget, max(int64(0), priorTokens), costs, failures)
+	plan := planToolResultBudgetWhole(a.toolOutputBudget, max(int64(0), priorTokens), costs, failures, whole)
 	if priorTokens >= 0 {
 		a.lastToolBudgetPlan = plan
 		a.lastToolBudgetMessage = messageIndex
@@ -269,6 +273,20 @@ func (a *Agent) cacheToolResults(ctx context.Context, calls, results []llm.Block
 		observe(delivery, deliveryBudget)
 		a.rememberBudgetResult(view.ResultID, result)
 	}
+}
+
+// skillInstructions reports a successful read of exactly one registered Skill's
+// SKILL.md. The model loads one to follow it word for word, so the batch budget
+// delivers it whole (planToolResultBudgetWhole) instead of as a preview. The
+// registry answers with the read tool's own resolution and the loader-registered
+// identity — the evidence compaction uses to restore a loaded Skill — so a
+// same-named copy, a multi-file read or a failed read is budgeted as usual.
+func (a *Agent) skillInstructions(call, result llm.Block) bool {
+	if a.registry == nil || result.IsError || call.Name != "read" {
+		return false
+	}
+	_, ok := a.registry.SkillDocumentReadAlone(call.Input)
+	return ok
 }
 
 func copyInitialResultDelivery(rule *tools.ResultDeliveryRule) *tools.ResultDeliveryRule {

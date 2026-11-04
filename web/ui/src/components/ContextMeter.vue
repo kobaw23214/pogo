@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from "vue";
+import { computed, reactive, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { ArrowRight } from "@element-plus/icons-vue";
 import { chooseLever, contextLevel, createContextEstimator } from "@/agent/contextEstimate";
-import { createContextUsageReader } from "@/agent/contextUsage";
-import type { Message, OverheadPart, ToolResult, Usage } from "@/api/types";
+import { createContextUsageReader, projectContextMessages } from "@/agent/contextUsage";
+import { compactionReduction } from "@/agent/compactionPresentation";
+import type { CompactionView, ContextMessage, Message, OverheadPart, ToolResult, Usage } from "@/api/types";
+import { normalizeMessageContent } from "@/api/messageContent";
 
 // Three layers now. The button answers "how much runway is left" at a glance; the
 // popover answers "what is eating it"; and the footer answers "so what do I do",
@@ -16,8 +18,8 @@ import type { Message, OverheadPart, ToolResult, Usage } from "@/api/types";
 // little. Conversation text is the shape nothing handles by itself, and the one
 // compaction exists for. Same numbers, opposite advice — see `lever`.
 //
-// The absolute number is always the server's measured prompt size; character
-// estimates only split it up.
+// The absolute number is the server's measured or estimated prompt size;
+// character estimates only split it up.
 const props = defineProps<{
   /** used is the latest turn's prompt size, not the session total. */
   used: number;
@@ -31,6 +33,9 @@ const props = defineProps<{
   overheadBreakdown?: OverheadPart[];
   messages: Message[];
   results: Record<string, ToolResult>;
+  /** Compacted model-facing history; undefined for an ordinary session. */
+  contextMessages?: ContextMessage[];
+  latestCompaction?: CompactionView | null;
   /**
    * clearTrigger is the prompt size at which the server starts dropping old tool
    * results, 0 when clearing is off. The warning bands are measured against it — see
@@ -61,18 +66,26 @@ const estimator = createContextEstimator();
 const readContextUsage = createContextUsageReader();
 const reading = computed(() => readContextUsage(props));
 
+type CategoryKey = "overhead" | "user" | "assistant" | "tools";
 interface Item {
+  id: string;
   name: string;
   tokens: number;
+  detail?: string;
+  overheadKind?: OverheadPart["kind"];
+  count?: number;
+  callId?: string;
+  isError?: boolean;
 }
 interface Cat {
-  key: string;
+  key: CategoryKey;
   label: string;
   color: string;
   tokens: number;
   note?: string;
   items?: Item[];
   moreCount?: number;
+  limit?: number;
 }
 
 // Four categories, four skin tokens rather than four literals: the meter is
@@ -90,9 +103,12 @@ function preview(text: string): string {
   return oneLine.length > 40 ? oneLine.slice(0, 40) + "…" : oneLine;
 }
 
-function top5(items: Item[]): { items: Item[]; more: number } {
-  items.sort((a, b) => b.tokens - a.tokens);
-  return { items: items.slice(0, 5), more: Math.max(0, items.length - 5) };
+function messageDetail(message: Message): string {
+  return normalizeMessageContent(message.content).flatMap(block => {
+    if (block.type === "text") return [block.text];
+    if (block.type === "tool_use") return [`${block.name}\n${JSON.stringify(block.input ?? null, null, 2)}`];
+    return [];
+  }).join("\n\n");
 }
 
 // The overhead's own items come from the server, which measured them; only the
@@ -116,12 +132,19 @@ function overheadLabel(p: OverheadPart): string {
 // More rows than the conversation categories get: the point of this list is
 // finding the one part that grew, and it is rarely in the top five alone.
 const OVERHEAD_ITEMS = 8;
+const CONVERSATION_ITEMS = 5;
 
 const overheadItems = computed<{ items?: Item[]; moreCount?: number }>(() => {
   const parts = (props.overheadBreakdown ?? []).filter((p) => p.tokens > 0);
   if (!parts.length) return {};
-  const items = parts.map((p) => ({ name: overheadLabel(p), tokens: p.tokens })).sort((a, b) => b.tokens - a.tokens);
-  return { items: items.slice(0, OVERHEAD_ITEMS), moreCount: Math.max(0, items.length - OVERHEAD_ITEMS) };
+  const items: Item[] = parts.map(p => ({
+    id: `${p.kind}:${p.name}`,
+    name: overheadLabel(p),
+    tokens: p.tokens,
+    overheadKind: p.kind,
+    count: p.count,
+  })).sort((a, b) => b.tokens - a.tokens);
+  return { items, moreCount: Math.max(0, items.length - OVERHEAD_ITEMS) };
 });
 
 // Raw character estimates per category. Thinking blocks are excluded on
@@ -133,11 +156,14 @@ const raw = computed(() => {
   const userItems: Item[] = [];
   const asstItems: Item[] = [];
   const toolItems: Item[] = [];
+  const projected = projectContextMessages(props.contextMessages);
+  const messages = projected?.messages ?? props.messages;
+  const results = projected?.results ?? Object.values(props.results);
 
-  for (const m of props.messages) {
+  for (const m of messages) {
     const { tokens, first } = estimator.ofMessage(m);
     if (!tokens) continue;
-    const item: Item = { name: preview(first) || t("contextMeter.toolCallFallback"), tokens };
+    const item: Item = { id: m.id, name: preview(first) || t("contextMeter.toolCallFallback"), tokens, detail: messageDetail(m) };
     if (m.role === "user") {
       user += tokens;
       userItems.push(item);
@@ -147,11 +173,11 @@ const raw = computed(() => {
     }
   }
 
-  for (const r of Object.values(props.results)) {
+  for (const r of results) {
     const tokens = estimator.ofResult(r);
     if (!tokens) continue;
     tools += tokens;
-    toolItems.push({ name: r.name ?? "tool", tokens });
+    toolItems.push({ id: r.call_id, name: r.name ?? "tool", tokens, detail: r.text ?? "", callId: r.call_id, isError: r.is_error });
   }
 
   return { user, assistant, tools, userItems, asstItems, toolItems };
@@ -176,6 +202,7 @@ const cats = computed<Cat[]>(() => {
       color: COLORS.overhead,
       tokens: overhead,
       note: t("contextMeter.overheadNote"),
+      limit: OVERHEAD_ITEMS,
       ...overheadItems.value,
     },
     {
@@ -204,8 +231,8 @@ const cats = computed<Cat[]>(() => {
 
 function itemsOf(items: Item[]): { items?: Item[]; moreCount?: number } {
   if (!items.length) return {};
-  const { items: top, more } = top5(items);
-  return { items: top, moreCount: more };
+  const sorted = [...items].sort((a, b) => b.tokens - a.tokens);
+  return { items: sorted, moreCount: Math.max(0, sorted.length - CONVERSATION_ITEMS) };
 }
 
 const total = computed(() => reading.value.used);
@@ -271,9 +298,18 @@ const lever = computed(() => {
 // An empty session has nothing a summary could replace: the button says so
 // instead of offering a no-op that would still spend a model call.
 const empty = computed(() => props.messages.length === 0);
+const compactionStatus = computed(() => {
+  const compaction = props.latestCompaction;
+  if (!compaction) return null;
+  const current = compaction.after >= props.messages.length;
+  const reduction = compactionReduction(compaction.before_tokens, compaction.after_tokens);
+  const key = reduction === null ? "statusSummary" : current ? "statusCurrent" : "statusPrevious";
+  return { current, text: t(`contextMeter.compact.${key}`, { n: compaction.before, pct: reduction ?? 0 }) };
+});
+const alreadyCompacted = computed(() => compactionStatus.value?.current === true && props.contextMessages?.length === 1);
 
 function askCompact() {
-  if (props.disabled || props.compacting || empty.value) return;
+  if (props.disabled || props.compacting || empty.value || alreadyCompacted.value) return;
   open.value = false;
   emit("compact");
 }
@@ -293,10 +329,32 @@ const freeW = computed(() =>
   props.window && free.value !== null ? Math.max((free.value / props.window) * 100, 0) : 0,
 );
 
-function toggle(key: string, hasItems: boolean) {
+const showAll = reactive(new Set<string>());
+const selected = ref<{ category: CategoryKey; id: string } | null>(null);
+
+function toggle(key: CategoryKey, hasItems: boolean) {
   if (!hasItems) return;
-  if (expanded.has(key)) expanded.delete(key);
-  else expanded.add(key);
+  if (expanded.has(key)) {
+    expanded.delete(key);
+    if (selected.value?.category === key) selected.value = null;
+  } else expanded.add(key);
+}
+
+function visibleItems(cat: Cat): Item[] {
+  const items = cat.items ?? [];
+  return showAll.has(cat.key) ? items : items.slice(0, cat.limit ?? CONVERSATION_ITEMS);
+}
+
+function toggleMore(key: CategoryKey) {
+  if (showAll.has(key)) showAll.delete(key);
+  else showAll.add(key);
+  if (selected.value?.category === key) selected.value = null;
+}
+
+function toggleDetail(cat: Cat, item: Item) {
+  selected.value = selected.value?.category === cat.key && selected.value.id === item.id
+    ? null
+    : { category: cat.key, id: item.id };
 }
 
 const pctOf = (tokens: number) => {
@@ -311,6 +369,82 @@ const short = (n: number) => {
   if (n >= 1000) return `${(n / 1000).toFixed(n >= 100_000 ? 0 : 1)}K`;
   return String(Math.round(n));
 };
+
+interface DetailView {
+  category: CategoryKey;
+  id: string;
+  kind: string;
+  body: string;
+  facts: string[];
+  content?: string;
+  contentLabel?: string;
+  isError?: boolean;
+}
+
+const selectedDetail = computed<DetailView | null>(() => {
+  if (!selected.value) return null;
+  const cat = cats.value.find(c => c.key === selected.value?.category);
+  const item = cat?.items?.find(it => it.id === selected.value?.id);
+  if (!cat || !item) return null;
+  const detail: DetailView = {
+    category: cat.key,
+    id: item.id,
+    kind: "",
+    body: "",
+    facts: [t("contextMeter.details.windowShare", { pct: pctOf(item.tokens) })],
+    isError: item.isError,
+  };
+  if (cat.key === "overhead") {
+    detail.facts.push(t("contextMeter.details.everyRequest"));
+    if ((item.count ?? 0) > 1) detail.facts.push(t("contextMeter.details.declarationCount", { n: item.count }));
+    switch (item.overheadKind) {
+      case "prompt":
+        detail.kind = t("contextMeter.details.promptPart");
+        detail.body = t("contextMeter.details.promptBody");
+        break;
+      case "skill_tools":
+        detail.kind = t("contextMeter.details.skillDefinitions");
+        detail.body = t("contextMeter.details.skillBody", { n: item.count ?? 0 });
+        break;
+      case "mcp":
+        detail.kind = t("contextMeter.details.mcpDefinitions");
+        detail.body = t("contextMeter.details.mcpBody", { n: item.count ?? 0 });
+        break;
+      default:
+        detail.kind = t("contextMeter.details.toolDefinition");
+        detail.body = t("contextMeter.details.toolBody", { name: item.name });
+    }
+    return detail;
+  }
+  detail.facts.push(t("contextMeter.details.inPrompt"));
+  const text = item.detail?.trim() ?? "";
+  detail.content = text || t("contextMeter.details.emptyContent");
+  if (cat.key === "tools") {
+    detail.kind = t("contextMeter.details.toolResult");
+    detail.body = t("contextMeter.details.resultBody");
+    detail.contentLabel = t("contextMeter.details.resultContent");
+    if (item.callId) detail.facts.push(`ID ${item.callId}`);
+    if (item.isError) detail.facts.push(t("contextMeter.details.failedCall"));
+  } else {
+    detail.kind = t(cat.key === "user" ? "contextMeter.details.userMessage" : "contextMeter.details.assistantMessage");
+    detail.body = t(cat.key === "user" ? "contextMeter.details.userBody" : "contextMeter.details.assistantBody");
+    detail.contentLabel = t("contextMeter.details.messageContent");
+  }
+  return detail;
+});
+
+const DETAIL_PAGE_SIZE = 4000;
+const detailLimit = ref(DETAIL_PAGE_SIZE);
+watch(selected, () => { detailLimit.value = DETAIL_PAGE_SIZE; });
+const visibleDetailContent = computed(() => selectedDetail.value?.content?.slice(0, detailLimit.value) ?? "");
+const detailHasMore = computed(() => (selectedDetail.value?.content?.length ?? 0) > detailLimit.value);
+function appendDetailPage() {
+  if (detailHasMore.value) detailLimit.value += DETAIL_PAGE_SIZE;
+}
+function onDetailScroll(event: Event) {
+  const el = event.currentTarget as HTMLElement;
+  if (el.scrollHeight - el.scrollTop - el.clientHeight <= 32) appendDetailPage();
+}
 </script>
 
 <template>
@@ -319,7 +453,7 @@ const short = (n: number) => {
     v-model:visible="open"
     placement="top-start"
     trigger="click"
-    :width="340"
+    :width="580"
     teleported
     :popper-options="{ modifiers: [{ name: 'preventOverflow', options: { altAxis: true, tether: false, padding: 12 } }] }"
     popper-class="ctx-pop"
@@ -346,6 +480,10 @@ const short = (n: number) => {
     </template>
 
     <div class="ctx-pop-content">
+      <div class="panel-heading">
+        <span class="panel-title">{{ t("contextMeter.title") }}</span>
+        <span class="panel-hint">{{ t("contextMeter.interactionHint") }}</span>
+      </div>
       <div class="head">
         <span class="big">{{ reading.source === 'unknown' ? '—' : usagePrefix + short(total) }}</span>
         <span class="dim">/ {{ short(window) }}</span>
@@ -371,9 +509,11 @@ const short = (n: number) => {
 
       <div class="rows">
         <template v-for="c in cats" :key="c.key">
-          <div
+          <button
+            type="button"
             class="row"
             :class="{ clickable: c.items?.length }"
+            :aria-expanded="c.items?.length ? expanded.has(c.key) : undefined"
             @click="toggle(c.key, !!c.items?.length)"
           >
             <span class="dot" :style="{ background: c.color }" />
@@ -382,14 +522,42 @@ const short = (n: number) => {
             <el-icon v-if="c.items?.length" class="chev" :class="{ down: expanded.has(c.key) }">
               <ArrowRight />
             </el-icon>
-          </div>
+          </button>
           <div v-if="c.note" class="note">{{ c.note }}</div>
           <div v-if="c.items?.length && expanded.has(c.key)" class="items">
-            <div v-for="(it, i) in c.items" :key="i" class="item">
-              <span class="iname" :title="it.name">{{ it.name }}</span>
-              <span class="itok">~{{ short(it.tokens) }}</span>
-            </div>
-            <div v-if="c.moreCount" class="more">{{ t("contextMeter.moreItems", { n: c.moreCount }) }}</div>
+            <template v-for="it in visibleItems(c)" :key="it.id">
+              <button
+                type="button"
+                class="item"
+                :class="{ selected: selectedDetail?.category === c.key && selectedDetail.id === it.id }"
+                :aria-expanded="selectedDetail?.category === c.key && selectedDetail.id === it.id"
+                @click="toggleDetail(c, it)"
+              >
+                <span class="iname" :title="it.name">{{ it.name }}</span>
+                <span class="itok">~{{ short(it.tokens) }}</span>
+                <el-icon class="item-chev"><ArrowRight /></el-icon>
+              </button>
+              <div v-if="selectedDetail?.category === c.key && selectedDetail.id === it.id" class="item-detail">
+                <div class="detail-head">
+                  <span class="detail-kind">{{ selectedDetail.kind }}</span>
+                  <button type="button" class="detail-close" :aria-label="t('contextMeter.details.close')" @click="selected = null">×</button>
+                </div>
+                <div class="detail-title" :title="it.name">{{ it.name }}</div>
+                <p class="detail-body">{{ selectedDetail.body }}</p>
+                <div class="detail-facts">
+                  <span v-for="fact in selectedDetail.facts" :key="fact">{{ fact }}</span>
+                </div>
+                <template v-if="selectedDetail.contentLabel">
+                  <div class="detail-content-label">{{ selectedDetail.contentLabel }}</div>
+                  <pre class="detail-content" :class="{ error: selectedDetail.isError }" @scroll.passive="onDetailScroll">{{ visibleDetailContent }}</pre>
+                  <button v-if="detailHasMore" type="button" class="detail-load-more" @click="appendDetailPage">{{ t("contextMeter.details.loadMore") }}</button>
+                </template>
+              </div>
+            </template>
+            <button v-if="c.moreCount" type="button" class="more" :aria-expanded="showAll.has(c.key)" @click="toggleMore(c.key)">
+              {{ showAll.has(c.key) ? t("contextMeter.lessItems") : t("contextMeter.moreItems", { n: c.moreCount }) }}
+              <el-icon class="chev" :class="{ down: showAll.has(c.key) }"><ArrowRight /></el-icon>
+            </button>
           </div>
         </template>
         <div class="row">
@@ -400,9 +568,14 @@ const short = (n: number) => {
       </div>
 
       <div class="act">
+        <div v-if="compactionStatus" class="compaction-status" data-testid="context-compaction-status">
+          <span class="status-mark" aria-hidden="true" />
+          <span>{{ compactionStatus.text }}</span>
+        </div>
         <!-- The advice comes before the button, because which lever to pull is the
              question and the button is only one of the two answers. -->
-        <p v-if="lever" class="advice" :class="lever.kind">
+        <p v-if="compactionStatus?.current" class="advice compacted">{{ t("contextMeter.compact.currentAdvice") }}</p>
+        <p v-else-if="lever" class="advice" :class="lever.kind">
           <template v-if="lever.kind === 'tools'">
             {{ t("contextMeter.advice.pre") }}<strong>{{ t("contextMeter.advice.toolWord") }}</strong>{{ t("contextMeter.advice.toolsPost", { share: lever.share }) }}
           </template>
@@ -412,14 +585,16 @@ const short = (n: number) => {
         </p>
         <button
           class="compact-btn"
-          :class="{ suggested: !empty && lever?.kind === 'conversation' }"
-          :disabled="disabled || compacting || empty"
+          :class="{ suggested: !empty && !compactionStatus?.current && lever?.kind === 'conversation' }"
+          :disabled="disabled || compacting || empty || alreadyCompacted"
           :title="
             disabled
               ? t('contextMeter.compact.disabledTitle')
               : empty
                 ? t('contextMeter.compact.emptyTitle')
-                : t('contextMeter.compact.title')
+                : alreadyCompacted
+                  ? t('contextMeter.compact.doneTitle')
+                  : t('contextMeter.compact.title')
           "
           @click="askCompact"
         >
@@ -428,7 +603,11 @@ const short = (n: number) => {
               ? t("contextMeter.compact.compacting")
               : empty
                 ? t("contextMeter.compact.emptyLabel")
-                : t("contextMeter.compact.label")
+                : alreadyCompacted
+                  ? t("contextMeter.compact.doneLabel")
+                  : compactionStatus?.current
+                    ? t("contextMeter.compact.again")
+                    : t("contextMeter.compact.label")
           }}
         </button>
       </div>
@@ -535,28 +714,33 @@ const short = (n: number) => {
 
 /* The menu lives outside the composer's clipped scrolling container. */
 :global(.ctx-pop) {
-  padding: 12px !important;
-  border-radius: 10px !important;
+  padding: 16px !important;
+  border-radius: 14px !important;
   max-width: calc(100vw - 24px);
   box-sizing: border-box;
 }
 
 .ctx-pop-content {
-  max-height: calc(100dvh - 48px);
+  max-height: min(720px, calc(100dvh - 48px));
   overflow-y: auto;
+  scrollbar-gutter: stable;
 }
+.panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 10px; }
+.panel-title { color: var(--el-text-color-primary); font-size: 13px; font-weight: 600; }
+.panel-hint { color: var(--el-text-color-placeholder); font-size: 11px; text-align: right; }
 .reading-source { margin: -2px 0 10px; color: var(--el-text-color-secondary); font-size: 11px; line-height: 1.5; }
 
 .head {
   display: flex;
   align-items: baseline;
-  gap: 4px;
-  margin-bottom: 8px;
+  gap: 5px;
+  margin-bottom: 6px;
 
   .big {
-    font-size: 18px;
+    font-size: 22px;
     font-weight: 700;
     font-variant-numeric: tabular-nums;
+    letter-spacing: -.02em;
   }
 
   .dim {
@@ -568,7 +752,7 @@ const short = (n: number) => {
   .pct-tag {
     margin-left: auto;
     font-size: 11px;
-    padding: 1px 7px;
+    padding: 2px 8px;
     border-radius: 9px;
     background: color-mix(in srgb, var(--el-color-success) 12%, transparent);
     color: var(--el-color-success);
@@ -587,11 +771,11 @@ const short = (n: number) => {
 
 .stack {
   display: flex;
-  height: 10px;
-  border-radius: 5px;
+  height: 12px;
+  border-radius: 6px;
   overflow: hidden;
   background: var(--el-fill-color-light);
-  margin-bottom: 10px;
+  margin: 12px 0 14px;
 
   .seg {
     height: 100%;
@@ -609,22 +793,33 @@ const short = (n: number) => {
 .rows {
   display: flex;
   flex-direction: column;
+  gap: 3px;
 }
 
 .row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 5px 6px;
-  border-radius: 5px;
+  gap: 9px;
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
   font-size: 12px;
+  text-align: left;
 
   &.clickable {
     cursor: pointer;
 
-    &:hover {
+    &:hover, &[aria-expanded="true"] {
       background: var(--el-fill-color-light);
     }
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--el-color-primary);
+    outline-offset: 1px;
   }
 
   .dot {
@@ -641,6 +836,7 @@ const short = (n: number) => {
 
   .name {
     color: var(--el-text-color-primary);
+    font-weight: 500;
   }
 
   .val {
@@ -651,7 +847,7 @@ const short = (n: number) => {
     em {
       font-style: normal;
       color: var(--el-text-color-secondary);
-      margin-left: 4px;
+      margin-left: 5px;
     }
   }
 
@@ -667,20 +863,42 @@ const short = (n: number) => {
 }
 
 .note {
-  padding: 0 6px 4px 22px;
+  padding: 0 10px 6px 30px;
   font-size: 11px;
+  line-height: 1.5;
   color: var(--el-text-color-secondary);
 }
 
 .items {
-  padding: 0 6px 4px 22px;
+  margin: 0 0 7px 14px;
+  padding: 4px 0 4px 14px;
+  border-left: 1px solid var(--el-border-color-lighter);
 
   .item {
     display: flex;
-    align-items: baseline;
+    align-items: center;
     gap: 8px;
-    padding: 2px 0;
-    font-size: 11px;
+    width: 100%;
+    padding: 7px 8px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    font-size: 12px;
+    text-align: left;
+    cursor: pointer;
+
+    &:hover, &.selected {
+      background: var(--el-fill-color-light);
+    }
+
+    &.selected .iname {
+      color: var(--el-color-primary);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--el-color-primary);
+      outline-offset: 1px;
+    }
   }
 
   .iname {
@@ -698,17 +916,98 @@ const short = (n: number) => {
     color: var(--el-text-color-secondary);
   }
 
-  .more {
-    padding-top: 2px;
-    font-size: 11px;
+  .item-chev {
+    flex: none;
+    width: 12px;
     color: var(--el-text-color-placeholder);
+    transition: transform .18s;
   }
+
+  .item.selected .item-chev {
+    color: var(--el-color-primary);
+    transform: rotate(90deg);
+  }
+
+  .more {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    margin: 4px 0 0 8px;
+    padding: 5px 7px;
+    border: 0;
+    border-radius: 5px;
+    background: transparent;
+    color: var(--el-color-primary);
+    font-size: 11px;
+    cursor: pointer;
+
+    &:hover { background: var(--el-color-primary-light-9, var(--el-fill-color-light)); }
+    &:focus-visible { outline: 2px solid var(--el-color-primary); outline-offset: 1px; }
+    .chev { transition: transform .18s; }
+    .chev.down { transform: rotate(90deg); }
+  }
+}
+
+.item-detail {
+  margin: 4px 6px 8px 8px;
+  padding: 12px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 10px;
+  background: var(--el-bg-color);
+  box-shadow: 0 4px 14px #00000008;
+}
+.detail-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.detail-kind { padding: 2px 7px; border-radius: 5px; background: var(--el-color-primary-light-9, var(--el-fill-color-light)); color: var(--el-color-primary); font-size: 11px; }
+.detail-close { width: 24px; height: 24px; padding: 0; border: 0; border-radius: 5px; background: transparent; color: var(--el-text-color-secondary); font-size: 18px; line-height: 1; cursor: pointer; }
+.detail-close:hover { background: var(--el-fill-color-light); color: var(--el-text-color-primary); }
+.detail-close:focus-visible { outline: 2px solid var(--el-color-primary); }
+.detail-title { margin-top: 9px; color: var(--el-text-color-primary); font-size: 13px; font-weight: 600; line-height: 1.5; overflow-wrap: anywhere; }
+.detail-body { margin: 6px 0 0; color: var(--el-text-color-regular); font-size: 12px; line-height: 1.65; }
+.detail-facts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.detail-facts > span { padding: 3px 7px; border-radius: 5px; background: var(--el-fill-color-light); color: var(--el-text-color-secondary); font-size: 11px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.detail-content-label { margin-top: 12px; color: var(--el-text-color-secondary); font-size: 11px; }
+.detail-content { max-height: 220px; margin: 6px 0 0; padding: 10px; overflow: auto; border-radius: 6px; background: var(--el-fill-color-light); color: var(--el-text-color-regular); font-family: var(--pg-mono, monospace); font-size: 11px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
+.detail-content.error { border-left: 2px solid var(--el-color-danger); }
+.detail-load-more { display: block; margin: 7px auto 0; padding: 4px 8px; border: 0; border-radius: 5px; background: transparent; color: var(--el-color-primary); font-size: 11px; cursor: pointer; }
+.detail-load-more:hover { background: var(--el-color-primary-light-9, var(--el-fill-color-light)); }
+.detail-load-more:focus-visible { outline: 2px solid var(--el-color-primary); outline-offset: 1px; }
+
+@media (max-width: 640px) {
+  .panel-hint { display: none; }
+  .items { margin-left: 4px; padding-left: 8px; }
+  .item-detail { margin-left: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .row .chev, .items .item-chev, .items .more .chev { transition: none; }
 }
 
 .act {
   margin-top: 8px;
   padding-top: 8px;
   border-top: 1px solid var(--el-border-color-lighter);
+}
+
+.compaction-status {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0 0 10px;
+  padding: 9px 10px;
+  border: 1px solid var(--el-color-success-light-7);
+  border-radius: 8px;
+  background: var(--el-color-success-light-9);
+  color: var(--el-color-success);
+  font-size: 11px;
+  line-height: 1.6;
+}
+.status-mark {
+  flex: 0 0 6px;
+  width: 6px;
+  height: 6px;
+  margin-top: 5px;
+  border-radius: 50%;
+  background: currentColor;
 }
 
 .advice {

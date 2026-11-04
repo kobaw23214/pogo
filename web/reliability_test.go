@@ -133,7 +133,7 @@ func TestCompactReservesSessionUntilAllViewsCommit(t *testing.T) {
 	if err := <-result; err != nil {
 		t.Fatal(err)
 	}
-	if s.Active() || len(s.agent.Messages()) != 1 || len(s.store.Messages("")) != 1 || len(s.hub.Snapshot().Messages) != 1 {
+	if s.Active() || len(s.agent.Messages()) != 1 || len(s.store.Messages("")) != 2 || len(s.hub.Snapshot().Messages) != 2 || len(s.hub.Snapshot().Compactions) != 1 {
 		t.Fatal("compaction views did not settle together")
 	}
 }

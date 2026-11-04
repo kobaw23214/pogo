@@ -37,8 +37,20 @@ type nativeUploadBinding struct {
 	DocumentVersion int64  `json:"document_version"`
 }
 
-func (b *nativeBrowser) uploadBinding(ctx context.Context) (nativeUploadBinding, error) {
-	state, err := b.request(ctx, http.MethodGet, "/state", nil)
+func (b *nativeBrowser) uploadBinding(ctx context.Context, operations ...map[string]json.RawMessage) (nativeUploadBinding, error) {
+	target := nativeBrowserTarget{}
+	var expectedEpoch *int64
+	if len(operations) > 0 {
+		op := operations[0]
+		if len(op["tab_id"]) > 0 || len(op["context_ref"]) > 0 || len(op["control_epoch"]) > 0 {
+			if json.Unmarshal(op["tab_id"], &target.TabID) != nil || json.Unmarshal(op["context_ref"], &target.ContextRef) != nil ||
+				json.Unmarshal(op["control_epoch"], &expectedEpoch) != nil || expectedEpoch == nil || *expectedEpoch < 0 ||
+				!nativeTabID.MatchString(target.TabID) || !validNativeContextRef(target.ContextRef) {
+				return nativeUploadBinding{}, errors.New("browser upload: incomplete explicit page binding")
+			}
+		}
+	}
+	state, err := b.request(ctx, http.MethodGet, target.suffix("/state"), nil)
 	if err != nil {
 		return nativeUploadBinding{}, err
 	}
@@ -46,12 +58,19 @@ func (b *nativeBrowser) uploadBinding(ctx context.Context) (nativeUploadBinding,
 		Control         string `json:"control"`
 		Context         string `json:"context_ref"`
 		Tab             string `json:"active_tab"`
+		ViewedTab       string `json:"viewed_tab"`
 		Generation      int64  `json:"generation"`
 		ControlEpoch    int64  `json:"control_epoch"`
 		DocumentVersion int64  `json:"document_version"`
 	}
 	if json.Unmarshal(state, &ownership) != nil || ownership.Control != "agent" {
 		return nativeUploadBinding{}, errors.New("browser upload: selected page is human-controlled; inspect tabs and explicitly claim the task page first")
+	}
+	if !target.empty() {
+		if ownership.Context != target.ContextRef || ownership.ViewedTab != target.TabID || ownership.ControlEpoch != *expectedEpoch {
+			return nativeUploadBinding{}, errors.New("browser upload: selected page binding changed; inspect tabs before uploading")
+		}
+		ownership.Tab = ownership.ViewedTab
 	}
 	if !validNativeContextRef(ownership.Context) || !nativeTabID.MatchString(ownership.Tab) || ownership.Generation < 1 || ownership.ControlEpoch < 0 || ownership.DocumentVersion < 1 {
 		return nativeUploadBinding{}, errors.New("browser upload: current page identity is unavailable; inspect the browser before uploading")
@@ -119,7 +138,7 @@ func (b *nativeBrowser) prepareUpload(ctx context.Context, op map[string]json.Ra
 		sources = append(sources, source{file, info, filepath.Base(absolute), absolute})
 	}
 	// Avoid transmitting files while the selected page belongs to a person.
-	ownership, err := b.uploadBinding(ctx)
+	ownership, err := b.uploadBinding(ctx, op)
 	if err != nil {
 		return err
 	}
@@ -206,7 +225,7 @@ func (b *nativeBrowser) prepareUpload(ctx context.Context, op map[string]json.Ra
 			return errors.New("browser upload: source changed during preparation; read the current file before uploading")
 		}
 	}
-	current, failure := b.uploadBinding(ctx)
+	current, failure := b.uploadBinding(ctx, op)
 	if failure != nil {
 		return failure
 	}

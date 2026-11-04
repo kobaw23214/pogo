@@ -1,14 +1,18 @@
 package web
 
 import (
+	"context"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/yosukeno/pogo/llm"
+	"github.com/yosukeno/pogo/memory"
 	"github.com/yosukeno/pogo/prefs"
 )
 
@@ -108,6 +112,21 @@ func TestDecodeDistillNotesEnforcesTheBounds(t *testing.T) {
 	}
 }
 
+func TestDecodeDistillNotesValidatesTypeAndCredentials(t *testing.T) {
+	notes, _ := parseDistillNotes(`{"notes": [{"path": "feedback.md", "type": "feedback", "content": "Always run tests first."}]}`, true)
+	if len(notes) != 1 || notes[0].Type != memory.NoteFeedback {
+		t.Fatalf("typed note = %+v", notes)
+	}
+	for _, raw := range []string{
+		`{"notes": [{"path": "bad.md", "type": "guess", "content": "x"}]}`,
+		`{"notes": [{"path": "secret.md", "type": "project", "content": "api_key = \"abcdefghijklmnop\""}]}`,
+	} {
+		if notes, _ := parseDistillNotes(raw, true); notes != nil {
+			t.Errorf("invalid note was accepted: %+v", notes)
+		}
+	}
+}
+
 // The repair fallback: an answer that came back in JSON but broke it still
 // yields its notes, while the same breakage under a token cap stays silence —
 // a truncated note is unfinished, not broken.
@@ -123,24 +142,26 @@ func TestParseDistillNotesRepairsBrokenJSON(t *testing.T) {
 
 // --- writing -----------------------------------------------------------------
 
-// Overwrite-by-topic is the update path: a later pass with a fresher
-// conclusion replaces the file, so the directory holds one note per topic.
+// Topic updates keep one current file while host metadata records its origin.
 func TestWriteDistilledNotesWritesAndOverwrites(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), ".pogo", "memory")
-	if got := writeDistilledNotes(dir, []distillNote{{Path: "a.md", Content: "v1\n"}}); got != 1 {
+	if got := writeDistilledNotes(dir, []distillNote{{Path: "a.md", Content: "v1\n"}}, "session_1"); got != 1 {
 		t.Fatalf("written = %d", got)
 	}
-	if got := writeDistilledNotes(dir, []distillNote{{Path: "a.md", Content: "v2\n"}}); got != 1 {
+	if got := writeDistilledNotes(dir, []distillNote{{Path: "a.md", Type: memory.NoteFeedback, Content: "v2\n"}}, "session_2"); got != 1 {
 		t.Fatalf("overwrite written = %d", got)
 	}
-	data, err := os.ReadFile(filepath.Join(dir, "a.md"))
-	if err != nil || string(data) != "v2\n" {
-		t.Fatalf("content = %q, %v", data, err)
+	note, err := memory.ReadNote(dir, "a.md")
+	if err != nil || note.Content != "v2\n" || note.Type != memory.NoteFeedback || note.SourceSession != "session_2" || note.Origin != "auto-distill" {
+		t.Fatalf("note = %+v, %v", note, err)
 	}
 	// A name the contract would never have accepted is not written even if the
 	// caller let one through — the write side checks too.
 	if got := writeDistilledNotes(dir, []distillNote{{Path: "../escape.md", Content: "x"}}); got != 0 {
 		t.Fatalf("an out-of-contract name was written")
+	}
+	if got := writeDistilledNotes(dir, []distillNote{{Path: "secret.md", Content: `api_key = "abcdefghijklmnop"`}}); got != 0 {
+		t.Fatalf("a credential was written")
 	}
 }
 
@@ -169,6 +190,9 @@ func TestMemoryIndex(t *testing.T) {
 	got := memoryIndex(dir)
 	if !strings.Contains(got, "a.md") || !strings.Contains(got, "b.md") || strings.Contains(got, ".hidden") {
 		t.Errorf("index = %q", got)
+	}
+	if !strings.Contains(got, `"content":"x\n"`) {
+		t.Errorf("topic updates need the existing body for merging: %q", got)
 	}
 }
 
@@ -319,5 +343,36 @@ func TestMemoryDistillationFollowsTheSettingsSwitchWithoutRestart(t *testing.T) 
 	}
 	if systems, _, _, _ := cap.snapshot(); len(systems) != 3 {
 		t.Errorf("after the toggle the model saw %d calls, want two runs plus the distillation", len(systems))
+	}
+}
+
+func TestDistillMemorySerializesSessionsSharingRoot(t *testing.T) {
+	var active, maximum int32
+	h := newHarness(t, func(int) (llm.Response, error) {
+		current := atomic.AddInt32(&active, 1)
+		defer atomic.AddInt32(&active, -1)
+		for {
+			previous := atomic.LoadInt32(&maximum)
+			if current <= previous || atomic.CompareAndSwapInt32(&maximum, previous, current) {
+				break
+			}
+		}
+		time.Sleep(20 * time.Millisecond)
+		return distillTurn(`{"notes":[]}`), nil
+	})
+	root := realTempDir(t)
+	sessions := []*Session{h.session(h.createSession()), h.session(h.createSession())}
+	var wg sync.WaitGroup
+	for _, sess := range sessions {
+		sess.memoryDir = root
+		wg.Add(1)
+		go func(s *Session) {
+			defer wg.Done()
+			s.distillMemory(context.Background(), s.cfg, root, nil)
+		}(sess)
+	}
+	wg.Wait()
+	if maximum > 1 {
+		t.Fatalf("two distillers read and replaced the same root concurrently: %d", maximum)
 	}
 }

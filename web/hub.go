@@ -163,10 +163,11 @@ type Hub struct {
 	nextSub    int64
 	closed     bool
 
-	msgs    []Message
-	results map[string]ToolResult
-	live    Live
-	usage   llm.Usage
+	msgs        []Message
+	compactions []session.CompactionView
+	results     map[string]ToolResult
+	live        Live
+	usage       llm.Usage
 	// bgTasks and bgUsage are the session-scoped state of backgrounded
 	// delegations. They sit outside live precisely because live is wiped at every
 	// run's end, and outside usage because the run-end event overwrites usage
@@ -182,6 +183,9 @@ type Hub struct {
 	// A model change retains the last count only as an approximation until its
 	// own provider reports a prompt size. Snapshots must preserve that distinction.
 	contextEstimated bool
+	// contextPrompt is the compacted model-facing transcript. It is separate
+	// from msgs and results, which preserve the complete visible history.
+	contextPrompt *ContextPrompt
 	// overhead is the fixed per-request cost (system prompt + tool schemas),
 	// and overheadParts itemizes it (agent.OverheadBreakdown). Updated at
 	// session creation, history replacement, catalog or Skill refresh and each
@@ -261,6 +265,7 @@ func (h *Hub) Publish(e Event) {
 // apply folds one event into the derived state, and fills in the fields the Hub
 // owns rather than the publisher (message ids).
 func (h *Hub) apply(e *Event) {
+	h.foldContextPromptLocked(*e)
 	switch e.Type {
 	case EvInboxUpdated:
 		if e.Item != nil {
@@ -297,6 +302,21 @@ func (h *Hub) apply(e *Event) {
 		h.run.EndReason, h.run.Error = "", ""
 		if e.Model != "" {
 			h.run.Model, h.run.Provider = e.Model, e.Provider
+		}
+
+	case EvCompacted:
+		if e.Compaction != nil {
+			updated := false
+			for i, c := range h.compactions {
+				if c.ID == e.Compaction.ID {
+					h.compactions[i] = *e.Compaction
+					updated = true
+					break
+				}
+			}
+			if !updated {
+				h.compactions = append(h.compactions, *e.Compaction)
+			}
 		}
 
 	case EvUserMessage:
@@ -459,6 +479,11 @@ func (h *Hub) apply(e *Event) {
 				inc.Head+e.Text[:min(maxIncomingHead-len(inc.Head), len(e.Text))], "")
 		}
 		inc.Tail = tailOf(inc.Tail+e.Text, maxIncomingTail)
+		if (inc.Name == "write" || inc.Name == "edit") && len(inc.raw) < maxIncomingStatsBytes {
+			inc.raw += e.Text[:min(maxIncomingStatsBytes-len(inc.raw), len(e.Text))]
+		}
+		added, removed := updateIncomingPreviewStats(inc, e.TS)
+		e.PreviewAdded, e.PreviewRemoved = &added, &removed
 
 	case EvToolPartial:
 		// Folded into the pending call rather than logged, so a client that
@@ -692,9 +717,59 @@ func (h *Hub) Seed(history []session.Timed) {
 	h.seedLocked(history)
 }
 
+func (h *Hub) SetCompactions(views []session.CompactionView) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	seen := make(map[string]bool, len(h.compactions))
+	for _, c := range h.compactions {
+		seen[c.ID] = true
+	}
+	for _, c := range views {
+		if !seen[c.ID] {
+			h.compactions = append(h.compactions, c)
+			seen[c.ID] = true
+		}
+	}
+	sort.SliceStable(h.compactions, func(i, j int) bool { return h.compactions[i].After < h.compactions[j].After })
+}
+
+func (h *Hub) HasCompactions() bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return len(h.compactions) > 0
+}
+
+// EstimateContext seeds the current compacted prompt before a provider has
+// measured it. Visible messages remain untouched.
+func (h *Hub) EstimateContext(prompt *ContextPrompt) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.contextPrompt = cloneContextPrompt(prompt)
+	h.context = prompt.Composition.Estimated
+	h.contextEstimated = true
+}
+
+func (h *Hub) foldContextPromptLocked(e Event) {
+	if e.ContextPrompt == nil {
+		return
+	}
+	h.contextPrompt = cloneContextPrompt(e.ContextPrompt)
+	if e.Type == EvCompacted || h.contextEstimated || h.context == 0 {
+		h.context = e.ContextPrompt.Composition.Estimated
+		h.contextEstimated = true
+	}
+}
+
 func (h *Hub) seedLocked(history []session.Timed) {
 	names := make(map[string]string)
 	for _, m := range history {
+		if summary, ok := agent.CompactionContinuationSummary(m.Message); ok {
+			h.compactions = append(h.compactions, session.CompactionView{
+				ID: fmt.Sprintf("legacy-%d-%d", m.Time, len(h.compactions)), After: len(h.msgs), Time: m.Time,
+				Summary: summary, StartedAt: m.Time, FinishedAt: m.Time,
+			})
+			continue
+		}
 		var kept []llm.Block
 		for _, b := range m.Message.Content {
 			switch b.Type {
@@ -785,12 +860,14 @@ func (h *Hub) Reset(history []session.Timed, usage llm.Usage) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.msgs = nil
+	h.compactions = nil
 	h.results = make(map[string]ToolResult)
 	h.resolvedUserInputs = make(map[string]tools.UserInputDetails)
 	h.live = Live{}
 	h.run.EndReason, h.run.Error = "", ""
 	h.context = 0
 	h.contextEstimated = false
+	h.contextPrompt = nil
 	h.usage = usage
 	// Chips reference a message on the branch being abandoned, so they go with
 	// it; the next run generates a fresh set against history that still exists.
@@ -1054,6 +1131,7 @@ func (h *Hub) snapshotLocked() Snapshot {
 		Inbox:             append([]InboxItem{}, h.inbox...),
 		Seq:               h.seq,
 		Messages:          msgs,
+		Compactions:       append([]session.CompactionView(nil), h.compactions...),
 		Results:           results,
 		UserInputAnswers:  resolvedInputs,
 		Live:              h.live.clone(),
@@ -1064,6 +1142,7 @@ func (h *Hub) snapshotLocked() Snapshot {
 		ShellTasks:        shellTasks,
 		ContextTokens:     h.context,
 		ContextEstimated:  h.contextEstimated,
+		ContextPrompt:     cloneContextPrompt(h.contextPrompt),
 		OverheadTokens:    h.overhead,
 		OverheadBreakdown: append([]agent.OverheadPart(nil), h.overheadParts...),
 		ClearTrigger:      h.clearTrigger,

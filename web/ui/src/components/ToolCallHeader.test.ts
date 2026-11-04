@@ -33,4 +33,28 @@ describe("shared tool header", () => {
     const bodyOnly = await renderToString(createSSRApp({ render: () => h(ToolCall, { call: settled, runActive: false, headerless: true }) }).use(i18n));
     expect(bodyOnly).not.toContain("tool-call-header"); expect(bodyOnly).toContain("saved output");
   });
+
+  it("makes file tool paths open in the workspace without linking other arguments", async () => {
+    const editCall: TimelineCall = { callId: "edit-1", name: "edit", args: { path: "artifacts/html-demo.html" }, running: false, orphaned: false };
+    const html = await renderToString(createSSRApp({ render: () => h(ToolCall, { call: editCall, runActive: false }) }).use(i18n));
+    expect(html).toContain('data-open-file="artifacts/html-demo.html"');
+    expect(html).toContain("在工作区打开 artifacts/html-demo.html");
+
+    const bashCall: TimelineCall = { callId: "bash-1", name: "bash", args: { command: "pwd" }, running: false, orphaned: false };
+    const bash = await renderToString(createSSRApp({ render: () => h(ToolCall, { call: bashCall, runActive: false }) }).use(i18n));
+    expect(bash).not.toContain("data-open-file");
+  });
+
+  it("marks Skill documents for the read-only preview instead of the workspace", async () => {
+    const path = "/home/pogo/.cache/pogo/embedded-skills/browser-use/SKILL.md";
+    const skillCall: TimelineCall = { callId: "skill-read", name: "read", args: { path }, running: false, orphaned: false };
+    const skills = [{ name: "browser-use", path }];
+    const html = await renderToString(createSSRApp({ render: () => h(ToolCall, { call: skillCall, runActive: false, skills, cwd: "/home/pogo/users/u1" }) }).use(i18n));
+    expect(html).toContain(`data-open-file="${path}"`);
+    expect(html).toContain('data-skill="browser-use"');
+    expect(html).toContain('data-skill-path="SKILL.md"');
+    const reference = { ...skillCall, args: { path: "/home/pogo/.cache/pogo/embedded-skills/browser-use/references/download.md" } };
+    const referenceHtml = await renderToString(createSSRApp({ render: () => h(ToolCall, { call: reference, runActive: false, skills, cwd: "/home/pogo/users/u1" }) }).use(i18n));
+    expect(referenceHtml).toContain('data-skill-path="references/download.md"');
+  });
 });

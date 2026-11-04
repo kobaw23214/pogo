@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"strings"
 )
 
@@ -12,6 +13,10 @@ import (
 type ImageHandle struct {
 	Ref  string
 	Name string
+}
+
+type ImageAnalyzeDetails struct {
+	Path string `json:"path"`
 }
 
 // ImageAnalyze is the bridge that lets a text-only model ask a vision model
@@ -35,18 +40,18 @@ type ImageAnalyze struct {
 func (*ImageAnalyze) Name() string { return "analyze_image" }
 
 func (t *ImageAnalyze) Description() string {
-	return "Ask the vision model a question about an image the user attached. " +
+	return "Ask the vision model a question about an attached image or any image in the session workspace. " +
 		"Use it whenever the [图片已附加 …] note in the conversation does not answer " +
 		"what you need: exact text in the image, colors, layout, what changed " +
 		"between two screenshots. The question may be specific (\"左上角按钮写的什么\") " +
 		"and you may call this tool repeatedly about the same image.\n\n" +
-		"image is the attachment's name or reference as it appears in the note; " +
+		"image is the attachment's name or reference, or a workspace-relative/absolute image path; " +
 		"omit it to ask about the most recently attached image."
 }
 
 func (t *ImageAnalyze) InputSchema() map[string]any {
 	return objectOrdered([]string{"question"}, orderedProps{
-		{"image", prop("string", "The image to ask about: its name as shown in the attachment note, or its reference. Omit for the most recently attached image.")},
+		{"image", prop("string", "The image to ask about: an attachment name/reference or an image path inside the session workspace. Omit for the most recently attached image.")},
 		{"question", prop("string", "What to look at or read in the image. Be specific; ask separately about unrelated things.")},
 	})
 }
@@ -77,29 +82,27 @@ func (t *ImageAnalyze) Execute(ctx context.Context, args json.RawMessage) (Resul
 		// An error is reported as text rather than a hard failure: the model
 		// may retry with a different image or rephrase, and the conversation
 		// should not die because a local model server was loading.
-		return Result{Text: "vision model unavailable: " + err.Error()}, nil
+		return Result{Text: "vision model unavailable: " + err.Error(), Details: ImageAnalyzeDetails{Path: ref}}, nil
 	}
 	answer = strings.TrimSpace(answer)
 	if answer == "" {
-		return Result{Text: "(the vision model returned an empty answer; try rephrasing the question)"}, nil
+		return Result{Text: "(the vision model returned an empty answer; try rephrasing the question)", Details: ImageAnalyzeDetails{Path: ref}}, nil
 	}
-	return Result{Text: answer}, nil
+	return Result{Text: answer, Details: ImageAnalyzeDetails{Path: ref}}, nil
 }
 
-// resolveRef maps the model's image argument — a ref, a name, or nothing for
-// "latest" — onto the store's reference. Bare names are matched exactly first
-// and as a suffix after, because notes quote the original filename, which may
-// carry directories or a "(1)" the model dropped.
+// resolveRef maps attachment names first, then falls back to an image path in
+// the session workspace. Empty and "latest" retain the newest-attachment shorthand.
 func (t *ImageAnalyze) resolveRef(image string) (string, error) {
 	image = strings.TrimSpace(image)
-	if t.Recent == nil {
-		return "", fmt.Errorf("this session has no attached images")
-	}
-	attached := t.Recent()
-	if len(attached) == 0 {
-		return "", fmt.Errorf("this session has no attached images")
+	var attached []ImageHandle
+	if t.Recent != nil {
+		attached = t.Recent()
 	}
 	if image == "" || strings.EqualFold(image, "latest") {
+		if len(attached) == 0 {
+			return "", fmt.Errorf("this session has no attached images; provide an image path in the workspace")
+		}
 		last := attached[len(attached)-1]
 		return last.Ref, nil
 	}
@@ -113,7 +116,24 @@ func (t *ImageAnalyze) resolveRef(image string) (string, error) {
 			return h.Ref, nil
 		}
 	}
-	return "", fmt.Errorf("no attached image matches %q (attached: %s)", image, t.describeAttached(attached))
+	if looksLikeImagePath(image) {
+		return image, nil
+	}
+	if len(attached) == 0 {
+		return "", fmt.Errorf("this session has no attached images; provide an image path in the workspace")
+	}
+	return "", fmt.Errorf("no attached image matches %q (attached: %s); you can also provide an image path in the workspace", image, t.describeAttached(attached))
+}
+
+func looksLikeImagePath(image string) bool {
+	if filepath.IsAbs(image) || strings.ContainsAny(image, `/\\`) {
+		return true
+	}
+	switch strings.ToLower(filepath.Ext(image)) {
+	case ".png", ".jpg", ".jpeg", ".webp":
+		return true
+	}
+	return false
 }
 
 func (*ImageAnalyze) describeAttached(attached []ImageHandle) string {

@@ -13,6 +13,7 @@ import {
   isTodoDetails,
   liveTodos,
   projectTaskTodos,
+  matchSkillFile,
   matchSkillRead,
   parseTaskNotification,
   readBodies,
@@ -745,6 +746,24 @@ describe("matchSkillRead", () => {
     expect(matchSkillRead("bash", { command: "cat SKILL.md" }, skills, "/proj")).toBeNull();
     expect(matchSkillRead("read", {}, skills, "/proj")).toBeNull();
     expect(matchSkillRead("read", { path: skills[0].path }, [], "/proj")).toBeNull();
+  });
+});
+
+describe("matchSkillFile", () => {
+  const skills = [{ name: "pdf-tools", path: "/home/u/.pogo/skills/pdf-tools/SKILL.md" }];
+  it("identifies the root and package documents without exposing their physical root", () => {
+    expect(matchSkillFile("read", { path: skills[0].path }, skills, "/proj")).toEqual({ skill: "pdf-tools", skillPath: "SKILL.md" });
+    expect(matchSkillFile("read", { path: "/home/u/.pogo/skills/pdf-tools/references/workflow.md" }, skills, "/proj")).toEqual({ skill: "pdf-tools", skillPath: "references/workflow.md" });
+  });
+  it("keeps sibling paths, ordinary files and write operations on the workspace path", () => {
+    expect(matchSkillFile("read", { path: "/home/u/.pogo/skills/pdf-tools-other/SKILL.md" }, skills, "/proj")).toBeNull();
+    expect(matchSkillFile("read", { path: "/proj/SKILL.md" }, skills, "/proj")).toBeNull();
+    expect(matchSkillFile("edit", { path: skills[0].path }, skills, "/proj")).toBeNull();
+    expect(matchSkillFile("read", { path: skills[0].path }, [], "/proj")).toBeNull();
+  });
+  it("uses the most specific package when Skill roots are nested", () => {
+    const nested = [...skills, { name: "workflow", path: "/home/u/.pogo/skills/pdf-tools/references/workflow/SKILL.md" }];
+    expect(matchSkillFile("read", { path: nested[1].path }, nested, "/proj")).toEqual({ skill: "workflow", skillPath: "SKILL.md" });
   });
 });
 

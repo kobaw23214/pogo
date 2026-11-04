@@ -1133,6 +1133,7 @@ func newClient(model string, retries int) (llm.Client, config.Resolved, error) {
 		APIKey:        cfg.APIKey,
 		Model:         cfg.Model,
 		MaxTokens:     cfg.MaxTokens,
+		Timeout:       cfg.Timeout,
 		Headers:       cfg.Headers,
 		ExtraBody:     cfg.ExtraBody,
 		Compatibility: cfg.Compatibility,

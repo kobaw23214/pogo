@@ -104,7 +104,7 @@ func (s *Server) handleGenerateUIIcons(w http.ResponseWriter, r *http.Request) {
 	if s.mgr.cfg.NewClient != nil {
 		client = s.mgr.cfg.NewClient(cfg, nil)
 	} else {
-		client = llm.New(llm.Options{BaseURL: cfg.BaseURL, APIKey: cfg.APIKey, Model: cfg.Model, MaxTokens: cfg.MaxTokens, Headers: cfg.Headers, ExtraBody: cfg.ExtraBody, Compatibility: cfg.Compatibility, MaxRetries: s.mgr.cfg.Retries})
+		client = llm.New(llm.Options{BaseURL: cfg.BaseURL, APIKey: cfg.APIKey, Model: cfg.Model, MaxTokens: cfg.MaxTokens, Timeout: cfg.Timeout, Headers: cfg.Headers, ExtraBody: cfg.ExtraBody, Compatibility: cfg.Compatibility, MaxRetries: s.mgr.cfg.Retries})
 	}
 	prompt, _ := json.Marshal(struct {
 		Prompt string `json:"prompt"`

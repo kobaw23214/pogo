@@ -20,6 +20,8 @@ import type {
   FilesResponse,
   ModelInfo,
   MaxTurnsInfo,
+  MemoryCatalog,
+  MemoryNote,
   PanelInfo,
   Prefs,
   PrefsInfo,
@@ -273,6 +275,12 @@ export const api = {
     return { blob: await res.blob(), version, identity: res.headers.get("X-Browser-Frame-Identity") ?? "", context_ref: res.headers.get("X-Browser-Context-Ref") ?? "", viewed_tab: res.headers.get("X-Browser-Viewed-Tab") ?? "", overlay: decodeNativeOverlay(res.headers.get("X-Browser-Overlay"), version) };
   },
   models: () => request<{ models: ModelInfo[]; default: string }>("GET", "/api/models"),
+
+  memoryNotes: (sessionId: string) => request<MemoryCatalog>("GET", `/api/sessions/${encodeURIComponent(sessionId)}/memory`),
+  saveMemoryNote: (sessionId: string, input: Pick<MemoryNote, "path" | "type" | "content">) =>
+    request<MemoryNote>("PUT", `/api/sessions/${encodeURIComponent(sessionId)}/memory`, input),
+  deleteMemoryNote: (sessionId: string, path: string) =>
+    request<{ deleted: boolean }>("DELETE", `/api/sessions/${encodeURIComponent(sessionId)}/memory?path=${encodeURIComponent(path)}`),
 
   // The Studio workbench requests the pinned session selection; management
   // deliberately omits sessionId to inspect the whole installed library.
@@ -598,10 +606,10 @@ export const api = {
       ...(paths && paths.length ? { paths } : {}),
     }),
 
-  // Replace the conversation with a summary of it. Costs one model call, so this
-  // can take as long as a turn does; 409 means a run is in flight and 422 means
-  // compaction would not make the prompt smaller.
-  compact: (sid: string) =>
+  // Replace model context with a summary while preserving the visible transcript.
+  // Costs one model call; 409 means a run is in flight and 422 means compaction
+  // would not make the prompt smaller.
+  compact: (sid: string, instructions?: string) =>
     control<{
       compacted: boolean;
       before: number;
@@ -609,7 +617,10 @@ export const api = {
       after_tokens: number;
       freed_tokens: number;
       summary: string;
-    }>(sid, { action: "compact" }),
+    }>(sid, {
+      action: "compact",
+      ...(instructions?.trim() ? { instructions: instructions.trim() } : {}),
+    }),
 
   // What a rewind-with-files would restore: the modified/deleted/created
   // paths between the checkpoint and now, each with the line counts the
@@ -787,7 +798,7 @@ export const api = {
 
   savePrefs: (prefs: Prefs) => request<PrefsInfo>("PUT", "/api/prefs", prefs),
 
-  // The live turn cap: 0 restores the -max-turns flag. Server-side this both
+  // The live turn cap: 0 explicitly disables it. Server-side this both
   // persists to prefs.json and pushes the new cap into already-open
   // conversations, so the answer applies without a reload.
   setMaxTurns: (n: number) => request<MaxTurnsInfo>("PUT", "/api/max-turns", { max_turns: n }),

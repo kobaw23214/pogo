@@ -14,6 +14,7 @@ export type ToolName =
   | "edit"
   | "bash"
   | "browser"
+  | "analyze_image"
   | "shortcut_query"
   | "shortcut_manage"
   | "shortcut_search"
@@ -380,7 +381,12 @@ export interface SkillArtifact {
   sizeBytes?: number;
 }
 
+export interface ImageAnalyzeDetails {
+  path: string;
+}
+
 export type ToolDetails =
+  | ImageAnalyzeDetails
   | ReadDetails
   | ReadManyDetails
   | LsDetails
@@ -465,6 +471,78 @@ export interface SkillAuthoringDetails {
   behavior_tested: false;
 }
 
+/** Worker diagnostics only; durations include nested stages and exclude model time. */
+export interface BrowserTiming {
+  total_ms: number;
+  queue_ms: number;
+  execution_ms: number;
+  /** Phase before post-action observation, including Playwright automatic waits. */
+  dispatch_ms: number;
+  /** Explicit navigate/back and new-tab preparation; a dispatch_ms substage. */
+  navigation_ms: number;
+  /** Explicit condition and observation-retry DOMContentLoaded waits; nested in execution. */
+  condition_wait_ms: number;
+  settle_ms: number;
+  /** Includes evidence captured inside snapshots; do not add nested stages. */
+  snapshot_ms: number;
+  /** Includes direct extract evidence as well as snapshot evidence. */
+  evidence_ms: number;
+  snapshot_count: number;
+  evidence_count: number;
+  intermediate_evidence_skipped: number;
+}
+
+export interface BrowserBatch {
+  requested: number;
+  executed: number;
+  skipped: number;
+  stop_reason: "completed" | "failed" | "page_changed" | "navigation" | "tab_changed" | "observation_pending" | "interrupted";
+}
+
+/** Only the stages actually measured for one page; aggregate browser timing
+ * contains additional fields which are not inferred or filled with zeros. */
+export type BrowserPageTiming = Pick<BrowserTiming, "total_ms" | "queue_ms" | "navigation_ms" | "snapshot_ms">;
+
+/** Input-order identity/status only. Full page text and evidence stay in the
+ * recorded tool payload and Spill, rather than being duplicated into UI state. */
+export interface BrowserPageSummary {
+  index: number;
+  requested_url?: string;
+  tab_id?: string;
+  context_ref?: string;
+  control_epoch?: number;
+  generation?: number;
+  document_version?: number;
+  version?: string;
+  url?: string;
+  title?: string;
+  ok: boolean;
+  status: "observed" | "failed" | "pending" | "not_started";
+  observation_pending?: boolean;
+  error?: string;
+  observed_at?: string;
+  truncated?: boolean;
+  timing?: BrowserPageTiming;
+}
+
+export interface BrowserPagesCoverage {
+  requested: number;
+  observed: number;
+  failed: number;
+  pending: number;
+  skipped: number;
+}
+
+/** A host-confirmed display suggestion; this never grants page control or
+ * changes the Agent's execution target. */
+export interface BrowserPagesFocus {
+  tab_id: string;
+  context_ref: string;
+  version: string;
+  generation: number;
+  control_epoch: number;
+}
+
 /** Trusted browser operation receipt. Page identity is display metadata;
  * selecting its Sheet does not grant the page's control lease. */
 export interface BrowserDetails {
@@ -478,6 +556,13 @@ export interface BrowserDetails {
   title?: string;
   favicon?: string;
   steps?: number;
+  step_results?: { action: string; ok: boolean; error?: string; duration_ms?: number }[];
+  timing?: BrowserTiming;
+  batch?: BrowserBatch;
+  pages?: BrowserPageSummary[];
+  coverage?: BrowserPagesCoverage;
+  focus?: BrowserPagesFocus;
+  observation_pending?: boolean;
   content_source?: string;
   has_readable_content?: boolean;
 }
@@ -661,6 +746,9 @@ export interface IncomingArgs {
   bytes: number;
   /** Content newlines seen so far — the live +N of a write in flight. */
   lines?: number;
+  /** Approximate preview diff, never the settled file diff. */
+  preview_added?: number;
+  preview_removed?: number;
   ts?: number;
 }
 
@@ -855,11 +943,47 @@ export interface BackgroundTaskSessionIdentity {
   run_id?: string;
 }
 
+export interface CompactionView {
+  id: string;
+  after: number;
+  ts: number;
+  summary: string;
+  instructions?: string;
+  before: number;
+  before_tokens: number;
+  after_tokens: number;
+  started_at?: number;
+  finished_at?: number;
+}
+
+export interface ContextComposition {
+  fixed: number;
+  user?: number;
+  assistant?: number;
+  tool_args?: number;
+  tools?: Record<string, number>;
+  estimated: number;
+  measured?: number;
+  cleared?: number;
+  messages: number;
+}
+
+export interface ContextMessage {
+  role: Message["role"];
+  content: Block[];
+}
+
+export interface ContextPrompt {
+  composition: ContextComposition;
+  messages: ContextMessage[];
+}
+
 export interface Snapshot {
   seq: number;
   /** Replay instance; sequence numbers are comparable only within this value. */
   stream_instance?: string;
   messages: Message[];
+  compactions?: CompactionView[];
   results: Record<string, ToolResult>;
   user_input_answers?: Record<string, UserInputDetails>;
   live: Live;
@@ -880,6 +1004,8 @@ export interface Snapshot {
   context_tokens: number;
   /** The retained count uses a previous model's tokenizer and is approximate. */
   context_estimated?: boolean;
+  /** Model-facing history after compaction, distinct from visible messages. */
+  context_prompt?: ContextPrompt;
   /**
    * Estimated fixed request cost (system prompt + tool schemas), for the
    * context meter's breakdown. An estimate, never a measurement.
@@ -952,6 +1078,8 @@ export interface AgentEvent {
   seq: number;
   type: EventType;
   ts: number;
+  compaction?: CompactionView;
+  context_prompt?: ContextPrompt;
   answer_review?: AnswerReview;
   document_session_id?: string;
   conversation_id?: string;
@@ -991,6 +1119,8 @@ export interface AgentEvent {
   call_id?: string;
   name?: ToolName;
   args?: unknown;
+  preview_added?: number;
+  preview_removed?: number;
   is_error?: boolean;
   details?: ToolDetails;
   /** The citation stamp, on `tool_end`; absent for todo and `-no-citations`. */
@@ -1191,6 +1321,25 @@ export interface SkillContent extends SkillDocumentContent {
   name: string;
   path: string;
   source: string;
+}
+
+export type MemoryNoteType = "user" | "feedback" | "project" | "reference";
+
+export interface MemoryNote {
+  path: string;
+  type: MemoryNoteType;
+  content: string;
+  modified: string;
+  created?: string;
+  source_session?: string;
+  origin: string;
+  size_bytes: number;
+}
+
+export interface MemoryCatalog {
+  scope: "agent" | "user";
+  directory: string;
+  notes: MemoryNote[];
 }
 
 export interface SkillPackageEntry {
@@ -1409,9 +1558,9 @@ export interface Prefs {
   /** Days a spill file is kept; 0 disables automatic cleanup entirely. */
   spill_retention_days: number;
   /**
-   * Runtime override of the interactive turn cap; 0 means the -max-turns
-   * flag decides. Edited through PUT /api/max-turns, not the wholesale
-   * prefs save, so this field survives every other sheet's save.
+   * Runtime override of the interactive turn cap; 0 means unlimited.
+   * Edited through PUT /api/max-turns, not the wholesale prefs save, so this
+   * field survives every other sheet's save.
    */
   max_turns?: number;
   /**
@@ -1423,8 +1572,8 @@ export interface Prefs {
 }
 
 // MaxTurnsInfo is GET /api/prefs's turns block and PUT /api/max-turns's
-// answer: the override (0 = none), the flag it falls back to, and the cap
-// runs use right now.
+// answer: the override (0 = unlimited), the finite default offered when
+// enabling a cap, and the cap runs use right now.
 export interface MaxTurnsInfo {
   max_turns: number;
   flag: number;

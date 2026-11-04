@@ -321,10 +321,12 @@ func TestInboxCancelledOrFailedRunDoesNotDrainQueue(t *testing.T) {
 	for _, kind := range []string{"cancel", "failure"} {
 		t.Run(kind, func(t *testing.T) {
 			release := make(chan struct{})
+			entered := make(chan struct{})
 			var once sync.Once
 			defer once.Do(func() { close(release) })
 			h := newHarness(t, func(n int) (llm.Response, error) {
 				if n == 1 {
+					close(entered)
 					<-release
 				}
 				if kind == "failure" {
@@ -336,6 +338,11 @@ func TestInboxCancelledOrFailedRunDoesNotDrainQueue(t *testing.T) {
 			stream := h.start(sid, "first")
 			defer stream.close()
 			s := h.session(sid)
+			select {
+			case <-entered:
+			case <-time.After(5 * time.Second):
+				t.Fatal("provider did not start")
+			}
 			if _, err := s.ReceiveInput("later", "later", "queued", ""); err != nil {
 				t.Fatal(err)
 			}

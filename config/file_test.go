@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // baseFixture is a stand-in for the compiled-in catalogue, so these tests describe
@@ -681,12 +682,61 @@ func TestExtraBodyFlowsFromMergeToResolve(t *testing.T) {
 	}
 }
 
+func TestProviderTimeoutFlowsFromMergeToResolve(t *testing.T) {
+	savedP, savedM := providers, catalog
+	t.Cleanup(func() { providers, catalog = savedP, savedM })
+	ps, ms, _, _, _, err := merge(map[string]Provider{}, nil, fileConfig{
+		Providers: map[string]providerFile{
+			"bailian": {BaseURL: "http://10.2.3.4:8080/compatible-mode/v1", KeyEnv: "BAILIAN_API_KEY", TimeoutSeconds: 2700},
+		},
+		Models: []modelFile{{ID: "qwen-max", Provider: "bailian", ContextWindow: 32768, MaxTokens: 8192}},
+	})
+	if err != nil {
+		t.Fatalf("merge: %v", err)
+	}
+	providers, catalog = ps, ms
+	t.Setenv("BAILIAN_API_KEY", "test-key")
+	r, err := Resolve("qwen-max")
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	if r.Timeout != 45*time.Minute {
+		t.Errorf("Resolved.Timeout = %v, want 45m", r.Timeout)
+	}
+}
+
+func TestProviderTimeoutKeepsLegacyDefaultAndRejectsNegative(t *testing.T) {
+	savedP, savedM := providers, catalog
+	t.Cleanup(func() { providers, catalog = savedP, savedM })
+	ps, ms, _, _, _, err := merge(map[string]Provider{}, nil, fileConfig{
+		Providers: map[string]providerFile{
+			"bailian": {BaseURL: "http://10.2.3.4:8080/compatible-mode/v1", KeyEnv: "BAILIAN_API_KEY"},
+		},
+		Models: []modelFile{{ID: "qwen-max", Provider: "bailian", ContextWindow: 32768, MaxTokens: 8192}},
+	})
+	if err != nil {
+		t.Fatalf("merge: %v", err)
+	}
+	providers, catalog = ps, ms
+	t.Setenv("BAILIAN_API_KEY", "test-key")
+	r, err := Resolve("qwen-max")
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	if r.Timeout != 0 {
+		t.Errorf("legacy provider timeout = %v, want zero for client default", r.Timeout)
+	}
+	if err := validateProvider("bad", providerFile{BaseURL: "https://api.vendor.example/v1", TimeoutSeconds: -1}); err == nil || !strings.Contains(err.Error(), "timeout_seconds") {
+		t.Errorf("negative timeout_seconds accepted: %v", err)
+	}
+}
+
 // An empty key would become a body field no gateway could read; it is refused
 // at load rather than sent.
 func TestExtraBodyEmptyKeyIsRefused(t *testing.T) {
 	err := validateProvider("p", providerFile{
-		BaseURL:  "https://api.vendor.example/v1",
-		KeyEnv:   "K",
+		BaseURL:   "https://api.vendor.example/v1",
+		KeyEnv:    "K",
 		ExtraBody: map[string]any{"": map[string]any{}},
 	})
 	if err == nil || !strings.Contains(err.Error(), "empty key") {

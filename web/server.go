@@ -500,6 +500,9 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/sessions/{sid}/stream", s.handleStream)
 	s.mux.HandleFunc("GET /api/sessions/{sid}/terminal", s.handleTerminal)
 	s.mux.HandleFunc("POST /api/sessions/{sid}/control", s.handleControl)
+	s.mux.HandleFunc("GET /api/sessions/{sid}/memory", s.handleMemory)
+	s.mux.HandleFunc("PUT /api/sessions/{sid}/memory", s.handleMemory)
+	s.mux.HandleFunc("DELETE /api/sessions/{sid}/memory", s.handleMemory)
 	s.mux.HandleFunc("GET /api/files", s.handleFiles)
 	s.mux.HandleFunc("GET /api/files/content", s.handleFileContent)
 	s.mux.HandleFunc("PUT /api/files/content", s.handleFileSave)
@@ -1571,6 +1574,7 @@ func (s *Server) handleTranscript(w http.ResponseWriter, r *http.Request) {
 	}
 	hub := NewHub()
 	hub.Seed(store.TimedMessages(""))
+	hub.SetCompactions(store.Compactions(""))
 	writeJSON(w, http.StatusOK, map[string]any{
 		"session_id": id,
 		"snapshot":   hub.Snapshot(),
@@ -1910,6 +1914,7 @@ type controlRequest struct {
 	// /messages because it must not start a run: it only joins one already in
 	// flight, and the reply tells the client which happened.
 	Prompt        string             `json:"prompt"`
+	Instructions  string             `json:"instructions"`
 	Parts         []MessageInputPart `json:"parts"`
 	InputLayout   string             `json:"input_layout"`
 	InboxID       string             `json:"id"`
@@ -2062,7 +2067,7 @@ func (s *Server) handleControl(w http.ResponseWriter, r *http.Request) {
 		}
 
 	case "compact":
-		res, err := sess.Compact(r.Context())
+		res, err := sess.CompactWithInstructions(r.Context(), req.Instructions)
 		switch {
 		case errors.Is(err, ErrRunActive):
 			writeErr(w, http.StatusConflict, err)

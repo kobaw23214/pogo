@@ -15,6 +15,7 @@ describe("migrateSheet", () => {
     expect(migrateSheet({ sheet: "files" })).toEqual({ sheet: "files", tab: null });
     expect(migrateSheet({ sheet: "hub" })).toEqual({ sheet: "hub", tab: null });
     expect(migrateSheet({ sheet: "skills" })).toEqual({ sheet: "skills", tab: null });
+    expect(migrateSheet({ sheet: "memory" })).toEqual({ sheet: "memory", tab: null });
     expect(migrateSheet({ sheet: "shortcuts" })).toEqual({ sheet: "shortcuts", tab: null });
     expect(migrateSheet({ sheet: "workflows" })).toEqual({ sheet: "workflows", tab: null });
   });
@@ -211,6 +212,20 @@ describe("restoreTabs — every open sheet is remembered state", () => {
     const { tabs, active } = restoreTabs({}, panels);
     expect(tabs).toEqual([]);
     expect(active).toBeNull();
+  });
+});
+
+
+describe("Skill document tabs", () => {
+  it("restores the package path and original session rather than treating it as a workspace file", () => {
+    const stored: DockTab = { id: "preview:wrong", label: "SKILL.md", kind: "skill", skill: "browser-use", path: "references/download.md", parentSession: "session_1", closable: true };
+    const { tabs, active } = restoreTabs({ open: [stored], active: stored.id }, panels);
+    expect(tabs).toEqual([{ ...stored, id: "skill:session_1:browser-use:references/download.md" }]);
+    expect(active).toBe("skill:session_1:browser-use:references/download.md");
+  });
+  it("drops a stored Skill document without its session authorization scope", () => {
+    const stored = { id: "skill:old", label: "SKILL.md", kind: "skill", skill: "browser-use", path: "SKILL.md", closable: true } as DockTab;
+    expect(restoreTabs({ open: [stored, ws[0]] }, panels).tabs).toEqual([ws[0]]);
   });
 });
 

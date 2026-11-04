@@ -77,6 +77,46 @@ type BrowserReply struct {
 	// This observation establishes neither causation nor business completion.
 	PendingRequests int `json:"pending_requests,omitempty"`
 	SettleMS        int `json:"settle_ms,omitempty"`
+	// ObservationPending distinguishes a dispatched action from a complete
+	// observation of its outcome. It never authorizes replaying that action.
+	ObservationPending bool `json:"observation_pending,omitempty"`
+	// Timing is diagnostic metadata, not page evidence or model-facing prose.
+	Timing *BrowserTiming `json:"timing,omitempty"`
+	Batch  *BrowserBatch  `json:"batch,omitempty"`
+}
+
+// BrowserTiming reports worker-side monotonic durations in milliseconds.
+// ExecutionMS excludes queueing. SnapshotMS includes its evidence work, while
+// EvidenceMS also includes direct extract evidence; stages are nested and must
+// not all be added together. These values do not include model/provider time.
+type BrowserTiming struct {
+	TotalMS     float64 `json:"total_ms"`
+	QueueMS     float64 `json:"queue_ms"`
+	ExecutionMS float64 `json:"execution_ms"`
+	// DispatchMS is the phase before post-action observation, including
+	// Playwright's automatic waits; it is not pure input transport latency.
+	DispatchMS float64 `json:"dispatch_ms"`
+	// NavigationMS covers explicit navigate/back and new-tab preparation. It
+	// is nested in DispatchMS, not all network work triggered by every click.
+	NavigationMS float64 `json:"navigation_ms"`
+	// ConditionWaitMS covers explicit wait conditions and observation-retry
+	// DOMContentLoaded waits. Normal wait conditions are also in DispatchMS.
+	ConditionWaitMS             float64 `json:"condition_wait_ms"`
+	SettleMS                    float64 `json:"settle_ms"`
+	SnapshotMS                  float64 `json:"snapshot_ms"`
+	EvidenceMS                  float64 `json:"evidence_ms"`
+	SnapshotCount               int     `json:"snapshot_count"`
+	EvidenceCount               int     `json:"evidence_count"`
+	IntermediateEvidenceSkipped int     `json:"intermediate_evidence_skipped"`
+}
+
+// BrowserBatch describes execution coverage, not business completion. Steps
+// contains only attempted actions; skipped actions must not be marked as run.
+type BrowserBatch struct {
+	Requested  int    `json:"requested"`
+	Executed   int    `json:"executed"`
+	Skipped    int    `json:"skipped"`
+	StopReason string `json:"stop_reason"`
 }
 
 // BrowserTabRef names a tab in a reply.
@@ -98,10 +138,20 @@ type BrowserScreenshot struct {
 
 // BrowserStep is one step's outcome inside a batch.
 type BrowserStep struct {
-	Action string `json:"action"`
-	OK     bool   `json:"ok"`
-	Error  string `json:"error,omitempty"`
-	Text   string `json:"text,omitempty"`
+	Action     string  `json:"action"`
+	OK         bool    `json:"ok"`
+	Error      string  `json:"error,omitempty"`
+	Text       string  `json:"text,omitempty"`
+	DurationMS float64 `json:"duration_ms,omitempty"`
+}
+
+// BrowserStepResult is the diagnostic subset retained by the host. Intermediate
+// page text is not copied into UI details merely because a batch was timed.
+type BrowserStepResult struct {
+	Action     string  `json:"action"`
+	OK         bool    `json:"ok"`
+	Error      string  `json:"error,omitempty"`
+	DurationMS float64 `json:"duration_ms,omitempty"`
 }
 
 // Browser actions, split by whether they can change the page. The split is
@@ -109,26 +159,28 @@ type BrowserStep struct {
 // at all is the channel's decision (web.BrowserGate), which asks once per run
 // rather than per action.
 const (
-	BrowserActionSnapshot   = "snapshot"
-	BrowserActionClick      = "click"
-	BrowserActionType       = "type"
-	BrowserActionNavigate   = "navigate"
-	BrowserActionWait       = "wait"
-	BrowserActionExtract    = "extract"
-	BrowserActionScroll     = "scroll"
-	BrowserActionFind       = "find"
-	BrowserActionSelect     = "select"
-	BrowserActionPress      = "press"
-	BrowserActionHover      = "hover"
-	BrowserActionBatch      = "batch"
-	BrowserActionScreenshot = "screenshot"
-	BrowserActionTabs       = "tabs"
-	BrowserActionBookmarks  = "bookmarks"
-	BrowserActionDownloads  = "downloads"
-	BrowserActionUpload     = "upload"
-	BrowserActionTab        = "tab"
-	BrowserActionCalculate  = "calculate"
-	BrowserActionDevTools   = "devtools"
+	BrowserActionSnapshot     = "snapshot"
+	BrowserActionClick        = "click"
+	BrowserActionType         = "type"
+	BrowserActionNavigate     = "navigate"
+	BrowserActionWait         = "wait"
+	BrowserActionExtract      = "extract"
+	BrowserActionScroll       = "scroll"
+	BrowserActionFind         = "find"
+	BrowserActionSelect       = "select"
+	BrowserActionPress        = "press"
+	BrowserActionHover        = "hover"
+	BrowserActionBatch        = "batch"
+	BrowserActionScreenshot   = "screenshot"
+	BrowserActionTabs         = "tabs"
+	BrowserActionBookmarks    = "bookmarks"
+	BrowserActionDownloads    = "downloads"
+	BrowserActionUpload       = "upload"
+	BrowserActionTab          = "tab"
+	BrowserActionCalculate    = "calculate"
+	BrowserActionDevTools     = "devtools"
+	BrowserActionOpenPages    = "open_pages"
+	BrowserActionObservePages = "observe_pages"
 )
 
 // MaxBrowserBatchSteps bounds one batch. The worker enforces the same number;
@@ -166,6 +218,8 @@ func BrowserReadOnly(action string) bool {
 	switch action {
 	case BrowserActionSnapshot, BrowserActionWait, BrowserActionExtract,
 		BrowserActionScroll, BrowserActionFind, BrowserActionScreenshot, BrowserActionTabs, BrowserActionCalculate, BrowserActionBookmarks, BrowserActionDownloads:
+		return true
+	case BrowserActionObservePages:
 		return true
 	}
 	return false
@@ -214,39 +268,43 @@ func (b *Browser) InputSchema() map[string]any { return b.inputSchema() }
 // executes an argument nobody vetted. That rule holds inside a batch too — each
 // step goes through the same validation as a lone call.
 type browserArgs struct {
-	Action       string          `json:"action"`
-	Target       string          `json:"target,omitempty"`
-	TabAction    string          `json:"tab_action,omitempty"`
-	ContextRef   string          `json:"context_ref,omitempty"`
-	ControlEpoch *int64          `json:"control_epoch,omitempty"`
-	X            *float64        `json:"x,omitempty"`
-	Y            *float64        `json:"y,omitempty"`
-	Version      string          `json:"version,omitempty"`
-	Text         *string         `json:"text,omitempty"`
-	Submit       bool            `json:"submit,omitempty"`
-	URL          string          `json:"url,omitempty"`
-	GoneText     string          `json:"gone_text,omitempty"`
-	Seconds      float64         `json:"seconds,omitempty"`
-	DownloadID   string          `json:"download_id,omitempty"`
-	Direction    string          `json:"direction,omitempty"`
-	Amount       float64         `json:"amount,omitempty"`
-	Role         string          `json:"role,omitempty"`
-	Name         string          `json:"name,omitempty"`
-	Placeholder  string          `json:"placeholder,omitempty"`
-	Label        string          `json:"label,omitempty"`
-	Query        string          `json:"query,omitempty"`
-	Limit        *int            `json:"limit,omitempty"`
-	Offset       int             `json:"offset,omitempty"`
-	TestID       string          `json:"testid,omitempty"`
-	Key          string          `json:"key,omitempty"`
-	Full         bool            `json:"full,omitempty"`
-	Actions      []browserArgs   `json:"actions,omitempty"`
-	Files        []string        `json:"files,omitempty"`
-	UploadMode   string          `json:"upload_mode,omitempty"`
-	Operation    string          `json:"operation,omitempty"`
-	QuantityRefs []string        `json:"quantity_refs,omitempty"`
-	Method       string          `json:"method,omitempty"`
-	Params       json.RawMessage `json:"params,omitempty"`
+	Action       string               `json:"action"`
+	Target       string               `json:"target,omitempty"`
+	TabAction    string               `json:"tab_action,omitempty"`
+	TabID        string               `json:"tab_id,omitempty"`
+	ContextRef   string               `json:"context_ref,omitempty"`
+	ControlEpoch *int64               `json:"control_epoch,omitempty"`
+	X            *float64             `json:"x,omitempty"`
+	Y            *float64             `json:"y,omitempty"`
+	Version      string               `json:"version,omitempty"`
+	Text         *string              `json:"text,omitempty"`
+	Submit       bool                 `json:"submit,omitempty"`
+	URL          string               `json:"url,omitempty"`
+	GoneText     string               `json:"gone_text,omitempty"`
+	Seconds      float64              `json:"seconds,omitempty"`
+	DownloadID   string               `json:"download_id,omitempty"`
+	Direction    string               `json:"direction,omitempty"`
+	Amount       float64              `json:"amount,omitempty"`
+	Role         string               `json:"role,omitempty"`
+	Name         string               `json:"name,omitempty"`
+	Placeholder  string               `json:"placeholder,omitempty"`
+	Label        string               `json:"label,omitempty"`
+	Query        string               `json:"query,omitempty"`
+	Limit        *int                 `json:"limit,omitempty"`
+	Offset       int                  `json:"offset,omitempty"`
+	TestID       string               `json:"testid,omitempty"`
+	Key          string               `json:"key,omitempty"`
+	Full         bool                 `json:"full,omitempty"`
+	Actions      []browserArgs        `json:"actions,omitempty"`
+	Files        []string             `json:"files,omitempty"`
+	UploadMode   string               `json:"upload_mode,omitempty"`
+	Operation    string               `json:"operation,omitempty"`
+	QuantityRefs []string             `json:"quantity_refs,omitempty"`
+	Method       string               `json:"method,omitempty"`
+	Params       json.RawMessage      `json:"params,omitempty"`
+	URLs         []string             `json:"urls,omitempty"`
+	Pages        []BrowserPageBinding `json:"pages,omitempty"`
+	Concurrency  *int                 `json:"concurrency,omitempty"`
 }
 
 var browserQuantityRef = regexp.MustCompile(`^[A-Za-z0-9_.:-]{1,160}$`)
@@ -285,7 +343,7 @@ func validBrowserDevToolsTarget(target string) bool {
 	return len(target) <= 160 && browserDevToolsTarget.MatchString(target)
 }
 
-func validateBrowserOp(a browserArgs) (browserArgs, error) {
+func validateBrowserOperation(a browserArgs) (browserArgs, error) {
 	action := strings.TrimSpace(a.Action)
 	text := ""
 	if a.Text != nil {
@@ -562,7 +620,8 @@ func (b *Browser) prepare(args json.RawMessage) (browserArgs, string, error) {
 		}
 		steps = append(steps, step)
 	}
-	return browserArgs{Action: BrowserActionBatch, Actions: steps}, a.Action, nil
+	op, err := applyBrowserPageBinding(a, browserArgs{Action: BrowserActionBatch, Actions: steps})
+	return op, a.Action, err
 }
 
 func (b *Browser) Execute(ctx context.Context, args json.RawMessage) (Result, error) {
@@ -603,6 +662,15 @@ func (b *Browser) Execute(ctx context.Context, args json.RawMessage) (Result, er
 // the original redacted diagnostics. Details never travel to a model provider.
 func (b *Browser) browserResult(op browserArgs, reply BrowserReply, text string) Result {
 	result := b.bound(op.Action, reply, text)
+	if browserPagesAction(op.Action) {
+		result.Payload = &ResultPayload{Text: text, Structured: append(json.RawMessage(nil), reply.Data...), Format: "json"}
+		if collection, err := decodeBrowserPages(op.Action, reply.Data); err == nil {
+			result.Payload.Incomplete = collection.Coverage.Observed < collection.Coverage.Requested
+		} else {
+			result.Payload.Incomplete = true
+		}
+		return result
+	}
 	if op.Action == BrowserActionTab && op.TabAction == "claim" && reply.OK && reply.ActiveTab == op.Target && reply.ContextRef == op.ContextRef &&
 		reply.Control == "agent" && op.ControlEpoch != nil && *op.ControlEpoch < maxBrowserControlEpoch && reply.ControlEpoch != nil && *reply.ControlEpoch == *op.ControlEpoch+1 {
 		details := result.Details.(map[string]any)
@@ -658,6 +726,9 @@ func (b *Browser) bound(action string, r BrowserReply, text string) Result {
 // information the model needs to know what state the page is in now, so they
 // travel with the error rather than being swallowed by it.
 func formatBrowserFailure(action string, r BrowserReply) string {
+	if browserPagesAction(action) {
+		return formatBrowserPages(action, r)
+	}
 	if action == BrowserActionDownloads {
 		return formatBrowserDownloadFailure(r)
 	}
@@ -667,6 +738,9 @@ func formatBrowserFailure(action string, r BrowserReply) string {
 	// with the failure rather than being dropped on the floor.
 	for _, d := range r.Dialogs {
 		fmt.Fprintf(&b, "\n%s — %s", browserDialogLabel(r), d)
+	}
+	if progress := formatBrowserBatch(r.Batch); progress != "" {
+		fmt.Fprintf(&b, "\n%s", progress)
 	}
 	if steps := formatBrowserSteps(r.Steps); steps != "" {
 		fmt.Fprintf(&b, "\n%s", steps)
@@ -680,6 +754,17 @@ func formatBrowserFailure(action string, r BrowserReply) string {
 		fmt.Fprintf(&b, "\ndata: %s", r.Data)
 	}
 	return b.String()
+}
+
+func formatBrowserBatch(batch *BrowserBatch) string {
+	if batch == nil {
+		return ""
+	}
+	text := fmt.Sprintf("batch: %d/%d steps executed; %d not executed; stop=%s", batch.Executed, batch.Requested, batch.Skipped, batch.StopReason)
+	if batch.Skipped > 0 {
+		text += ". Observe the current page before planning the remaining steps; do not replay completed clicks or submissions."
+	}
+	return text
 }
 
 func formatBrowserEvidence(raw json.RawMessage) string {
@@ -723,6 +808,9 @@ func formatBrowserSteps(steps []BrowserStep) string {
 // interactive-element count — so the model always knows what its action did
 // without spending a separate snapshot call.
 func formatBrowserReply(action string, r BrowserReply) string {
+	if browserPagesAction(action) {
+		return formatBrowserPages(action, r)
+	}
 	if action == BrowserActionBookmarks {
 		return formatBrowserBookmarks(r)
 	}
@@ -752,6 +840,10 @@ func formatBrowserReply(action string, r BrowserReply) string {
 		fmt.Fprintf(&b, "%s — %s\n", browserDialogLabel(r), d)
 	}
 	b.WriteString(formatBrowserSettle(r))
+	if progress := formatBrowserBatch(r.Batch); progress != "" {
+		b.WriteString(progress)
+		b.WriteString("\n")
+	}
 	if steps := formatBrowserSteps(r.Steps); steps != "" {
 		b.WriteString(steps)
 		b.WriteString("\n")
@@ -800,6 +892,9 @@ func formatBrowserSettle(r BrowserReply) string {
 // package's return value in order to extend it is one refactor away from silently
 // dropping the addition.
 func browserDetails(action string, r BrowserReply) map[string]any {
+	if browserPagesAction(action) {
+		return browserPagesDetails(action, r)
+	}
 	// Operation/status text is formatted separately from the worker's readable
 	// page text. Keep that distinction for evidence presentation and the bounded
 	// missing-citation review; this flag never claims the content is correct.
@@ -810,7 +905,7 @@ func browserDetails(action string, r BrowserReply) map[string]any {
 		"url":                  r.URL,
 		"title":                r.Title,
 		"interactive":          r.Interactive,
-		"has_readable_content": r.OK && readable != "" && readable != "No matching elements or readable page text.",
+		"has_readable_content": r.OK && !r.ObservationPending && readable != "" && readable != "No matching elements or readable page text.",
 	}
 	if action == BrowserActionBookmarks {
 		// Pogo bookmarks are saved-scope metadata, not an observation of any web
@@ -839,6 +934,20 @@ func browserDetails(action string, r BrowserReply) map[string]any {
 	}
 	if len(r.Steps) > 0 {
 		d["steps"] = len(r.Steps)
+		steps := make([]BrowserStepResult, len(r.Steps))
+		for i, step := range r.Steps {
+			steps[i] = BrowserStepResult{Action: step.Action, OK: step.OK, Error: step.Error, DurationMS: step.DurationMS}
+		}
+		d["step_results"] = steps
+	}
+	if r.Timing != nil {
+		d["timing"] = *r.Timing
+	}
+	if r.Batch != nil {
+		d["batch"] = *r.Batch
+	}
+	if r.ObservationPending {
+		d["observation_pending"] = true
 	}
 	return d
 }

@@ -79,6 +79,7 @@ onBeforeUnmount(() => {
   if (current.value) revoke(current.value.id, currentOwner);
   for (const [id, owner] of retired) revoke(id, owner);
 });
+defineExpose({ reload });
 </script>
 
 <template>

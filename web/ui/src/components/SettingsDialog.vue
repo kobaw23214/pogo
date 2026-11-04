@@ -198,7 +198,7 @@ async function applySync(fn: () => void) {
 }
 
 const storageDirty = computed(
-  () => !!storage.value && (storage.value.days !== snapshotDays.value || storage.value.turns !== snapshotTurns.value),
+  () => !!storage.value && (storage.value.days !== snapshotDays.value || storage.value.turns !== snapshotTurns.value || storage.value.turnsLimited !== snapshotTurnsLimited.value),
 );
 const rawBehind = computed(() => lastEdited.value === "form");
 
@@ -1468,11 +1468,14 @@ const storage = ref<{
   turns: number;
   turnsFlag: number;
   turnsEffective: number;
+  turnsLimited: boolean;
 } | null>(null);
 // The full prefs object as loaded, so the storage sheet's wholesale
 // PUT /api/prefs carries the fields other sheets own instead of zeroing them.
 const prefsLoaded = ref<Prefs | null>(null);
 const snapshotTurns = ref(0);
+const snapshotTurnsLimited = ref(false);
+const turnsEffectiveText = computed(() => storage.value?.turnsLimited ? t("settingsDialog.turnsEffective", { n: storage.value.turnsEffective }) : t("settingsDialog.turnsUnlimited"));
 const storageError = ref("");
 const storageSaving = ref(false);
 const pruning = ref(false);
@@ -1502,20 +1505,21 @@ async function loadStorage() {
     const info = await api.getPrefs();
     prefsLoaded.value = info.prefs;
     memoryAuto.value = !!info.prefs.memory_auto;
+    const turnOverride = info.turns?.max_turns ?? 0;
     storage.value = {
       days: info.prefs.spill_retention_days,
       files: info.spill.files,
       bytes: info.spill.bytes,
       dir: info.spill.dir,
       lastSweep: info.last_sweep ?? null,
-      // Show the actual cap; the API's zero override means use the default.
-      // Keep that override in prefsLoaded so saving other settings preserves it.
-      turns: info.turns?.effective ?? 300,
+      turns: turnOverride > 0 ? info.turns?.effective ?? turnOverride : 300,
       turnsFlag: info.turns?.flag ?? 300,
-      turnsEffective: info.turns?.effective ?? 300,
+      turnsEffective: info.turns?.effective ?? 0,
+      turnsLimited: turnOverride > 0,
     };
     snapshotDays.value = storage.value.days;
     snapshotTurns.value = storage.value.turns;
+    snapshotTurnsLimited.value = storage.value.turnsLimited;
     // A prefs file the server cannot read pauses the automatic sweep; the
     // section still renders (with the defaults) so the file can be fixed by
     // saving from here.
@@ -1547,8 +1551,8 @@ async function saveStorage() {
     ElMessage.error(t("settingsDialog.storageBadDays"));
     return;
   }
-  const turns = storage.value.turns;
-  if (!Number.isInteger(turns) || turns < 1 || turns > 1000) {
+  const turns = storage.value.turnsLimited ? storage.value.turns : 0;
+  if (storage.value.turnsLimited && (!Number.isInteger(turns) || turns < 1 || turns > 1000)) {
     ElMessage.error(t("settingsDialog.turnsBad"));
     return;
   }
@@ -1562,17 +1566,14 @@ async function saveStorage() {
     storage.value.days = info.prefs.spill_retention_days;
     snapshotDays.value = storage.value.days;
     prefsLoaded.value = info.prefs;
-    storage.value.turns = info.turns?.effective ?? storage.value.turns;
-    storage.value.turnsFlag = info.turns?.flag ?? storage.value.turnsFlag;
-    storage.value.turnsEffective = info.turns?.effective ?? storage.value.turnsEffective;
-    if (turns !== snapshotTurns.value) {
+    if (turns !== snapshotTurns.value || storage.value.turnsLimited !== snapshotTurnsLimited.value) {
       const tv = await api.setMaxTurns(turns);
-      storage.value.turns = tv.effective;
       storage.value.turnsFlag = tv.flag;
       storage.value.turnsEffective = tv.effective;
       prefsLoaded.value.max_turns = tv.max_turns;
     }
     snapshotTurns.value = storage.value.turns;
+    snapshotTurnsLimited.value = storage.value.turnsLimited;
     storageError.value = info.load_error ?? "";
     ElMessage.success(t("settingsDialog.storageSaved"));
   } catch (err) {
@@ -1581,10 +1582,13 @@ async function saveStorage() {
     if (fresh) {
       prefsLoaded.value = fresh.prefs;
       if (storage.value) {
-        storage.value.turns = fresh.turns?.effective ?? storage.value.turns;
+        const override = fresh.turns?.max_turns ?? 0;
+        storage.value.turns = override > 0 ? fresh.turns?.effective ?? override : 300;
         storage.value.turnsFlag = fresh.turns?.flag ?? storage.value.turnsFlag;
         storage.value.turnsEffective = fresh.turns?.effective ?? storage.value.turnsEffective;
+        storage.value.turnsLimited = override > 0;
         snapshotTurns.value = storage.value.turns;
+        snapshotTurnsLimited.value = storage.value.turnsLimited;
       }
     }
   } finally {
@@ -2576,12 +2580,13 @@ watch(activeSection, (s, prev) => {
             <div v-if="storage" class="sect">
               <div class="sect-head">
                 <span>{{ t("settingsDialog.turnsTitle") }}</span>
-                <span class="hint">{{ t("settingsDialog.turnsEffective", { n: storage.turnsEffective }) }}</span>
+                <span class="hint">{{ turnsEffectiveText }}</span>
               </div>
               <div class="prow-line">
                 <label class="fld num">
                   <span>{{ t("settingsDialog.turnsField") }}</span>
-                  <input v-model.number="storage.turns" type="number" min="1" max="1000" step="1" />
+                  <el-switch v-model="storage.turnsLimited" :active-text="t('settingsDialog.turnsLimitEnabled')" />
+                  <input v-if="storage.turnsLimited" v-model.number="storage.turns" type="number" min="1" max="1000" step="1" />
                 </label>
               </div>
               <p class="hint">{{ t("settingsDialog.turnsHint", { flag: storage.turnsFlag }) }}</p>

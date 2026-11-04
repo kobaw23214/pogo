@@ -44,7 +44,7 @@ func TestLoadInvalidValueIsAnError(t *testing.T) {
 	}
 }
 
-// The turn cap accepts 0 (follow the flag) and the documented bound, and
+// The turn cap accepts 0 (unlimited) and the documented bound, and
 // refuses both directions outside it: a negative or huge cap is a typo, not
 // a budget anyone asked for.
 func TestValidateMaxTurns(t *testing.T) {

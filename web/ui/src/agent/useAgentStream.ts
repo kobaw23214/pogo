@@ -8,7 +8,7 @@ import { parseFrame } from "./sse";
 import { createNewlineCounter } from "./argsPreview";
 import { browserStreamBacklogThrough, createBrowserReveal, type BrowserEventDelivery } from "./browserView";
 import { createBrowserFocusObserver } from "./browserFocus";
-import { emptyLive, type AgentEvent, type AttachmentMeta, type BgTask, type InboxItem, type Live, type Message, type OverheadPart, type PolicyState, type RunInfo, type ShellJobRecord, type StarterCard, type ToolResult, type Usage } from "@/api/types";
+import { emptyLive, type AgentEvent, type AttachmentMeta, type BgTask, type CompactionView, type ContextPrompt, type InboxItem, type Live, type Message, type OverheadPart, type PolicyState, type RunInfo, type ShellJobRecord, type StarterCard, type ToolResult, type Usage } from "@/api/types";
 import { liveAgentWorkflowUpdate, type AgentWorkflowUpdate } from "./agentWorkflowUpdates";
 import { mergeInboxItem } from "@/agent/conversationInbox";
 import { gt } from "@/i18n";
@@ -111,6 +111,15 @@ export interface ImageDescribe {
  */
 export function useAgentStream(options: { attachments?: boolean } = {}) {
   const messages = ref<Message[]>([]);
+  const compactions = ref<CompactionView[]>([]);
+  function acceptCompaction(view: CompactionView) {
+    const next = [...compactions.value];
+    const index = next.findIndex(c => c.id === view.id || (c.id.startsWith("local-") && !view.id.startsWith("local-") && c.summary === view.summary));
+    if (index >= 0) next[index] = view;
+    else next.push(view);
+    next.sort((a, b) => a.after - b.after);
+    compactions.value = next;
+  }
   // The selected target may change before its snapshot arrives. Components
   // retain the old transcript during that gap, so its UI state needs this id.
   const displaySessionId = ref<string | null>(null);
@@ -137,6 +146,15 @@ export function useAgentStream(options: { attachments?: boolean } = {}) {
   // A previous model's tokenizer count is useful only as an approximation.
   // Persisted snapshots carry the same flag, so reconnecting cannot relabel it.
   const contextEstimated = ref(false);
+  const contextPrompt = ref<ContextPrompt | null>(null);
+  function acceptContextPrompt(e: AgentEvent, forceEstimate = false) {
+    if (!e.context_prompt) return;
+    contextPrompt.value = e.context_prompt;
+    if (forceEstimate || contextEstimated.value || !contextTokens.value) {
+      contextTokens.value = e.context_prompt.composition.estimated;
+      contextEstimated.value = true;
+    }
+  }
   // overheadTokens is the server's fixed-cost estimate (system prompt + tool
   // schemas), and overheadBreakdown what it is made of. Both arrive with a
   // snapshot, a model change, and a turn_start whose tool view changed them
@@ -353,6 +371,7 @@ export function useAgentStream(options: { attachments?: boolean } = {}) {
       browserFocus.observe(e, observed);
     }
 
+    if (e.type !== "snapshot") acceptContextPrompt(e, e.type === "compacted");
     switch (e.type) {
       case "shortcuts_changed": {
         // The event carries no content or permissions. Open panels refetch via
@@ -378,6 +397,7 @@ export function useAgentStream(options: { attachments?: boolean } = {}) {
         displaySessionId.value = delivery?.sessionId ?? sessionId;
         workspaceDirty = false;
         messages.value = normalizeMessages(s.messages);
+        compactions.value = s.compactions ?? [];
         const restoredAnswers = s.user_input_answers ?? {};
         results.value = Object.fromEntries(Object.entries(s.results ?? {}).map(([callID, result]) => [callID,
           restoredAnswers[callID] ? { ...result, details: restoredAnswers[callID] } : result,
@@ -395,6 +415,7 @@ export function useAgentStream(options: { attachments?: boolean } = {}) {
         shellTasks.value = shellJobSnapshot(s.shell_tasks);
         contextTokens.value = s.context_tokens ?? 0;
         contextEstimated.value = s.context_estimated ?? false;
+        contextPrompt.value = s.context_prompt ?? null;
         overheadTokens.value = s.overhead_tokens ?? 0;
         overheadBreakdown.value = s.overhead_breakdown ?? [];
         clearTrigger.value = s.clear_trigger ?? 0;
@@ -528,6 +549,8 @@ export function useAgentStream(options: { attachments?: boolean } = {}) {
           }
           entry.lines = slot.base + slot.counter.push(text);
         }
+        if (e.preview_added !== undefined) entry.preview_added = e.preview_added;
+        if (e.preview_removed !== undefined) entry.preview_removed = e.preview_removed;
         const head = entry.head ?? "";
         if (text && head.length < maxIncomingHead) {
           // The head's only job is to carry the path, so it stops growing once
@@ -905,14 +928,14 @@ export function useAgentStream(options: { attachments?: boolean } = {}) {
         return;
       }
 
-      case "rewound":
-      case "compacted": {
-        // Two different events with one response, because the response is the same
-        // one: whatever this tab holds no longer describes the session's history.
-        // A rewind abandoned a branch, a compaction replaced the whole history with
-        // a summary of it, and in both cases only a fresh snapshot rebuilds the
-        // truth. A REST refetch does that without dropping this still-good stream;
-        // the seq guard keeps a snapshot that raced live events from regressing them.
+      case "compacted":
+        if (e.compaction) acceptCompaction(e.compaction);
+        return;
+
+      case "rewound": {
+        // A rewind abandoned a branch, so only a fresh snapshot rebuilds the
+        // truth. Compaction is deliberately different: its marker appends without
+        // discarding any visible messages.
         const sid = sessionId;
         if (!sid) return;
         // A rewind can also delete the uploads only its abandoned branch
@@ -1211,6 +1234,8 @@ export function useAgentStream(options: { attachments?: boolean } = {}) {
 
   return {
     messages: messages as Ref<Message[]>,
+    compactions,
+    acceptCompaction,
     displaySessionId,
     results,
     live,
@@ -1228,6 +1253,7 @@ export function useAgentStream(options: { attachments?: boolean } = {}) {
     acceptShellTask,
     contextTokens,
     contextEstimated,
+    contextPrompt,
     overheadTokens,
     overheadBreakdown,
     clearTrigger,

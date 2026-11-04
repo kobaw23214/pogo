@@ -303,7 +303,7 @@ func (s *Server) handleStudioGenerateStarters(w http.ResponseWriter, r *http.Req
 		client = llm.New(llm.Options{
 			BaseURL: cfg.BaseURL, APIKey: cfg.APIKey, Model: cfg.Model, MaxTokens: cfg.MaxTokens,
 			Headers: cfg.Headers, ExtraBody: cfg.ExtraBody, Compatibility: cfg.Compatibility,
-			MaxRetries: s.mgr.cfg.Retries,
+			Timeout: cfg.Timeout, MaxRetries: s.mgr.cfg.Retries,
 		})
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), studioGenerateTimeout)

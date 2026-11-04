@@ -12,6 +12,10 @@ export default {
       todoCountOne: "{n} 项",
       todoCleared: "清空",
       searchIn: "in {path}",
+      browserOpenPages: "批量打开 {n} 个网页",
+      browserObservePages: "读取 {n} 个网页",
+      browserOpenPagesPending: "批量打开网页",
+      browserObservePagesPending: "读取多个网页",
     },
     en: {
       turnLabel: "Turn {n}",
@@ -22,6 +26,10 @@ export default {
       todoCountOne: "{n} item",
       todoCleared: "Clear list",
       searchIn: "in {path}",
+      browserOpenPages: "Open {n} webpages",
+      browserObservePages: "Read {n} webpages",
+      browserOpenPagesPending: "Open webpages",
+      browserObservePagesPending: "Read webpages",
     },
   },
 };

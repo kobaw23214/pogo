@@ -288,16 +288,17 @@ func (b *nativeBrowser) Execute(ctx context.Context, raw json.RawMessage) (tools
 	if err := json.Unmarshal(raw, &op); err != nil || op == nil {
 		return tools.BrowserReply{}, errors.New("invalid browser operation")
 	}
+	// New binding fields must never be silently ignored by an older worker.
+	// Negotiate with a read before staging files or dispatching any new action.
+	focus, err := b.pageExecutionMetadata(ctx, raw)
+	if err != nil {
+		return tools.BrowserReply{}, err
+	}
 	if metadata.Action == tools.BrowserActionUpload {
 		if err := b.prepareUpload(ctx, op); err != nil {
 			return tools.BrowserReply{}, err
 		}
 	}
-	// Only an explicit Agent tab change needs a one-shot viewer focus identity.
-	// This optional read cannot recover/recreate a context, grant control, or
-	// delay a page operation beyond its small metadata budget. Execute owns op,
-	// so calling State's context-recovery path here would deadlock on acquire.
-	focus := b.focusMetadata(ctx, raw)
 	op["op_id"], _ = json.Marshal(randomID(16))
 	response, err := b.request(ctx, http.MethodPost, "/execute", op)
 	if err != nil {
@@ -315,6 +316,9 @@ func (b *nativeBrowser) Execute(ctx context.Context, raw json.RawMessage) (tools
 		return tools.BrowserReply{}, ctx.Err()
 	}
 	reply.Backend = "native"
+	if metadata.Action == tools.BrowserActionOpenPages || metadata.Action == tools.BrowserActionObservePages {
+		b.sanitizePageCollectionFocus(ctx, &reply, focus, metadata.Action)
+	}
 	// Worker fields alone never authorize a UI focus. Older workers omit this
 	// field; future workers must not contradict the captured context either.
 	workerContext := reply.ContextRef
@@ -357,6 +361,9 @@ func nativeBrowserTabChange(raw json.RawMessage) bool {
 	}
 	if json.Unmarshal(raw, &action) != nil {
 		return false
+	}
+	if action.Action == tools.BrowserActionOpenPages {
+		return true
 	}
 	if action.Action == tools.BrowserActionTab {
 		return action.TabAction == "" || action.TabAction == "new" || action.TabAction == "switch" || action.TabAction == "claim"

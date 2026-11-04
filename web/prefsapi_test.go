@@ -143,6 +143,27 @@ func TestPruneSpillEndpointRefusesWhenDisabledOrBroken(t *testing.T) {
 	}
 }
 
+func TestMaxTurnsDefaultsUnlimitedAndCanToggleCap(t *testing.T) {
+	front := prefsTestServer(t)
+	code, got := prefsRequest(t, front, "GET", "/api/prefs", "")
+	if code != http.StatusOK {
+		t.Fatalf("GET /api/prefs: %d", code)
+	}
+	turns := got["turns"].(map[string]any)
+	if turns["effective"] != 0.0 || turns["max_turns"] != 0.0 {
+		t.Fatalf("default turn cap = %v, want unlimited", turns)
+	}
+
+	code, got = prefsRequest(t, front, "PUT", "/api/max-turns", `{"max_turns":300}`)
+	if code != http.StatusOK || got["effective"] != 300.0 || got["max_turns"] != 300.0 {
+		t.Fatalf("enable turn cap: code %d, response %v", code, got)
+	}
+	code, got = prefsRequest(t, front, "PUT", "/api/max-turns", `{"max_turns":0}`)
+	if code != http.StatusOK || got["effective"] != 0.0 || got["max_turns"] != 0.0 {
+		t.Fatalf("disable turn cap: code %d, response %v", code, got)
+	}
+}
+
 func readPrefsFile() (int, error) {
 	data, err := os.ReadFile(prefs.Path())
 	if err != nil {

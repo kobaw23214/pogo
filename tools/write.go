@@ -30,8 +30,8 @@ type writeArgs struct {
 func (*Write) Name() string { return "write" }
 
 func (*Write) Description() string {
-	return "Write content to a file. Creates the file if it doesn't exist, overwrites it if it does. " +
-		"Parent directories are created automatically."
+	return "Write content to a file. Creates or overwrites; parent directories are auto-created. " +
+		"When streaming arguments, put path before content."
 }
 
 // ExecutionMode is Parallel; concurrent writes to the same file are made safe by

@@ -41,11 +41,17 @@ func TestAutoCompactPreRunCheckFiresBetweenRuns(t *testing.T) {
 		t.Fatalf("%d model calls; want 3 (answer, summary, answer) — the pre-run check did not fire", calls)
 	}
 	snap := h.session(sid).Hub().Snapshot()
-	first := snap.Messages[0]
-	if !strings.Contains(textOf(first), "SUMMARY") {
-		t.Fatalf("message 0 after compaction:\n%.200s\nwant the compaction continuation", textOf(first))
+	if len(snap.Messages) != 4 || textOf(snap.Messages[0]) != "first question" {
+		t.Fatalf("auto-compaction removed visible history: %+v", snap.Messages)
 	}
-	if strings.Count(textOf(first), "first question") != 1 {
+	if len(snap.Compactions) != 1 || !strings.Contains(snap.Compactions[0].Summary, "SUMMARY") {
+		t.Fatalf("auto-compaction checkpoint is missing: %+v", snap.Compactions)
+	}
+	model := h.session(sid).agent.Messages()
+	if len(model) != 3 || !strings.Contains(model[0].Text(), "SUMMARY") {
+		t.Fatalf("model did not resume from the auto-compaction checkpoint: %+v", model)
+	}
+	if strings.Count(model[0].Text(), "first question") != 1 {
 		t.Fatalf("the original request must be pinned verbatim exactly once in the continuation")
 	}
 }

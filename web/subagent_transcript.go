@@ -34,6 +34,7 @@ func (s *Server) handleSubagentTranscript(w http.ResponseWriter, r *http.Request
 	}
 	hub := NewHub()
 	hub.Seed(store.TimedMessages(""))
+	hub.SetCompactions(store.Compactions(""))
 	usage, _ := store.UsageTotals()
 	hub.SetUsage(usage)
 	writeJSON(w, http.StatusOK, map[string]any{

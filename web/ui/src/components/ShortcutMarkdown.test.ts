@@ -56,6 +56,7 @@ describe("Passive Markdown boundary and default compatibility", () => {
     const html = await render(MarkdownView, { source, passive: true, fileLinks: true });
     expect(html).not.toContain("<img"); expect(html).not.toContain("<script>"); expect(html).toContain("&lt;script&gt;");
     expect(html).toContain('class="markdown-image-alt">remote</span>');
+    expect(html).not.toContain("data-markdown-image-preview");
     expect(html).not.toContain("data-diagram"); expect(html).not.toContain("data-cite-anchor"); expect(html).not.toContain("data-workspace-file");
     expect(html).toContain('target="_blank" rel="noopener noreferrer"');
     for (const language of ["mermaid", "echarts", "bash"]) expect(html).toContain(`data-language="${language}" data-uncollapsed="true" data-line-numbers="false"`);
@@ -64,6 +65,7 @@ describe("Passive Markdown boundary and default compatibility", () => {
   it("preserves ordinary answer images, diagrams, citation anchors and code behavior when passive is omitted", async () => {
     const html = await render(MarkdownView, { source });
     expect(html).toContain('<img src="https://example.invalid/private.png"');
+    expect(html).toContain('class="markdown-image"'); expect(html).toContain('data-markdown-image-preview="true"'); expect(html).toContain('tabindex="0"');
     expect(html).toContain('data-diagram="mermaid"'); expect(html).toContain('data-diagram="echarts"');
     expect(html).toContain('data-cite-anchor="0"');
     expect(html).toContain('data-language="bash" data-uncollapsed="false" data-line-numbers="true"');
@@ -79,5 +81,23 @@ describe("Passive Markdown boundary and default compatibility", () => {
   it("keeps unsafe markdown URI schemes inert and escapes image-alt HTML", async () => {
     const html = await render(MarkdownView, { source: '[x](javascript:alert(1))\n\n![<img onerror=alert(1)>](https://example.invalid/a)', passive: true });
     expect(html).not.toContain('href="javascript:'); expect(html).not.toContain("<img"); expect(html).toContain("&lt;img onerror=alert(1)&gt;");
+  });
+});
+
+describe("HTML Artifact Markdown segments", () => {
+  const source = '```html-preview\n{"path":"artifacts/app.html","title":"Demo"}\n```';
+  it("mounts an artifact only after the active answer settles", async () => {
+    const html = await render(MarkdownView, { source });
+    expect(html).toContain('class="html-artifact'); expect(html).toContain("Demo"); expect(html).toContain("htmlArtifact.unavailable");
+    const streaming = await render(MarkdownView, { source, streaming: true });
+    expect(streaming).not.toContain('class="html-artifact'); expect(streaming).toContain('data-language="json"');
+  });
+  it("keeps passive metadata and ordinary HTML fences as inert source code", async () => {
+    const passive = await render(MarkdownView, { source, passive: true });
+    expect(passive).not.toContain('class="html-artifact');
+    expect(passive).toContain('data-language="html-preview" data-uncollapsed="true"');
+    const code = await render(MarkdownView, { source: '```html\n<script>alert(1)</script>\n```' });
+    expect(code).not.toContain('class="html-artifact'); expect(code).not.toContain("<script>");
+    expect(code).toContain('data-language="html"'); expect(code).toContain("&lt;script&gt;");
   });
 });

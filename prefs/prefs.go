@@ -77,11 +77,10 @@ type Prefs struct {
 	// bounded cost. Set by the settings dialog's slider.
 	AttachmentMaxMB int `json:"attachment_max_mb,omitempty"`
 	// MaxTurns is the runtime override of the interactive turn cap
-	// (-max-turns, agent.DefaultMaxTurns). 0 means the startup flag decides —
-	// the pre-override behaviour. Set by the settings dialog; the Manager
-	// applies it to cached sessions so the next run of an already-open
-	// conversation sees it without a reload. Schedule jobs keep their own
-	// MaxJobTurns cap either way.
+	// (-max-turns, agent.DefaultMaxTurns). 0 explicitly disables the cap.
+	// Set by the settings dialog; the Manager applies it to cached sessions so
+	// the next run of an already-open conversation sees it without a reload.
+	// Schedule jobs keep their own MaxJobTurns cap either way.
 	MaxTurns int `json:"max_turns,omitempty"`
 	// MemoryAuto turns on automatic memory distillation for interactive Studio
 	// Agent sessions (web/memory_distill.go). False means memory stays
@@ -122,7 +121,7 @@ func (p Prefs) Validate() error {
 		return fmt.Errorf("sandbox_mode must be empty (follow env) or enforce|degrade|off, got %q", p.SandboxMode)
 	}
 	if p.MaxTurns < 0 || p.MaxTurns > MaxTurnsBound {
-		return fmt.Errorf("max_turns must be 0 (follow -max-turns) or 1..%d, got %d",
+		return fmt.Errorf("max_turns must be 0 (unlimited) or 1..%d, got %d",
 			MaxTurnsBound, p.MaxTurns)
 	}
 	return nil

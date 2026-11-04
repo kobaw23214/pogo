@@ -87,7 +87,7 @@ describe('approval mode across reconstructed stream instances', () => {
     vi.spyOn(api, 'session').mockImplementation(() => new Promise(done => { resolve = done as typeof resolve; }));
     vi.spyOn(api, 'sessionAttachments').mockResolvedValue([]);
     const stream = store(), connection = stream.connect('chat-one');
-    first.send(snapshot(10, oldInstance, 'auto'), { type: 'compacted', seq: 11, ts: 11 });
+    first.send(snapshot(10, oldInstance, 'auto'), { type: 'rewound', seq: 11, ts: 11 });
     await vi.advanceTimersByTimeAsync(1);
     first.end(); await connection;
     restarted.send(snapshot(15, newInstance)); await vi.advanceTimersByTimeAsync(500);

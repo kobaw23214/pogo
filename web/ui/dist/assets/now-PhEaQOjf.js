@@ -1,0 +1,1 @@
+import{T as e}from"./get-z12M7s8T.js";var t=function(){return e.Date.now()};export{t};

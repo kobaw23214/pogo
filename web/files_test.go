@@ -18,11 +18,11 @@ import (
 
 // filesHarness builds the standard harness around an empty scripted model: the
 // file API never talks to one, so any call failing the test below is a bug.
-func filesHarness(t *testing.T) *harness {
+func filesHarness(t *testing.T, tweaks ...func(*Config)) *harness {
 	t.Helper()
 	return newHarness(t, func(int) (llm.Response, error) {
 		return llm.Response{}, errors.New("the file API must not call the model")
-	})
+	}, tweaks...)
 }
 
 func writeFixture(t *testing.T, root, rel, content string) {

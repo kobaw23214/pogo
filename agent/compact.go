@@ -126,6 +126,10 @@ func (a *Agent) compact(ctx context.Context, keep int64) (CompactResult, error) 
 // must atomically save the supplied branch, without calling back into Agent.
 // A failed commit leaves the old history intact; model usage is still charged.
 func (a *Agent) CompactWithCommit(ctx context.Context, keep int64, commit func([]llm.Message) error) (CompactResult, error) {
+	return a.CompactWithCommitInstructions(ctx, keep, commit, "")
+}
+
+func (a *Agent) CompactWithCommitInstructions(ctx context.Context, keep int64, commit func([]llm.Message) error, instructions string) (CompactResult, error) {
 	a.mu.Lock()
 	running := a.running
 	a.mu.Unlock()
@@ -154,7 +158,7 @@ func (a *Agent) CompactWithCommit(ctx context.Context, keep int64, commit func([
 
 	cut := splitKeepIndex(a.messages, keep)
 	head, tail := a.messages[:cut], a.messages[cut:]
-	summary, response, err := a.summarise(ctx, head, previousSummary(a.messages))
+	summary, response, err := a.summariseWithInstructions(ctx, head, previousSummary(a.messages), instructions)
 	usage := response.Usage
 	// Empty, truncated and cancelled responses can still consume tokens.
 	a.addUsage(usage)
@@ -344,6 +348,13 @@ func previousSummary(msgs []llm.Message) string {
 	return ""
 }
 
+func CompactionContinuationSummary(m llm.Message) (string, bool) {
+	if !llm.IsCompactionContinuation(&m) {
+		return "", false
+	}
+	return previousSummary([]llm.Message{m}), true
+}
+
 // summarise asks the model for the summary and returns it with what it cost.
 //
 // # The history is flattened into one user message, and no tools are offered
@@ -379,6 +390,10 @@ func previousSummary(msgs []llm.Message) string {
 // summaries. A summary is not a subtask whose cost can be shopped around; it is the
 // only remaining record of the instructions.
 func (a *Agent) summarise(ctx context.Context, head []llm.Message, prev string) (string, llm.Response, error) {
+	return a.summariseWithInstructions(ctx, head, prev, "")
+}
+
+func (a *Agent) summariseWithInstructions(ctx context.Context, head []llm.Message, prev, instructions string) (string, llm.Response, error) {
 	// What the model has been seeing, not the raw history: clearing is already
 	// applied on the way into every prompt, so summarising the uncleared text would
 	// send the provider more than the conversation ever occupied — and would ask for
@@ -402,7 +417,14 @@ func (a *Agent) summarise(ctx context.Context, head []llm.Message, prev string) 
 			"than starting from scratch: carry forward everything still true, drop what the " +
 			"transcript shows is finished or superseded, and merge in what happened since.\n\n")
 	}
+	instructions = strings.TrimSpace(instructions)
+	if instructions != "" {
+		b.WriteString("<compaction-focus>\n" + instructions + "\n</compaction-focus>\n\n")
+	}
 	b.WriteString("Summarise the session above so that it can be continued without the transcript.")
+	if instructions != "" {
+		b.WriteString(" Give additional weight to the user's <compaction-focus> without dropping any explicit constraints or unfinished work.")
+	}
 	req := llm.UserText(b.String())
 
 	// Keep the same client wrapper, model and cancellation budget. The purpose
@@ -469,7 +491,7 @@ Rules:
 // exists as a constant so previousSummary can recognise a continuation for what
 // it is — the output of an earlier compaction — instead of guessing from a tag a
 // user might have pasted as data.
-const continuationOpening = "This session continues from an earlier conversation."
+const continuationOpening = llm.CompactionContinuationOpening
 
 // continuation is the single user message the conversation becomes.
 //

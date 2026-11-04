@@ -229,11 +229,10 @@ func TestMultiuserFileMutationCannotReachAnotherAccount(t *testing.T) {
 }
 
 func TestFileMutationDoesNotManagePrivateLibraryAssetsOrTheirAncestor(t *testing.T) {
-	h := filesHarness(t)
+	h := filesHarness(t, func(cfg *Config) {
+		cfg.SessionDir = filepath.Join(cfg.Cwd, "internal", "sessions")
+	})
 	root := h.mgr.Cwd()
-	prior := h.mgr.cfg.SessionDir
-	h.mgr.cfg.SessionDir = filepath.Join(root, "internal", "sessions")
-	defer func() { h.mgr.cfg.SessionDir = prior }()
 	writeFixture(t, root, "internal/sessions/information/assets/source.txt", "private")
 	for _, path := range []string{"internal", "internal/sessions/information/assets/source.txt"} {
 		resp := h.do(http.MethodDelete, "/api/files", fileMutationJSON(t, root, path, "", true))
@@ -248,11 +247,10 @@ func TestFileMutationDoesNotManagePrivateLibraryAssetsOrTheirAncestor(t *testing
 }
 
 func TestFileMutationRejectsPrivateStorageCaseAliases(t *testing.T) {
-	h := filesHarness(t)
+	h := filesHarness(t, func(cfg *Config) {
+		cfg.SessionDir = filepath.Join(cfg.Cwd, ".localagent", "sessions")
+	})
 	root := h.mgr.Cwd()
-	prior := h.mgr.cfg.SessionDir
-	h.mgr.cfg.SessionDir = filepath.Join(root, ".localagent", "sessions")
-	defer func() { h.mgr.cfg.SessionDir = prior }()
 	writeFixture(t, root, ".localagent/sessions/information/assets/source.txt", "private")
 	canonical, err := os.Stat(filepath.Join(root, ".localagent"))
 	if err != nil {
@@ -293,11 +291,10 @@ func TestFileMutationRejectsPrivateStorageCaseAliases(t *testing.T) {
 }
 
 func TestFileMutationPrivateStorageIdentityGuardBothDirections(t *testing.T) {
-	h := filesHarness(t)
-	workspace := h.mgr.Cwd()
-	prior := h.mgr.cfg.SessionDir
-	h.mgr.cfg.SessionDir = filepath.Join(workspace, "private-parent", "sessions")
-	defer func() { h.mgr.cfg.SessionDir = prior }()
+	workspace := t.TempDir()
+	// This direct identity check has no HTTP or background-runtime dependency.
+	// Its private-root variants must not mutate a live Manager's configuration.
+	server := &Server{mgr: &Manager{cfg: Config{SessionDir: filepath.Join(workspace, "private-parent", "sessions")}}}
 	writeFixture(t, workspace, "private-parent/sessions/information/asset.txt", "private")
 	writeFixture(t, workspace, "public/note.txt", "public")
 	root, err := os.OpenRoot(workspace)
@@ -305,7 +302,6 @@ func TestFileMutationPrivateStorageIdentityGuardBothDirections(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer root.Close()
-	server := &Server{mgr: h.mgr}
 	for _, test := range []struct {
 		path    string
 		blocked bool
@@ -326,7 +322,7 @@ func TestFileMutationPrivateStorageIdentityGuardBothDirections(t *testing.T) {
 	}
 	// A configured private descendant that has not yet been initialized still
 	// protects its existing ancestor from removal through another spelling.
-	h.mgr.cfg.SessionDir = filepath.Join(workspace, "private-parent", "not-created", "sessions")
+	server.mgr.cfg.SessionDir = filepath.Join(workspace, "private-parent", "not-created", "sessions")
 	info, err := root.Lstat("private-parent")
 	if err != nil {
 		t.Fatal(err)

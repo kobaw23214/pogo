@@ -21,7 +21,7 @@ export interface BrowserLiveCallbacks {
   /** Mount this epoch in a fresh video element. Only present() grants input. */
   media: (stream: MediaStream, frame: BrowserLiveFrame) => Promise<void>;
   mediaClosed: () => void;
-  error: (error: Error & { code?: string; seq?: number }) => void;
+  error: (error: Error & { code?: string; seq?: number; requestKind?: "input" | "display" }) => void;
   close: () => void;
   /** Input is suspended during a bounded ICE interruption; no events replay. */
   connection?: (available: boolean) => void;
@@ -363,7 +363,10 @@ export function createBrowserLive(socket: WebSocket, target: NativeBrowserTarget
         if (!sent || !peer || sent.media_epoch !== peer.frame.media_epoch || sent.frame_id !== peer.frame.frame_id) return;
         stopMedia(); awaitMedia();
       }
-      callbacks.error(Object.assign(new Error(typeof data.error === "string" ? data.error.slice(0, 500) : "Browser action failed"), { code: typeof data.code === "string" ? data.code.slice(0, 100) : undefined, seq }));
+      // This local attribution comes from the command we sent, never from an
+      // error string. Navigation recovery must not mistake input for display.
+      const requestKind = sent ? sent.input ? "input" as const : "display" as const : undefined;
+      callbacks.error(Object.assign(new Error(typeof data.error === "string" ? data.error.slice(0, 500) : "Browser action failed"), { code: typeof data.code === "string" ? data.code.slice(0, 100) : undefined, seq, requestKind }));
     } else if (data.type === "ack") {
       if (integer(data.seq, 1, Number.MAX_SAFE_INTEGER)) {
         const seq = Number(data.seq), sent = sentBindings.get(seq); sentBindings.delete(seq);

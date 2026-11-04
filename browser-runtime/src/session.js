@@ -7,6 +7,8 @@ import { BrowserDevTools, validateDevToolsAction } from './devtools.js';
 import { BrowserFavicons } from './favicon.js';
 import { installLinkNavigationPolicy, installLinkNavigationOnPage } from './link-navigation.js';
 import { BrowserUploads, MAX_UPLOAD_FILES, UPLOAD_ID } from './uploads.js';
+import { isNavigationContextError } from './navigation-recovery.js';
+import { runPageJobs, validatePageJobsAction } from './page-jobs.js';
 
 export class HTTPError extends Error {
   constructor(status, message, code) { super(code ? `${code}: ${message}` : message); this.status = status; if (code) this.code = code; }
@@ -24,6 +26,18 @@ async function bounded(promise, ms, message = 'browser operation timed out') {
 function fail(error) { return { ok: false, error: String(error?.message ?? error).slice(0, 2000) }; }
 function finite(value) { return typeof value === 'number' && Number.isFinite(value); }
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+// Runtime measurements are display diagnostics, not webpage evidence. Stages
+// can nest: snapshot_ms includes its own optional evidence_ms; extract may
+// capture evidence directly. Only queue_ms + execution_ms form the outer total.
+const browserTiming = () => ({ total_ms: 0, queue_ms: 0, execution_ms: 0, dispatch_ms: 0,
+  navigation_ms: 0, condition_wait_ms: 0, settle_ms: 0, snapshot_ms: 0, evidence_ms: 0,
+  snapshot_count: 0, evidence_count: 0, intermediate_evidence_skipped: 0 });
+const elapsedMS = started => Math.max(0, performance.now() - started);
+async function timed(timing, stage, work) {
+  const started = timing ? performance.now() : 0;
+  try { return await work(); }
+  finally { if (timing) timing[stage] += elapsedMS(started); }
+}
 // A slow site gets a full minute to navigate or satisfy a condition. Keep
 // this separate from connection, cancellation and live-frame deadlines.
 export const DEFAULT_ACTION_TIMEOUT_MS = 60_000;
@@ -38,7 +52,22 @@ const SETTLE_REQUEST_TYPES = new Set(['document', 'fetch', 'xhr']);
 const SETTLE_ACTIONS = new Set(['click', 'type', 'select', 'press', 'hover', 'scroll', 'navigate', 'upload']);
 // These commands do not dispatch site mutations. An observation timeout must
 // not be presented as an unknown click/submit that requires destructive reset.
-const OBSERVATION_ACTIONS = new Set(['snapshot', 'find', 'extract', 'wait', 'screenshot', 'tabs', 'calculate']);
+const OBSERVATION_ACTIONS = new Set(['snapshot', 'find', 'extract', 'wait', 'screenshot', 'tabs', 'calculate', 'observe_pages']);
+const PAGE_JOB_ACTIONS = new Set(['open_pages', 'observe_pages']);
+const BOUND_PAGE_ACTIONS = new Set(['snapshot', 'find', 'click', 'type', 'navigate', 'wait', 'extract', 'scroll', 'select', 'press', 'hover', 'screenshot', 'upload', 'devtools', 'batch']);
+
+function pageActionBinding(action, nested = false) {
+  // claim has its own existing target/context/epoch contract. Ordinary page
+  // actions use a separate tab_id so an element ref never doubles as a tab.
+  if (action.action === 'tab' && action.tab_action === 'claim' && action.tab_id === undefined) return null;
+  if (action.tab_id === undefined && action.context_ref === undefined && action.control_epoch === undefined) return null;
+  if (nested || !BOUND_PAGE_ACTIONS.has(action.action)) throw new HTTPError(400, 'page binding is only supported on standalone page actions or the enclosing same-page batch');
+  if (!/^t[1-9]\d{0,9}$/.test(action.tab_id ?? '') || !/^ctx_[a-f0-9]{24}$/.test(action.context_ref ?? '') ||
+      !Number.isSafeInteger(action.control_epoch) || action.control_epoch < 0) {
+    throw new HTTPError(400, 'page binding requires tab_id, context_ref and control_epoch from the same fresh tabs row');
+  }
+  return { tab_id: action.tab_id, context_ref: action.context_ref, control_epoch: action.control_epoch };
+}
 // A breakpoint can suspend an already-dispatched click/evaluation. These
 // commands inspect or resume it without replacing its unresolved promise.
 function debugRecovery(a) {
@@ -53,7 +82,17 @@ function urlFor(value, base) {
 
 export function validateAction(a, nested = false) {
   if (!a || typeof a !== 'object' || Array.isArray(a)) throw new Error('action must be an object');
+  const binding = pageActionBinding(a, nested);
+  if (binding) {
+    a = { ...a };
+    delete a.tab_id; delete a.context_ref; delete a.control_epoch;
+  }
   const name = a.action;
+  if (PAGE_JOB_ACTIONS.has(name)) {
+    if (nested) throw new Error('multi-page operations must run separately, not inside a same-page batch');
+    validatePageJobsAction(a);
+    return;
+  }
   const target = typeof a.target === 'string' && a.target.length > 0 && a.target.length <= 4096;
   if (name === 'batch') {
     if (nested || !Array.isArray(a.actions) || a.actions.length < 1 || a.actions.length > 12) {
@@ -168,6 +207,7 @@ export class BrowserSession {
     this.cachedIDs = [];
     this.rawAction = null;
     this.observationReads = new Map();
+    this.pageReadQueues = new Map();
     this.frameFlights = new Map();
     this.liveViews = new Set();
     this.liveActions = new Map();
@@ -531,9 +571,27 @@ export class BrowserSession {
   }
   beginOperation(meta, mode) {
     let finish;
-    const operation = { mode, pages: new Set(meta ? [meta] : []), authority: new Map(meta ? [[meta, this.controlFor(meta).epoch]] : []), done: new Promise(resolve => { finish = resolve; }) };
+    const operation = { mode, pages: new Set(meta ? [meta] : []), authority: new Map(meta ? [[meta, this.controlFor(meta).epoch]] : []),
+      pageDone: new Map(), done: new Promise(resolve => { finish = resolve; }) };
     operation.finish = () => { if (this.currentOperation === operation) this.currentOperation = null; finish(); };
     this.currentOperation = operation; return operation;
+  }
+  beginPageJob(meta) {
+    const operation = this.currentOperation;
+    if (!operation || operation.mode !== 'agent') throw new HTTPError(409, 'page job is outside its browser transaction');
+    let resolve;
+    const done = new Promise(finish => { resolve = finish; });
+    operation.pages.add(meta); operation.authority.set(meta, this.controlFor(meta).epoch); operation.pageDone.set(meta, done);
+    let finished = false;
+    return () => {
+      if (finished) return;
+      finished = true;
+      if (operation.pageDone.get(meta) === done) {
+        operation.pages.delete(meta); operation.authority.delete(meta); operation.pageDone.delete(meta);
+      }
+      resolve();
+      this.publishLiveState(meta);
+    };
   }
   invalidatePage(meta) {
     meta.visual++;
@@ -765,6 +823,7 @@ export class BrowserSession {
     const control = this.controlFor(meta);
     return {
       backend: 'native', control_scope: 'tab', ...(this.host?.displayMode === 'desktop' ? { display_mode: 'desktop' } : {}), context_ref: this.contextRef, viewed_tab: meta?.id ?? '', control: control.mode, control_epoch: control.epoch, generation: this.generation,
+      agent_capabilities: { explicit_page_binding: true, page_collections: true },
       document_version: meta?.version ?? 0, version: this.version(meta), busy: this.phase !== 'ready' || control.phase !== 'ready' || Boolean(meta?.ownershipPending || meta?.linkNavigationPending) || this.operationTouches(meta) || this.contextBlocked(),
       pick_pending: Boolean(meta && this.picker.pending.has(meta)),
       page_loading: Boolean(meta?.pageLoading), ...(meta?.pageLoadError ? { page_load_error: meta.pageLoadError } : {}),
@@ -912,9 +971,38 @@ export class BrowserSession {
     return { epoch, deadline, live: true, ...(authority ? { authority } : {}) };
   }
 
+  observationTarget(observation) {
+    for (let current = observation; current; current = current.parent) if (current.targetMeta) return current.targetMeta;
+    return null;
+  }
+
+  observationPage(observation) {
+    const meta = this.observationTarget(observation);
+    if (!meta) return this.page();
+    this.assertLive();
+    if (this.pages.get(meta.id) !== meta || meta.page.isClosed()) throw new HTTPError(410, 'bound observation page was closed', 'BROWSER_TAB_CLOSED');
+    return meta;
+  }
+
+  observationMatchesPage(observation, meta) {
+    const bound = this.observationTarget(observation);
+    return this.pages.get(meta.id) === meta && !meta.page.isClosed() && (bound ? bound === meta : this.active === meta.id);
+  }
+
+  enqueuePageRead(meta, work) {
+    // Snapshot collectors write only internal ref markers. Same-page reads
+    // serialize those markers; independent Pages still run concurrently.
+    const previous = this.pageReadQueues.get(meta) ?? Promise.resolve();
+    const result = previous.then(work), drained = result.catch(() => {});
+    this.pageReadQueues.set(meta, drained);
+    drained.finally(() => { if (this.pageReadQueues.get(meta) === drained) this.pageReadQueues.delete(meta); }).catch(() => {});
+    return result;
+  }
+
   checkObservation(observation) {
     if (observation.parent) this.checkObservation(observation.parent);
     if (!observation.live || observation.epoch !== this.generation || this.closed) throw new HTTPError(409, 'page observation was superseded; inspect the current page');
+    if (this.observationTarget(observation)) this.observationPage(observation);
     if (observation.authority) {
       const { meta, mode, lease, controlEpoch } = observation.authority;
       const control = this.controlFor(meta);
@@ -939,12 +1027,20 @@ export class BrowserSession {
       if (reads.get(kind) === raw) reads.delete(kind);
       if (!reads.size && this.observationReads.get(owner) === reads) this.observationReads.delete(owner);
     }).catch(() => {});
-    const result = unbounded ? await raw : await bounded(raw, Math.max(1, Math.min(1500, observation.deadline - Date.now())), 'page observation timed out; the page may still be loading or busy');
+    let result;
+    try {
+      result = unbounded ? await raw : await bounded(raw, Math.max(1, Math.min(1500, observation.deadline - Date.now())), 'page observation timed out; the page may still be loading or busy');
+    } catch (error) {
+      // Only the read became stale. Keep the action's existing dispatch and
+      // uncertainty fences intact; neither the worker nor the caller replays it.
+      if (isNavigationContextError(error)) throw new HTTPError(409, 'page changed during observation; inspect the current page without repeating the previous click or submission', 'BROWSER_OBSERVATION_CHANGED');
+      throw error;
+    }
     this.checkObservation(observation);
     return result;
   }
 
-  async refreshRevision(observation = this.observation(), meta = this.page(), { fast = false, unbounded = false } = {}) {
+  async refreshRevision(observation = this.observation(), meta = this.observationPage(observation), { fast = false, unbounded = false } = {}) {
     const documentVersion = meta.version;
     const revisions = [];
     for (const frame of meta.page.frames()) {
@@ -975,7 +1071,7 @@ export class BrowserSession {
     if (mode === 'agent') this.requireAgentPage(meta);
   }
 
-  tabDiscovery(action) { return action.action === 'tabs' || action.action === 'tab' && ['new', 'switch', 'claim'].includes(action.tab_action ?? 'switch'); }
+  tabDiscovery(action) { return PAGE_JOB_ACTIONS.has(action.action) || action.action === 'tabs' || action.action === 'tab' && ['new', 'switch', 'claim'].includes(action.tab_action ?? 'switch'); }
 
   async execute(args) {
     this.touch();
@@ -992,24 +1088,31 @@ export class BrowserSession {
     if (this.operations.size >= 10_000) throw new HTTPError(409, 'session operation limit reached; create a new session');
     try { validateAction(args); } catch (e) { return fail(e); }
     if (this.phase !== 'ready') throw new HTTPError(409, 'browser is being cancelled');
-    if (!this.tabDiscovery(args)) this.requireAgentPage(this.pages.get(this.active));
+    const binding = pageActionBinding(args);
+    const selectedMeta = binding ? this.selectedPage(binding) : this.pages.get(this.active);
+    if (binding && this.controlFor(selectedMeta).epoch !== binding.control_epoch) throw new HTTPError(409, 'bound page control changed; inspect tabs before continuing', 'TAB_CONTROL_CHANGED');
+    if (!this.tabDiscovery(args)) this.requireAgentPage(selectedMeta);
     if ([...this.pages.values()].some(meta => meta.liveInputBlocked)) throw new HTTPError(409, 'live input release is uncertain; cancel the browser before continuing');
     if ([...this.liveActions.values()].some(action => action.uncertain)) throw new HTTPError(409, 'live input outcome is unknown; cancel the browser before continuing');
     if (this.rawAction && !this.inOperation && !debugRecovery(args)) throw new HTTPError(409, 'previous browser action is still pending; use devtools diagnostics/resume for a breakpoint, otherwise cancel before continuing');
     const epoch = this.generation;
-    const originalMeta = this.pages.get(this.active), originalControlEpoch = this.controlFor(originalMeta).epoch;
+    const originalMeta = selectedMeta, originalControlEpoch = this.controlFor(originalMeta).epoch;
     const record = { hash };
     this.operations.set(args.op_id, record); // Reserve before entering the queue.
+    const timing = browserTiming(), queuedAt = performance.now();
     const result = await this.enqueue(async () => {
+      const startedAt = performance.now();
+      timing.queue_ms = Math.max(0, startedAt - queuedAt);
       try {
         if (this.tabDiscovery(args)) {
           this.assertLive();
           if (epoch !== this.generation || this.phase !== 'ready') throw new Error('tab action was fenced by context cancellation');
         } else this.guard(epoch, 'agent', undefined, originalMeta, originalControlEpoch);
-        if (!this.tabDiscovery(args) && this.pages.get(this.active) !== originalMeta) throw new Error('Agent target changed while action was queued; inspect tabs before continuing');
+        if (binding && this.selectedPage(binding) !== originalMeta) throw new Error('bound browser page changed while action was queued');
+        if (!binding && !this.tabDiscovery(args) && this.pages.get(this.active) !== originalMeta) throw new Error('Agent target changed while action was queued; inspect tabs before continuing');
         if ([...this.pages.values()].some(meta => meta.liveInputBlocked)) throw new Error('live input release is uncertain; cancel the browser before continuing');
         if ([...this.liveActions.values()].some(action => action.uncertain)) throw new Error('live input outcome is unknown; cancel the browser before continuing');
-        if (this.dialog) throw new Error('page dialog is pending; take human control to accept or dismiss it');
+        if (this.dialog && !PAGE_JOB_ACTIONS.has(args.action)) throw new Error('page dialog is pending; take human control to accept or dismiss it');
         if ([...this.pages.values()].some(meta => this.devtools.isBlocked(meta))) throw new Error('debug operation outcome unknown; cancel the browser task before continuing; do not replay');
         if (this.rawAction) {
           if (!debugRecovery(args)) throw new Error('previous browser action is still pending; use devtools diagnostics/resume for a breakpoint, otherwise cancel before continuing');
@@ -1017,53 +1120,113 @@ export class BrowserSession {
           return { ...reply, backend: 'native', active_tab: this.active ?? '', version: this.version(),
             text: `${reply.text ?? ''}${this.rawAction ? '\nThe earlier page action is still pending; inspect its result after resuming. Do not repeat it.' : ''}` };
         }
+        // An explicit binding selects the Agent's execution target inside the
+        // existing serial input transaction; it never claims a human page or
+        // asks the UI to focus it. Bulk reads below do not change this target.
+        if (binding) this.active = originalMeta.id;
         const meta = this.pages.get(this.active);
-        if (meta && this.devtools.isPaused(meta) && !['devtools', 'tabs', 'tab'].includes(args.action)) throw new Error('debugger paused; use devtools Debugger.resume or Debugger.disable, or take human control');
+        if (meta && this.devtools.isPaused(meta) && !PAGE_JOB_ACTIONS.has(args.action) && !['devtools', 'tabs', 'tab'].includes(args.action)) throw new Error('debugger paused; use devtools Debugger.resume or Debugger.disable, or take human control');
         this.inOperation = true;
         const operation = this.beginOperation(this.tabDiscovery(args) ? null : this.pages.get(this.active), 'agent');
         try {
-        const reply = await this.run(args, epoch);
+        const reply = await this.run(args, epoch, 'agent', undefined, timing);
+        if (PAGE_JOB_ACTIONS.has(args.action)) return { ...reply, backend: 'native' };
         const claimed = args.action === 'tab' && args.tab_action === 'claim' ? this.pages.get(this.active) : null;
         return { ...reply, backend: 'native', active_tab: this.active ?? '', version: reply.version ?? this.version(),
           ...(reply.ok && claimed ? { context_ref: this.contextRef, control: this.controlFor(claimed).mode, control_epoch: this.controlFor(claimed).epoch } : {}) };
         } finally { operation.finish(); }
       } catch (e) { return { ...fail(e), url: this.pages.get(this.active)?.page.url() }; }
-      finally { this.inOperation = false; }
+      finally { this.inOperation = false; timing.execution_ms = elapsedMS(startedAt); }
     });
+    timing.total_ms = elapsedMS(queuedAt);
+    const measured = { ...result, timing: Object.fromEntries(Object.entries(timing).map(([key, value]) => [key, Math.round(value * 100) / 100])) };
     // Browser internals may include authenticated business data. Preserve the
     // reservation for deduplication, but never replay cached debug responses.
-    if (debugAction) return epoch === this.generation ? result : fail('debug operation interrupted; inspect current state; do not replay');
-    record.result = result;
+    if (debugAction) return epoch === this.generation ? measured : { ...fail('debug operation interrupted; inspect current state; do not replay'), timing: measured.timing };
+    record.result = measured;
     this.cachedIDs.push(args.op_id);
     if (this.cachedIDs.length > 64) delete this.operations.get(this.cachedIDs.shift()).result;
-    return result;
+    return measured;
   }
 
-  async run(args, epoch, mode = 'agent', lease) {
+  async run(args, epoch, mode = 'agent', lease, timing) {
+    if (PAGE_JOB_ACTIONS.has(args.action)) return this.perform(args, epoch, { mode, lease, timing });
     const list = args.action === 'batch' ? args.actions : [args];
     const steps = [];
     let reply = { ok: true };
+    let stopReason = 'completed';
     for (const [index, action] of list.entries()) {
-      const discovery = mode === 'agent' && this.tabDiscovery(action);
-      if (!discovery) this.guard(epoch, mode, lease);
-      else if (epoch !== this.generation || this.phase !== 'ready') throw new Error('tab action was fenced by cancellation');
-      const activity = this.activity.begin(action, mode);
-      const before = this.pages.get(this.active);
-      const version = before?.version;
-      // Human input is watched live through frames; only agent actions wait
-      // for their own requests before the observation they return.
-      reply = await this.perform(action, epoch, { settle: mode === 'agent', last: index === list.length - 1, mode, lease });
-      await this.activity.finish(activity, reply.ok, Boolean(this.dialog && this.rawAction));
-      if (args.action === 'batch') steps.push({ action: action.action, ok: reply.ok, ...(reply.error ? { error: reply.error } : {}) });
-      if (!reply.ok) break;
-      if (!discovery || action.action === 'tab') this.guard(epoch, mode, lease);
-      if (list.length > 1 && (reply.observation_pending || this.active !== before?.id || before?.version !== version || ['navigate', 'tab'].includes(action.action))) {
-        reply.text = `${reply.text ?? ''}\nBatch stopped after navigation/tab change; inspect the current page before continuing.`;
+      const startedAt = performance.now();
+      const capture = {};
+      let activity, attempted = false, recorded = false;
+      try {
+        const discovery = mode === 'agent' && this.tabDiscovery(action);
+        if (!discovery) this.guard(epoch, mode, lease);
+        else if (epoch !== this.generation || this.phase !== 'ready') throw new Error('tab action was fenced by cancellation');
+        activity = this.activity.begin(action, mode);
+        const before = this.pages.get(this.active);
+        const version = before?.version;
+        // A known form sequence can defer optional quantity/structure extraction.
+        // Keep every text/ref snapshot, settle and validity check. Explicit reads,
+        // submitting type, clicks and key actions retain their full observation.
+        const deferEvidence = args.action === 'batch' && index < list.length - 1 &&
+          ['type', 'select'].includes(action.action) && !action.submit;
+        // Human input is watched live through frames; only agent actions wait
+        // for their own requests before the observation they return.
+        attempted = true;
+        reply = await this.perform(action, epoch, { settle: mode === 'agent', last: index === list.length - 1, mode, lease, timing, deferEvidence, capture });
+        await this.activity.finish(activity, reply.ok, Boolean(this.dialog && this.rawAction));
+        if (args.action === 'batch') {
+          steps.push({ action: action.action, ok: reply.ok, duration_ms: Math.round(elapsedMS(startedAt) * 100) / 100, ...(reply.error ? { error: reply.error } : {}) });
+          recorded = true;
+        }
+        if (!reply.ok) { stopReason = reply.observation_pending ? 'observation_pending' : 'failed'; break; }
+        if (!discovery || action.action === 'tab') this.guard(epoch, mode, lease);
+        if (reply.observation_pending) { stopReason = 'observation_pending'; break; }
+        if (index < list.length - 1 && (this.active !== before?.id || before?.version !== version || ['navigate', 'tab'].includes(action.action))) {
+          stopReason = action.action === 'tab' || this.active !== before?.id ? 'tab_changed' : action.action === 'navigate' ? 'navigation' : 'page_changed';
+          // The planned intermediate step is now the returned terminal step.
+          // Re-observe once with a fresh authority-bound read, never by replaying
+          // its input or attaching new evidence to an old document's text.
+          if (capture.deferred) {
+            reply = await this.finishBatchObservation(reply, capture.deferred, epoch, mode, lease, timing);
+            if (reply.observation_pending) stopReason = 'observation_pending';
+          }
+          reply.text = `${reply.text ?? ''}\nBatch stopped after navigation/tab change; inspect the current page before continuing.`;
+          break;
+        }
+      } catch (error) {
+        reply = { ...fail(error), url: this.pages.get(this.active)?.page.url() };
+        stopReason = 'interrupted';
+        if (activity) await this.activity.finish(activity, false, Boolean(this.dialog && this.rawAction)).catch(() => {});
+        if (args.action === 'batch' && attempted && !recorded) steps.push({ action: action.action, ok: false, error: reply.error, duration_ms: Math.round(elapsedMS(startedAt) * 100) / 100 });
         break;
       }
     }
-    const { observation_pending, ...result } = reply;
-    return { ...result, ...(args.action === 'batch' ? { steps } : {}) };
+    return { ...reply, ...(args.action === 'batch' ? { steps, batch: {
+      requested: list.length, executed: steps.length, skipped: list.length - steps.length, stop_reason: stopReason,
+    } } : {}) };
+  }
+
+  async finishBatchObservation(reply, captured, epoch, mode, lease, timing) {
+    const pending = () => ({ ...reply, observation_pending: true,
+      evidence: { schema: 'dom-evidence-v1', status: 'unavailable', reason: 'The batch ended while its page observation changed; take a fresh snapshot. Do not repeat completed inputs.' },
+      text: `${reply.text ?? ''}\nCompleted inputs are retained; final page observation could not be confirmed. Take a fresh snapshot without replaying them.` });
+    let observation;
+    try {
+      const meta = captured.meta;
+      this.guard(epoch, mode, lease, meta, captured.controlEpoch);
+      if (this.pages.get(meta.id) !== meta || this.active !== meta.id || meta.version !== captured.version || this.frameIdentity(meta) !== captured.identity) return pending();
+      observation = this.observation(epoch, Date.now() + Math.min(this.actionTimeout, 4000), { meta, mode, lease, controlEpoch: captured.controlEpoch });
+      observation.timing = timing;
+      // This read is pinned to the captured tab. Do not use observe()'s popup
+      // retry, which can intentionally follow a newly active page elsewhere.
+      const fresh = await this.snapshot({}, observation);
+      this.guard(epoch, mode, lease, meta, captured.controlEpoch);
+      if (this.active !== meta.id || meta.version !== captured.version || this.frameIdentity(meta) !== captured.identity) return pending();
+      return { ...reply, ...fresh };
+    } catch { return pending(); }
+    finally { if (observation) observation.live = false; }
   }
 
   async perform(action, epoch, options = {}) {
@@ -1071,6 +1234,8 @@ export class BrowserSession {
     const startingMeta = this.pages.get(this.active);
     const authority = startingMeta && !this.tabDiscovery(action) ? { meta: startingMeta, mode: options.mode ?? 'agent', lease: options.lease, controlEpoch: this.controlFor(startingMeta).epoch } : undefined;
     const observation = this.observation(epoch, until, authority);
+    observation.timing = options.timing;
+    observation.batchCapture = options.capture;
     if (['snapshot', 'find', 'extract'].includes(action.action)) observation.deadline = Math.min(until, Date.now() + Math.min(this.actionTimeout, 4000));
     let wake;
     const dialogPromise = new Promise(resolve => { wake = () => resolve({ dialog: true }); });
@@ -1082,7 +1247,7 @@ export class BrowserSession {
       // page family can suspend its result or execution budget.
       if (sourceMeta && this.devtools.isPaused(sourceMeta)) resolve({ debugger: true });
     }; });
-    const watchDebugger = !debugRecovery(action);
+    const watchDebugger = !debugRecovery(action) && !PAGE_JOB_ACTIONS.has(action.action);
     if (watchDebugger) this.debuggerWake = debugWake;
     const sourcePage = options.settle && SETTLE_ACTIONS.has(action.action) ? this.page().page : null;
     const scope = sourcePage ? {
@@ -1092,14 +1257,19 @@ export class BrowserSession {
     } : null;
     if (scope) this.settleScope = scope;
     let raw;
-    const dispatched = () => { if (this.rawAction === raw) this.rawAction = null; };
+    const dispatchStartedAt = performance.now();
+    let dispatchRecorded = false;
+    const dispatched = () => {
+      if (!dispatchRecorded) { dispatchRecorded = true; if (options.timing && !PAGE_JOB_ACTIONS.has(action.action)) options.timing.dispatch_ms += elapsedMS(dispatchStartedAt); }
+      if (this.rawAction === raw) this.rawAction = null;
+    };
     raw = this.action(action, epoch, { ...options, scope, until, observation, dispatched });
-    if (!OBSERVATION_ACTIONS.has(action.action)) this.trackAction(raw);
+    if (!OBSERVATION_ACTIONS.has(action.action)) this.trackAction(raw, PAGE_JOB_ACTIONS.has(action.action) ? null : startingMeta);
     if (scope) raw.finally(() => {
       if (this.settleScope === scope) this.settleScope = null;
     }).catch(() => {});
     try {
-      const outcome = await bounded(Promise.race([raw.then(value => ({ value })), dialogPromise, ...(watchDebugger ? [debugPromise] : [])]), this.actionTimeout + 1500);
+      const outcome = await bounded(Promise.race([raw.then(value => ({ value })), ...(!PAGE_JOB_ACTIONS.has(action.action) ? [dialogPromise] : []), ...(watchDebugger ? [debugPromise] : [])]), this.actionTimeout + 1500);
       if (outcome.dialog) return { ok: false, error: 'page dialog requires human control; the action outcome is pending', dialogs: [`${this.dialog?.type}: ${this.dialog?.message}`] };
       if (outcome.debugger) return fail('debugger paused the dispatched action; its outcome is pending. Inspect devtools events.list and use Debugger.resume before verifying the result. Do not repeat the action.');
       if (epoch !== this.generation) return fail('operation cancelled or browser control changed; inspect state before continuing');
@@ -1113,6 +1283,10 @@ export class BrowserSession {
       // still pending, rawAction blocks further input until an explicit cancel.
       return fail(error);
     } finally {
+      if (!dispatchRecorded && options.timing && !OBSERVATION_ACTIONS.has(action.action) && !PAGE_JOB_ACTIONS.has(action.action)) {
+        dispatchRecorded = true;
+        options.timing.dispatch_ms += elapsedMS(dispatchStartedAt);
+      }
       // A late read may finish in Chromium, but must never publish old refs,
       // evidence, or revisions into a later operation.
       observation.live = false;
@@ -1121,9 +1295,9 @@ export class BrowserSession {
     }
   }
 
-  trackAction(raw) {
+  trackAction(raw, meta = this.pages.get(this.active)) {
     this.rawAction = raw;
-    this.rawActionMeta = this.pages.get(this.active);
+    this.rawActionMeta = meta;
     raw.finally(() => { if (this.rawAction === raw) { this.rawAction = null; this.rawActionMeta = null; } }).catch(() => {});
     return raw;
   }
@@ -1145,7 +1319,7 @@ export class BrowserSession {
   // and same-document changes fence the whole capture; no submitted action is
   // repeated to repair an observation. History remains explicitly as-observed.
   async captureEvidence(target = null, full = false, observation = this.observation()) {
-    const meta = this.page(), documentVersion = meta.version, epoch = this.generation;
+    const meta = this.observationPage(observation), documentVersion = meta.version, epoch = this.generation;
     const observationID = `o_${randomBytes(12).toString('hex')}_${this.nextObservation++}`;
     const unavailable = reason => ({ schema: 'dom-evidence-v1', status: 'unavailable', observation_id: observationID, reason, frames: [], truncated: false });
     try {
@@ -1165,7 +1339,7 @@ export class BrowserSession {
       }
       const after = await this.refreshRevision(observation);
       this.checkObservation(observation);
-      if (epoch !== this.generation || this.active !== meta.id || meta.version !== documentVersion || before !== after || !meta.revisionCovered) return unavailable('Document changed or revision coverage was lost during evidence capture; observe again.');
+      if (epoch !== this.generation || !this.observationMatchesPage(observation, meta) || meta.version !== documentVersion || before !== after || !meta.revisionCovered) return unavailable('Document changed or revision coverage was lost during evidence capture; observe again.');
       const observedAt = new Date().toISOString();
       const recorded = captures.map(({ value, frameURL }, index) => this.quantities.record(value, {
         observation_id: `${observationID}:f${index}`, generation: epoch, tab: meta.id,
@@ -1183,13 +1357,19 @@ export class BrowserSession {
   async optionalEvidence(target, full, parent) {
     // Structured evidence is optional enrichment. Reserve publication time for
     // already captured text/refs instead of letting slow evidence discard them.
-    const child = { ...this.observation(parent.epoch, Math.min(parent.deadline - 100, Date.now() + 750)), parent };
-    try { return await this.captureEvidence(target, full, child); }
+    const child = { ...this.observation(parent.epoch, Math.min(parent.deadline - 100, Date.now() + 750)), parent, targetMeta: this.observationTarget(parent) };
+    if (parent.timing) parent.timing.evidence_count++;
+    try { return await timed(parent.timing, 'evidence_ms', () => this.captureEvidence(target, full, child)); }
     finally { child.live = false; }
   }
 
-  async snapshot(query = {}, observation = this.observation()) {
-    const meta = this.page();
+  async snapshot(query = {}, observation = this.observation(), options = {}) {
+    if (observation.timing) observation.timing.snapshot_count++;
+    return timed(observation.timing, 'snapshot_ms', () => this.snapshotContents(query, observation, options));
+  }
+
+  async snapshotContents(query, observation, { includeEvidence = true } = {}) {
+    const meta = this.observationPage(observation);
     const version = meta.version;
     const all = [];
     const capturedRefs = [];
@@ -1236,7 +1416,7 @@ export class BrowserSession {
         return { next, items, text: (document.body?.innerText ?? '').slice(0, 32_000), title: document.title };
       }, { marker: this.marker, next, known }), observation);
       this.checkObservation(observation);
-      if (meta.version !== version || this.active !== meta.id) throw new Error('page changed during snapshot; take a new snapshot');
+      if (meta.version !== version || !this.observationMatchesPage(observation, meta)) throw new Error('page changed during snapshot; take a new snapshot');
       if (frame === meta.page.mainFrame()) { observedTitle = result.title; body = result.text; }
       for (const item of result.items) {
         capturedRefs.push([item.ref, { page: meta, version, frame }]);
@@ -1248,15 +1428,26 @@ export class BrowserSession {
     const lines = filtered.map(item => `[${item.ref}] ${item.role} ${JSON.stringify(item.name)}${item.value ? ` value=${JSON.stringify(item.value)}` : ''}${item.checked !== undefined ? ` checked=${item.checked}` : ''}${item.href ? ` href=${item.href}` : ''}${item.options ? ` options=${JSON.stringify(item.options)}` : ''}`);
     const budget = query.full ? 60_000 : 22_000;
     const text = `${query.action === 'find' ? '' : body + '\n\n'}${lines.join('\n')}`.slice(0, budget);
-    const evidence = query.action === 'find' ? null : await this.optionalEvidence(null, query.full === true, observation);
+    const evidence = query.action === 'find' || !includeEvidence ? null : await this.optionalEvidence(null, query.full === true, observation);
     this.checkObservation(observation);
-    if (meta.version !== version || this.active !== meta.id) throw new Error('page changed during snapshot; take a new snapshot');
+    if (meta.version !== version || !this.observationMatchesPage(observation, meta)) throw new Error('page changed during snapshot; take a new snapshot');
     meta.title = observedTitle;
     for (const [ref, value] of capturedRefs) this.refs.set(ref, value);
+    if (!includeEvidence && query.action !== 'find') {
+      if (observation.timing) observation.timing.intermediate_evidence_skipped++;
+      if (observation.batchCapture) observation.batchCapture.deferred = {
+        meta, version, identity: this.frameIdentity(meta), controlEpoch: this.controlFor(meta).epoch,
+      };
+    }
     return this.sourceFavicon({ ok: true, url: meta.page.url(), title: meta.title, interactive: all.length, text: text || 'No matching elements or readable page text.', ...(evidence ? { evidence } : {}) }, meta, version);
   }
 
-  async action(a, epoch, { scope = null, last = true, until = Infinity, observation = this.observation(epoch), dispatched = () => {} } = {}) {
+  async action(a, epoch, { scope = null, last = true, until = Infinity, observation = this.observation(epoch), dispatched = () => {}, deferEvidence = false } = {}) {
+    if (PAGE_JOB_ACTIONS.has(a.action)) {
+      const reply = await runPageJobs(this, a, epoch, { timing: observation.timing, parentObservation: observation });
+      dispatched();
+      return reply;
+    }
     if (a.action === 'devtools') {
       const meta = this.page();
       const documentVersion = meta.version;
@@ -1286,7 +1477,8 @@ export class BrowserSession {
       return { ok: true, url: state.url, title: state.title, text: JSON.stringify(this.tabMetadata(false, true)) };
     }
     if (a.action === 'tab') {
-      await this.tab(a);
+      if (a.tab_action === 'new') await timed(observation.timing, 'navigation_ms', () => this.tab(a));
+      else await this.tab(a);
       dispatched();
       const target = this.pages.get(this.active);
       if (target) observation.authority = { meta: target, mode: 'agent', controlEpoch: this.controlFor(target).epoch };
@@ -1310,13 +1502,13 @@ export class BrowserSession {
     try {
     switch (a.action) {
       case 'snapshot': case 'find': return this.snapshot(a, observation);
-      case 'navigate': await page.goto(urlFor(a.url, page.url()), { waitUntil: 'domcontentloaded' }); break;
+      case 'navigate': await timed(observation.timing, 'navigation_ms', () => page.goto(urlFor(a.url, page.url()), { waitUntil: 'domcontentloaded' })); break;
       case 'input_back':
         // Playwright implements native history traversal through Chromium's
         // Page.getNavigationHistory / Page.navigateToHistoryEntry, including
         // same-document routes and document commits. It is not a synthetic
         // keyboard shortcut or a website's potentially replaced history API.
-        await page.goBack({ waitUntil: 'domcontentloaded' });
+        await timed(observation.timing, 'navigation_ms', () => page.goBack({ waitUntil: 'domcontentloaded' }));
         break;
       case 'click':
         if (a.target) { const target = await this.locator(a.target); this.checkObservation(observation); await target.click(); }
@@ -1419,10 +1611,12 @@ export class BrowserSession {
         break;
       case 'wait': {
         const timeout = Math.min(Math.max(a.seconds ? a.seconds * 1000 : this.actionTimeout, 1), this.actionTimeout, MAX_WAIT_TIMEOUT_MS);
-        if (a.target) { const target = await this.locator(a.target); this.checkObservation(observation); await target.waitFor({ state: a.gone_text ? 'hidden' : 'visible', timeout }); }
-        else if (a.gone_text) await page.getByText(a.gone_text).first().waitFor({ state: 'hidden', timeout });
-        else if (a.text) await page.getByText(a.text).first().waitFor({ state: 'visible', timeout });
-        else await page.waitForURL(a.url, { waitUntil: 'domcontentloaded', timeout });
+        await timed(observation.timing, 'condition_wait_ms', async () => {
+          if (a.target) { const target = await this.locator(a.target); this.checkObservation(observation); await target.waitFor({ state: a.gone_text ? 'hidden' : 'visible', timeout }); }
+          else if (a.gone_text) await page.getByText(a.gone_text).first().waitFor({ state: 'hidden', timeout });
+          else if (a.text) await page.getByText(a.text).first().waitFor({ state: 'visible', timeout });
+          else await page.waitForURL(a.url, { waitUntil: 'domcontentloaded', timeout });
+        });
         break;
       }
       case 'extract': {
@@ -1465,13 +1659,15 @@ export class BrowserSession {
     // Input has returned: all remaining work is bounded observation. Preserve
     // its known dispatch without confusing an unavailable read with a pending
     // side effect. No failed observation ever repeats the input.
-    const settled = scope ? await this.settleAfter(scope, last, until) : null;
+    const settled = scope ? await timed(observation.timing, 'settle_ms', () => this.settleAfter(scope, last, until)) : null;
     if (!observation.live || epoch !== this.generation) return fail('operation observation superseded; inspect current state without repeating the action');
     observation.deadline = Math.min(observation.deadline, Date.now() + Math.min(this.actionTimeout, 4000));
     meta.visual++;
     this.lastScreenshotVersion = null;
     if (this.dialog) return fail('dialog pending; human input required');
-    const observed = this.closedSourceObservation(scope) || await this.observe(observation);
+    const includeEvidence = !(deferEvidence && scope && this.active === scope.fromTab && meta.version === scope.sourceVersion &&
+      !settled?.pending_requests && !settled?.opened_tabs?.length);
+    const observed = this.closedSourceObservation(scope) || await this.observe(observation, { includeEvidence });
     // Closing can also race the snapshot itself. Do not present a fallback
     // background page as the result of the already-dispatched action.
     const verified = this.closedSourceObservation(scope) || observed;
@@ -1491,16 +1687,16 @@ export class BrowserSession {
         'Use tabs if a page is still opening, then explicitly choose tab with target and inspect it. Do not repeat the action.' };
   }
 
-  async observe(observation = this.observation()) {
-    try { return await this.snapshot({}, observation); }
+  async observe(observation = this.observation(), options = {}) {
+    try { return await this.snapshot({}, observation, options); }
     catch {
       // Enter/click may finish dispatch before navigation destroys the old
       // execution context. Retry only observation, never the submitted action.
       try {
         this.checkObservation(observation);
-        await this.page().page.waitForLoadState('domcontentloaded', { timeout: Math.max(1, Math.min(1500, observation.deadline - Date.now())) });
+        await timed(observation.timing, 'condition_wait_ms', () => this.page().page.waitForLoadState('domcontentloaded', { timeout: Math.max(1, Math.min(1500, observation.deadline - Date.now())) }));
         this.checkObservation(observation);
-        return await this.snapshot({}, observation);
+        return await this.snapshot({}, observation, options);
       } catch {
         return { ok: true, url: this.pages.get(this.active)?.page.url(), title: this.pages.get(this.active)?.title,
           observation_pending: true, text: 'Action was dispatched. Page observation is incomplete because the page changed, is still loading, or is busy. Take a fresh snapshot or inspect another page before continuing. Do not repeat the action.' };
@@ -1830,6 +2026,10 @@ export class BrowserSession {
     this.invalidatePage(meta); this.quantities.clear();
     const lease = meta.lease;
     const operation = this.operationTouches(meta) ? this.currentOperation : null;
+    // Capture this Page's exact completion before cleanup yields. A finished
+    // job removes its map entry; looking it up later would accidentally fall
+    // back to waiting for every other page in the collection.
+    const operationDone = operation ? operation.pageDone?.get(meta) ?? operation.done : null;
     // A claim is itself the queued raw action. Waiting for that promise here
     // would make a claim of the currently selected human Page await itself.
     const raw = !claim && this.rawActionMeta === meta ? this.rawAction : null;
@@ -1837,7 +2037,7 @@ export class BrowserSession {
     try {
       await liveCleanup;
       await this.devtools.detach(meta);
-      if (operation) await bounded(operation.done, this.actionTimeout + 2000);
+      if (operationDone) await bounded(operationDone, this.actionTimeout + 2000);
       const liveQueue = this.liveQueues.get(meta);
       if (liveQueue) await bounded(liveQueue, 2500);
       if (raw && this.dialog?.page !== meta.page) await bounded(raw.catch(() => {}), this.actionTimeout + 2000);

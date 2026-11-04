@@ -2,7 +2,7 @@
 
 ## skills
 
-skill 是一包按需加载的领域知识：一个目录，一个 `SKILL.md`，外加它需要的脚本和参考文档。启动时只有名字和描述进 system prompt，模型判断任务匹配时自己用 `read` 取全文——所以二十个 skill 平时只花几百 token。
+skill 是一包按需加载的领域知识：一个目录，一个 `SKILL.md`，外加它需要的脚本和参考文档。启动时只有名字和描述进 system prompt，模型判断任务匹配时自己用 `read` 取全文——所以二十个 skill 平时只花几百 token。单独读取已注册 skill 的 `SKILL.md` 时，全文不受单结果和单批次的输出预算限制，只受 read 本身的单页上限和剩余上下文约束（见[「工具结果」](tool-result-management.md#adaptive-model-text-budgets)）。
 
 格式与 [Agent Skills 标准](https://agentskills.io/specification) 和 pi 一致，同一个目录两边都能用。
 
@@ -143,7 +143,7 @@ Web 模式下，每个用户根下还有**第三个记忆层**：`<用户根>/ag
 
 ## skills
 
-A skill is a pack of domain knowledge loaded on demand: a directory, a `SKILL.md`, plus whatever scripts and reference docs it needs. At startup only the name and description enter the system prompt; when the model decides the task matches, it reads the full text itself via `read` — so twenty skills cost only a few hundred tokens at idle.
+A skill is a pack of domain knowledge loaded on demand: a directory, a `SKILL.md`, plus whatever scripts and reference docs it needs. At startup only the name and description enter the system prompt; when the model decides the task matches, it reads the full text itself via `read` — so twenty skills cost only a few hundred tokens at idle. A read of a registered skill's `SKILL.md` on its own reaches the model whole, outside the per-result and per-batch output budgets; only read's own page limit and the remaining context bound it (see [tool results](tool-result-management.md#adaptive-model-text-budgets)).
 
 The format matches the [Agent Skills standard](https://agentskills.io/specification) and pi; the same directory works on both.
 

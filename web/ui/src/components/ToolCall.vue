@@ -2,6 +2,7 @@
 import { computed, nextTick, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import AnsiText from "./AnsiText.vue";
+import AnswerText from "./AnswerText.vue";
 import BashResult from "./tools/BashResult.vue";
 import EditResult from "./tools/EditResult.vue";
 import LsResult from "./tools/LsResult.vue";
@@ -28,6 +29,7 @@ import CodeBlock from "./CodeBlock.vue";
 import GateCard from "./GateCard.vue";
 import ToolCallHeader from "./ToolCallHeader.vue";
 import { presentToolCall, toolCallState } from "@/agent/toolPresentation";
+import { extractPath } from "@/agent/argsPreview";
 import {
   isBashDetails,
   isEditDetails,
@@ -40,10 +42,11 @@ import {
   isSubagentDetails,
   isTodoDetails,
   isWriteDetails,
+  matchSkillFile,
   matchSkillRead,
   type TimelineCall,
 } from "@/agent/timeline";
-import type { OpenSheetRequest } from "./dockSheets";
+import type { OpenFileTarget, OpenSheetRequest } from "./dockSheets";
 
 const props = defineProps<{
   call: TimelineCall;
@@ -66,6 +69,7 @@ const emit = defineEmits<{
   freeze: [string];
   thaw: [string];
   "open-sheet": [OpenSheetRequest];
+  "open-file": [OpenFileTarget];
 }>();
 
 const { t } = useI18n();
@@ -77,6 +81,28 @@ const isSubagent = computed(() => props.call.name === "subagent");
 
 const state = computed(() => toolCallState(props.call));
 const presentation = computed(() => presentToolCall(props.call));
+const fileTarget = computed<OpenFileTarget | undefined>(() => {
+  if (typeof props.call.args === "string") {
+    if (!["read", "write", "edit"].includes(props.call.name)) return undefined;
+    const path = extractPath(props.call.args);
+    if (!path?.trim()) return undefined;
+    return { path, name: path.split(/[\\/]/).pop() || path };
+  }
+  if (typeof props.call.args !== "object" || props.call.args === null || Array.isArray(props.call.args)) return undefined;
+  if (props.call.name === "analyze_image") {
+    const details = props.call.result?.details;
+    const resolved = details && "path" in details && typeof details.path === "string" ? details.path : "";
+    const input = (props.call.args as { image?: unknown }).image;
+    const path = resolved || (typeof input === "string" && /[\\/]/.test(input) ? input : "");
+    if (!path) return undefined;
+    return { path, name: path.split(/[\\/]/).pop() || path };
+  }
+  if (!["read", "write", "edit"].includes(props.call.name)) return undefined;
+  const path = (props.call.args as { path?: unknown }).path;
+  if (typeof path !== "string" || !path.trim()) return undefined;
+  const skill = matchSkillFile(props.call.name, props.call.args, props.skills ?? [], props.cwd ?? "");
+  return { path, name: path.split(/[\\/]/).pop() || path, ...(skill ?? {}) };
+});
 
 const details = computed(() => props.call.result?.details);
 const shortcutTool = computed(() => shortcutCallTool(props.call.name, props.call.args));
@@ -110,7 +136,7 @@ watch(
   <!-- data-cite is the anchor an answer's citation chips jump to (agent/
        citeJump.ts); absent when the call carried no stamp. -->
   <div class="call" :class="state" :data-cite="call.result?.source?.label">
-    <ToolCallHeader v-if="!headerless && (!isSubagent || inputInvalid)" :presentation="presentation">
+    <ToolCallHeader v-if="!headerless && (!isSubagent || inputInvalid)" :presentation="presentation" :file-target="fileTarget" @open-file="emit('open-file', $event)">
       <span v-if="skillName" class="badge skill">skill {{ skillName }}</span>
     </ToolCallHeader>
 
@@ -228,6 +254,9 @@ watch(
       />
       <EditResult v-else-if="call.name === 'edit' && isEditDetails(details)" :details="details" />
       <WriteResult v-else-if="call.name === 'write' && isWriteDetails(details)" :result="call.result" :details="details" />
+      <div v-else-if="call.name === 'analyze_image'" class="analyze-image-result">
+        <AnswerText :source="call.result.text" passive />
+      </div>
       <BashResult v-else-if="call.name === 'bash' && isBashDetails(details)" :result="call.result" :details="details" />
       <!-- MCP is a family, not a name: the guard on the details' server+tool
            pair is the discriminator, not the (possibly hash-truncated) wire
@@ -282,6 +311,20 @@ watch(
 
 .body {
   margin: 6px 0 10px 14px;
+}
+
+.analyze-image-result {
+  margin-top: 8px;
+  padding: 12px 16px;
+  border: 1px solid var(--el-border-color-light);
+  border-radius: 10px;
+  background: var(--el-fill-color-lighter);
+  overflow-wrap: anywhere;
+}
+.analyze-image-result :deep(.answer) {
+  margin-top: 0;
+  font-size: 13px;
+  line-height: 1.75;
 }
 
 .argument-error {

@@ -72,7 +72,8 @@ test('a paused document without verified native pixels refuses a new media sourc
   const { WaylandSessionHost } = await import('../src/wayland.js');
   const host = new WaylandSessionHost({}, 'paused-source-unit'), calls = [];
   host.rpc = { async request(op) { calls.push(op); return { ack: true }; } };
-  const record = { pageId: 't1', page: { async evaluate() { assert.fail('a paused source must not inject or wait for JavaScript'); } } };
+  const record = { pageId: 't1', page: { isClosed: () => false, async evaluate() { assert.fail('a paused source must not inject or wait for JavaScript'); } } };
+  host.session = { pages: new Map([[record.pageId, { documentIdentityReady: true }]]), frameIdentity: () => 'document-known' };
   await assert.rejects(host.sourceFence(record, 'source-new', 'document-new', true), /no verified native pixels/);
   assert.deepEqual(calls, ['capture_stop']);
   record.proof = { key: 'source-old', documentKey: 'document-known', seq: 77 };

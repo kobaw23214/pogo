@@ -150,6 +150,24 @@ func (r *Registry) SkillDocumentsLoadedByRead(input, details json.RawMessage) []
 	return out
 }
 
+// SkillDocumentReadAlone reports the registered Skill document a read call
+// asked for when it is the call's only file, so that the whole result is that
+// Skill's instructions. A read of several files is an ordinary multi-file page
+// even when one of them is a SKILL.md. Attribution is SkillDocumentAt's: the
+// read tool's own resolution and the loader-registered identity, never the
+// file name alone. The caller still checks that the call succeeded.
+func (r *Registry) SkillDocumentReadAlone(input json.RawMessage) (SkillDocument, bool) {
+	var a readArgs
+	if json.Unmarshal(input, &a) != nil {
+		return SkillDocument{}, false
+	}
+	targets, err := a.targets()
+	if err != nil || len(targets) != 1 {
+		return SkillDocument{}, false
+	}
+	return r.SkillDocumentAt(targets[0])
+}
+
 // SkillBindingsLoadedByRead reports the deferrable groups a read call loaded.
 func (r *Registry) SkillBindingsLoadedByRead(input, details json.RawMessage) []string {
 	var out []string

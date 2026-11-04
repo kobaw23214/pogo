@@ -17,8 +17,9 @@ import { OFFICE_STARTUP_TIMEOUT_MS, officeStartupTimeout, retryOfficeStartup, ty
 import type { OfficeReferenceSnapshot } from "@/api/types";
 import { observeOfficeInput } from "@/agent/officeInput";
 import { createOfficeAutosave } from "@/agent/officeAutosave";
+import { withOfficeEditorMode } from "@/agent/officeMode";
 
-const props = defineProps<{ path: string; conversationId: string; currentConversationId?: string; officeSessionId?: string; immersive?: boolean; initialOpen?: OfficeOpen; initialInstanceId?: string }>();
+const props = defineProps<{ path: string; conversationId: string; currentConversationId?: string; officeSessionId?: string; immersive?: boolean; initialOpen?: OfficeOpen; initialInstanceId?: string; viewOnly?: boolean }>();
 const emit = defineEmits<{ status: [session: OfficeSession]; closed: []; closedPrevious: [id: string]; saved: []; preview: []; reference: [snapshot: OfficeReferenceSnapshot]; openFailed: [message: string]; focusExisting: [path: string]; viewSaved: [] }>();
 const { t, locale } = useI18n();
 const mountBase = `office-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
@@ -56,7 +57,7 @@ const selectionNotice = ref("");
 const selectionError = ref(false);
 const saveRequested = ref(false);
 const dirty = ref(false);
-const autoSaveEnabled = ref(true);
+const autoSaveEnabled = ref(!props.viewOnly);
 const inputLocked = ref(false);
 const settlingExport = ref(false);
 const failed = ref("");
@@ -143,7 +144,7 @@ const ready = computed(() => editorReady.value && bridgeReady.value && !connecti
 const canQueue = computed(() => ready.value && !versionRestoring.value && !session.value?.blocked && session.value?.recovery?.state !== "checking" && !syncFrozen.value && !reloadRequested.value && !newerVersion.value && !busy.value && !closing.value && !settlingExport.value && (!inFlight.value || !flight?.expired) && !session.value?.savePhase && session.value?.saveState !== "saving");
 const canReferenceSelection = computed(() => ready.value && capabilities.value.selectionRead === true && !capturingSelection.value && !inFlight.value &&
   !pendingState.value && !stateUnconfirmed && !busy.value && !saving.value && !closing.value && !syncFrozen.value && !replacement.value && !reloadRequested.value && !versionRestoring.value && !session.value?.batch && !session.value?.blocked);
-const canRestoreVersion = computed(() => canQueue.value && !inFlight.value && !changedScope.value && !replacement.value && !session.value?.batch &&
+const canRestoreVersion = computed(() => !props.viewOnly && canQueue.value && !inFlight.value && !changedScope.value && !replacement.value && !session.value?.batch &&
   !!session.value?.fileRef && validOfficeVersion(session.value.diskVersion) && session.value.diskVersion === session.value.canvasVersion && cleanLocalEditor());
 const canvasAtSavedVersion = computed(() => ready.value && !inFlight.value && !pendingState.value && cleanLocalEditor());
 const saving = computed(() => saveRequested.value || inputLocked.value || settlingExport.value || session.value?.saveState === "saving");
@@ -154,7 +155,7 @@ const recoveringOperation = computed(() => session.value?.recovery?.state === "c
 const stateLabel = computed(() => leaseFenced.value ? t("officeEditor.access.fencedShort") : leasePaused.value ? t("officeEditor.access.pausedShort") : recoveringOperation.value ? t("officeEditor.recoveringShort") : failed.value || session.value?.saveState === "error" ? t("officeEditor.failedShort") : loading.value ? t("officeEditor.connectingShort") : queued.value ? t("officeEditor.queuedShort") : session.value?.saveState === "saving" || saving.value ? t("officeEditor.savingShort") : busy.value ? t("officeEditor.processingShort") : dirty.value ? t("officeEditor.unsavedShort") : session.value?.savedAt ? t("officeEditor.savedShort") : t("officeEditor.idleShort"));
 const current = (epoch: number) => !disposed && !bootstrapReleasing && lifecycle === epoch && !!opened && session.value?.id === opened.session.id;
 const autosave = createOfficeAutosave({
-  canSave: () => (manualSavePending || autoSaveEnabled.value) && canQueue.value && (manualSavePending || !inFlight.value) && !pendingState.value && !stateUnconfirmed && !composingInput && (manualSavePending || Date.now() - lastInputAt >= 3000),
+  canSave: () => !props.viewOnly && (manualSavePending || autoSaveEnabled.value) && canQueue.value && (manualSavePending || !inFlight.value) && !pendingState.value && !stateUnconfirmed && !composingInput && (manualSavePending || Date.now() - lastInputAt >= 3000),
   save: async () => performSave(),
 });
 
@@ -623,6 +624,7 @@ async function poll() {
   schedule();
 }
 function dispatch(command: OfficeCommand, epoch: number) {
+  if (props.viewOnly && (command.operation === "host.export" || mutationCommands.has(command.operation))) return;
   if (!current(epoch) || flight || !bridgeReady.value || closing.value) return;
   const active: Flight = { command, lifecycle: epoch, reporting: false };
   active.completion = new Promise<boolean>(resolve => { active.settle = resolve; });
@@ -807,6 +809,7 @@ async function run(operation: "history.undo" | "history.redo") {
   finally { if (current(epoch)) busy.value = false; }
 }
 function save(): Promise<boolean> {
+  if (props.viewOnly) return Promise.resolve(false);
   if (savePromise) return savePromise;
   if (!canQueue.value || !opened || pendingState.value || composingInput) return Promise.resolve(false);
   // The same scheduler joins manual saves, Ctrl+S and automatic write-back.
@@ -819,6 +822,7 @@ function save(): Promise<boolean> {
   return request;
 }
 async function performSave(): Promise<boolean> {
+  if (props.viewOnly) return false;
   if (!opened || disposed || leaseFenced.value || leasePaused.value) return false;
   busy.value = true; saveRequested.value = true;
   const epoch = lifecycle;
@@ -1059,7 +1063,7 @@ async function doOpenEditor(useExisting: boolean, expectedFileRef?: string, repl
     if (!current(epoch)) return;
     await nextTick();
     if (!current(epoch)) return;
-    const config = { ...result.config, width: "100%", height: "100%", events: {
+    const config = withOfficeEditorMode({ ...result.config, width: "100%", height: "100%", events: {
       onDocumentReady: () => {
         if (disposed || epoch !== lifecycle || !opened || session.value?.id !== opened.session.id) return;
         canvasMounted = true; editorReady.value = true; clearTimeout(bootstrapTimer);
@@ -1070,7 +1074,7 @@ async function doOpenEditor(useExisting: boolean, expectedFileRef?: string, repl
         void bindBridge(epoch);
       },
       onDocumentStateChange: (event: { data: boolean }) => {
-        if (disposed || epoch !== lifecycle || !opened || leaseFenced.value) return;
+        if (props.viewOnly || disposed || epoch !== lifecycle || !opened || leaseFenced.value) return;
         // Engine "clean" means received by the editing service, not saved to
         // the workspace. Only the canonical export receipt clears dirty.
         if (event.data === false) { autosave.flush(); return; }
@@ -1078,7 +1082,7 @@ async function doOpenEditor(useExisting: boolean, expectedFileRef?: string, repl
       },
       onDownloadAs: (event: { data: { url?: string; fileType?: string } }) => { void exported(event.data, epoch); },
       onError: (event: { data?: { errorDescription?: string } }) => { if (current(epoch)) void failBootstrap(new Error(event.data?.errorDescription || t("officeEditor.unavailable")), epoch); },
-    } };
+    } }, props.viewOnly === true);
     watchStartupStage("document", epoch);
     editor = new api.DocEditor(mountId.value, config);
     statusTimer = setInterval(() => {
@@ -1170,7 +1174,7 @@ defineExpose({ prepareClose, refreshStatus, save });
 </script>
 
 <template>
-  <section ref="root" class="office-editor" :class="{ immersive }" :data-office-session="session?.id" :data-office-ready="ready" :data-office-dirty="dirty" :data-office-sync-state="syncState" :data-office-input-frozen="syncFrozen || leasePaused || leaseFenced" :data-office-autosave="autoSaveEnabled">
+  <section ref="root" class="office-editor" :class="{ immersive }" :data-office-session="session?.id" :data-office-ready="ready" :data-office-dirty="dirty" :data-office-sync-state="syncState" :data-office-input-frozen="syncFrozen || leasePaused || leaseFenced" :data-office-autosave="autoSaveEnabled" :data-office-mode="viewOnly ? 'view' : 'edit'">
     <header class="office-toolbar">
       <el-popover placement="bottom-start" trigger="click" :width="360" popper-class="office-document-popover">
         <template #reference>
@@ -1182,12 +1186,13 @@ defineExpose({ prepareClose, refreshStatus, save });
           <p>{{ saveLabel }}<span v-if="session"> · {{ t('officeEditor.version', { version: session.revision }) }}</span></p>
           <p>{{ ready ? t('officeEditor.sameDocument') : t('officeEditor.waiting') }}</p>
           <p class="history-note">{{ t('officeEditor.undoNote') }}</p>
-          <label class="autosave-toggle"><input v-model="autoSaveEnabled" type="checkbox" :disabled="leaseFenced" />{{ t('officeEditor.access.autosaveToggle') }}</label>
+          <label v-if="!viewOnly" class="autosave-toggle"><input v-model="autoSaveEnabled" type="checkbox" :disabled="leaseFenced" />{{ t('officeEditor.access.autosaveToggle') }}</label>
           <p class="history-note">{{ t('officeEditor.access.autosave') }}</p>
           <button type="button" class="office-action preview-action" @click="emit('preview')">{{ t('officeEditor.preview') }}</button>
         </div>
       </el-popover>
       <span class="document-state" :class="{ dirty, saving, waiting: loading || !ready, bad: !recoveringOperation && !connectionLost && (failed || session?.saveState === 'error') }" :title="failed || (saving ? t('officeEditor.saveHelp') : saveLabel)" role="status" aria-live="polite">{{ stateLabel }}</span>
+      <span v-if="viewOnly" class="office-view-only">{{ t('officeEditor.viewOnly') }}</span>
       <div class="toolbar-context" :class="{ 'has-sync': !!syncNotice }">
         <el-popover v-if="syncNotice" placement="bottom-start" trigger="click" :width="360" popper-class="office-sync-popover">
           <template #reference>
@@ -1213,12 +1218,12 @@ defineExpose({ prepareClose, refreshStatus, save });
       <OfficeActivity :items="activityItems" :has-versions="!!session?.fileRef">
         <template #versions><OfficeVersions v-if="session?.fileRef" :conversation-id="session.conversationId" :path="session.path" :file-ref="session.fileRef" :current-version="session.diskVersion" :canvas-version="session.canvasVersion" :canvas-clean="canvasAtSavedVersion" :can-restore="canRestoreVersion" :restoring="versionRestoring" :restore-version="restoreFileVersion" /></template>
       </OfficeActivity>
-      <div class="history-actions">
+      <div v-if="!viewOnly" class="history-actions">
         <button type="button" class="office-action history-action" :disabled="!canQueue || capabilities.nativeUndo !== true" :title="`${t('officeEditor.undo')} · ${capabilities.nativeUndo ? t('officeEditor.undoNote') : t('officeEditor.historyUnavailable')}`" :aria-label="t('officeEditor.undo')" @click="run('history.undo')"><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M7 4 3 8l4 4M3 8h8a6 6 0 0 1 6 6v2" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" /></svg></button>
         <button type="button" class="office-action history-action" :disabled="!canQueue || capabilities.nativeRedo !== true" :title="`${t('officeEditor.redo')} · ${capabilities.nativeRedo ? t('officeEditor.undoNote') : t('officeEditor.historyUnavailable')}`" :aria-label="t('officeEditor.redo')" @click="run('history.redo')"><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="m13 4 4 4-4 4M17 8H9a6 6 0 0 0-6 6v2" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" /></svg></button>
       </div>
       <button type="button" class="office-action reference-action" :disabled="!canReferenceSelection" :aria-busy="capturingSelection" :title="t(capabilities.selectionRead === true ? 'officeEditor.selection.help' : 'officeEditor.selection.unavailable')" @pointerdown.prevent @click="referenceSelection"><el-icon v-if="capturingSelection" class="save-spinner"><Loading /></el-icon><svg v-else viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M7 4H4v12h12v-3M9 4h7v7M16 4l-9 9" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round" /></svg>{{ t('officeEditor.selection.action') }}</button>
-      <button type="button" class="office-action save-action" :class="{ saving }" :disabled="!canQueue || pendingState > 0" :aria-busy="saving" :title="queued ? t('officeEditor.queueHelp') : saving ? t('officeEditor.saveHelp') : t('officeEditor.save')" @click="save"><el-icon :class="{ 'save-spinner': saving }"><Loading v-if="saving" /><DocumentChecked v-else /></el-icon>{{ queued ? t('officeEditor.queuedAction') : t('officeEditor.save') }}</button>
+      <button v-if="!viewOnly" type="button" class="office-action save-action" :class="{ saving }" :disabled="!canQueue || pendingState > 0" :aria-busy="saving" :title="queued ? t('officeEditor.queueHelp') : saving ? t('officeEditor.saveHelp') : t('officeEditor.save')" @click="save"><el-icon :class="{ 'save-spinner': saving }"><Loading v-if="saving" /><DocumentChecked v-else /></el-icon>{{ queued ? t('officeEditor.queuedAction') : t('officeEditor.save') }}</button>
     </header>
     <p v-if="changedScope" class="office-notice">{{ t('officeEditor.changedScope') }}</p>
     <p v-if="selectionNotice" class="office-notice selection-notice" :class="{ bad: selectionError }" role="status" aria-live="polite">{{ selectionNotice }}</p>
@@ -1253,6 +1258,7 @@ defineExpose({ prepareClose, refreshStatus, save });
 
 <style scoped>
 .office-editor { display: flex; flex-direction: column; flex: 1; min-height: 0; height: 100%; background: var(--el-bg-color); }
+.office-view-only { flex: 0 0 auto; padding: 1px 6px; border-radius: 4px; background: var(--el-fill-color-light); color: var(--el-text-color-secondary); font-size: 10px; }
 .autosave-toggle { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; cursor: pointer; }.autosave-toggle input { accent-color: var(--el-color-primary); }
 .office-toolbar { display: flex; align-items: center; flex: 0 0 36px; box-sizing: border-box; min-width: 0; gap: 9px; padding: 3px 8px; border-bottom: 1px solid var(--el-border-color-lighter); }
 .document-state { display: inline-flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: var(--el-text-color-secondary); }.document-state::before { content: ''; flex: 0 0 6px; width: 6px; height: 6px; border-radius: 50%; background: var(--el-color-success); }.document-state.waiting::before { background: var(--el-text-color-placeholder); }.document-state.dirty::before { background: var(--el-color-warning); }.document-state.bad { color: var(--el-color-danger); }.document-state.bad::before { background: var(--el-color-danger); }

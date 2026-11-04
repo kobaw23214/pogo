@@ -8,6 +8,14 @@ rendered tab in the right dock only when explicitly selected. The first renders
 in the client's browser; the second opens a native remote-browser Page.
 There is no HTML source/preview switch in the file toolbar.
 
+A top-level `html-preview` fence instead embeds an HTML Artifact in the answer.
+Its body is JSON with a workspace `path` and optional `title`, never executable
+HTML. Streaming answers show this metadata as code and mount the iframe only
+after the run settles. The inline card offers source, refresh, download and a
+separate rendered dock tab. It mounts lazily near the viewport and uses the same
+capability and sandbox path as the dock. Passive document previews keep the
+metadata as code, and ordinary HTML links retain the source-file behavior above.
+
 HTML runs in the client's browser inside an `allow-scripts` sandbox, without
 `allow-same-origin`, forms, top navigation or popups. The response has its own
 CSP sandbox as well, so opening the URL in a top-level native browser Page does

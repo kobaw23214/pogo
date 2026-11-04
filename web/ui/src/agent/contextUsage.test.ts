@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { Message, ToolResult } from "@/api/types";
-import { contextRingPercent, createContextUsageReader } from "./contextUsage";
+import type { ContextMessage, Message, ToolResult } from "@/api/types";
+import { contextRingPercent, createContextUsageReader, projectContextMessages } from "./contextUsage";
 
 const message = (text: string): Message => ({ id: "u1", role: "user", content: [{ type: "text", text }] });
 const read = createContextUsageReader();
@@ -33,5 +33,20 @@ describe("shared context reading", () => {
   });
   it.each([null, undefined, Number.NaN, Number.POSITIVE_INFINITY])("unknown percentage %s draws no fabricated arc", value => {
     expect(contextRingPercent(value)).toBeNull();
+  });
+});
+
+describe("compacted prompt projection", () => {
+  it("derives categories only from the supplied model-facing messages", () => {
+    const context: ContextMessage[] = [
+      { role: "user", content: [{ type: "text", text: "summary" }] },
+      { role: "assistant", content: [{ type: "tool_use", id: "call-1", name: "read", input: { path: "kept.txt" } }] },
+      { role: "user", content: [{ type: "tool_result", tool_use_id: "call-1", text: "kept result" }] },
+    ];
+    const projected = projectContextMessages(context)!;
+    expect(projected.messages.map(message => message.id)).toEqual(["context-0", "context-1", "context-2"]);
+    expect(projected.results).toEqual([{ call_id: "call-1", name: "read", text: "kept result", is_error: undefined }]);
+    expect(projectContextMessages(undefined)).toBeNull();
+    expect(projectContextMessages([])).toEqual({ messages: [], results: [] });
   });
 });

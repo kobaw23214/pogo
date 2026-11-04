@@ -15,7 +15,9 @@ const fullOpen = computed(() => expanded.value && !props.compact);
 const presentation = computed<ToolPresentation>(() => ({
   glyph: "thinking",
   name: t("thinkingBlock.title"),
-  secondary: fullOpen.value ? t("thinkingBlock.full") : t("thinkingBlock.recent"),
+  // Settled thinking is one quiet line: the excerpt was there to show live
+  // progress, and after the turn it only pushes the tools and prose down.
+  secondary: fullOpen.value ? t("thinkingBlock.full") : props.streaming ? t("thinkingBlock.recent") : undefined,
   meta: props.durationMs !== undefined && Number.isFinite(props.durationMs) && props.durationMs >= 0 ? formatDuration(props.durationMs) : undefined,
   protocolName: t("thinkingBlock.title"),
   state: props.streaming ? "running" : "done",
@@ -85,7 +87,7 @@ watch(() => props.text, async (value, previous) => {
     <ToolCallHeader :presentation="presentation" :expandable="!compact" :open="fullOpen" :controls="bodyId" @toggle="toggle" />
     <div v-if="fullOpen" :id="bodyId" ref="body" class="thinking-full" tabindex="0" role="region" :aria-label="t('thinkingBlock.full')"
       @scroll.passive="onScroll" @wheel.passive="onWheel" @keydown="onKeydown">{{ text }}</div>
-    <StreamTailWindow v-else class="thinking-recent" :text="text" :streaming="streaming" :lines="3" />
+    <StreamTailWindow v-else-if="streaming" class="thinking-recent" :text="text" :streaming="streaming" :lines="3" />
   </section>
 </template>
 

@@ -45,8 +45,8 @@ type prefsView struct {
 }
 
 // maxTurnsView is the turn-cap state the dialog renders: the settings
-// override (0 = none), the startup flag it falls back to, and the effective
-// cap runs actually use right now.
+// override (0 = unlimited), the finite default offered when enabling a cap,
+// and the effective cap runs actually use right now.
 type maxTurnsView struct {
 	Override  int `json:"max_turns"`
 	Flag      int `json:"flag"`
@@ -59,11 +59,7 @@ func (s *Server) maxTurnsSnapshot() maxTurnsView {
 		flag = agent.DefaultMaxTurns
 	}
 	override := int(s.mgr.maxTurnsOverride.Load())
-	effective := override
-	if effective <= 0 {
-		effective = flag
-	}
-	return maxTurnsView{Override: override, Flag: flag, Effective: effective}
+	return maxTurnsView{Override: override, Flag: flag, Effective: override}
 }
 
 type spillUsage struct {
@@ -106,8 +102,8 @@ func (s *Server) handleGetPrefs(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, s.prefsSnapshot())
 }
 
-// handlePutMaxTurns is the settings dialog's live turn cap; 0 restores the
-// startup flag. It is its own endpoint for the same reason the sandbox switch
+// handlePutMaxTurns is the settings dialog's live turn cap; 0 explicitly
+// disables the cap. It is its own endpoint for the same reason the sandbox switch
 // is: PUT /api/prefs replaces the file wholesale, so a one-field save here
 // must never travel through it. The live propagation happens first (the
 // Manager pushes the cap into cached sessions), then the file is rewritten
@@ -122,7 +118,7 @@ func (s *Server) handlePutMaxTurns(w http.ResponseWriter, r *http.Request) {
 	}
 	if body.MaxTurns < 0 || body.MaxTurns > prefs.MaxTurnsBound {
 		writeErr(w, http.StatusBadRequest, fmt.Errorf(
-			"max_turns must be 0 (follow -max-turns) or 1..%d, got %d", prefs.MaxTurnsBound, body.MaxTurns))
+			"max_turns must be 0 (unlimited) or 1..%d, got %d", prefs.MaxTurnsBound, body.MaxTurns))
 		return
 	}
 	s.mgr.SetMaxTurnsOverride(body.MaxTurns)

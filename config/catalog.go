@@ -33,6 +33,8 @@ type Provider struct {
 	// OpenAI clients never send. Nil unless the provider's file entry declares
 	// one.
 	ExtraBody map[string]any
+	// TimeoutSeconds bounds one model request. Zero uses the client's default.
+	TimeoutSeconds int64
 	// BaseURLEnv names an environment variable that, when set, replaces BaseURL
 	// at resolve time — the escape hatch for pointing at a proxy or a mirror
 	// without editing the configuration. It is only honoured where it was

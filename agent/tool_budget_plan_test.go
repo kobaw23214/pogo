@@ -81,3 +81,53 @@ func TestToolBudgetPlanBatchInvariants(t *testing.T) {
 		}
 	}
 }
+
+// Registered Skill instructions are allocated whole, ahead of the batch and
+// outside the per-result and batch limits; only known headroom cuts them, never
+// below the identity allowance. The other results are planned as before within
+// what is left, and the target includes the whole allocation.
+func TestToolBudgetPlanKeepsSkillInstructionsWhole(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		cfg      ToolOutputBudgetConfig
+		prompt   int64
+		costs    []int64
+		whole    []bool
+		want     []int64
+		target   int64
+		headroom int64
+	}{
+		{name: "outside per-result and batch limits", cfg: ToolOutputBudgetConfig{PerResultTokens: 512, BatchTokens: 1024},
+			costs: []int64{8400, 3000}, whole: []bool{true, false}, want: []int64{8400, 512}, target: 8912, headroom: -1},
+		{name: "known headroom still bounds it", cfg: ToolOutputBudgetConfig{ContextWindow: 32000, MaxOutputTokens: 1000}, prompt: 27000,
+			costs: []int64{8400, 1000}, whole: []bool{true, false}, want: []int64{2400, 128}, target: 2400, headroom: 2400},
+		{name: "a full context keeps the identity allowance", cfg: ToolOutputBudgetConfig{ContextWindow: 32000, MaxOutputTokens: 1000}, prompt: 29400,
+			costs: []int64{8400}, whole: []bool{true}, want: []int64{128}, target: 128, headroom: 0},
+		{name: "several share headroom in call order", cfg: ToolOutputBudgetConfig{ContextWindow: 32000, MaxOutputTokens: 1000}, prompt: 20000,
+			costs: []int64{5000, 5000}, whole: []bool{true, true}, want: []int64{5000, 4400}, target: 9400, headroom: 9400},
+		{name: "default 1M window", cfg: ToolOutputBudgetConfig{ContextWindow: 1048576, MaxOutputTokens: 65536}, prompt: 20000,
+			costs: []int64{8400, 10000}, whole: []bool{true, false}, want: []int64{8400, 8192}, target: 16592, headroom: 910612},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := planToolResultBudgetWhole(tc.cfg, tc.prompt, tc.costs, nil, tc.whole)
+			if !reflect.DeepEqual(got.PerResult, tc.want) || got.TargetTokens != tc.target || got.Headroom != tc.headroom {
+				t.Fatalf("plan = %+v; want allocations %v, target %d, headroom %d", got, tc.want, tc.target, tc.headroom)
+			}
+		})
+	}
+
+	// Without whole results the plan is exactly the ordinary one.
+	random := rand.New(rand.NewSource(7))
+	for iteration := 0; iteration < 200; iteration++ {
+		costs := make([]int64, random.Intn(12)+1)
+		failures := make([]bool, len(costs))
+		for i := range costs {
+			costs[i], failures[i] = int64(random.Intn(20000)), random.Intn(4) == 0
+		}
+		cfg := ToolOutputBudgetConfig{ContextWindow: random.Intn(300000), MaxOutputTokens: int64(random.Intn(20000))}
+		prompt := int64(random.Intn(200000))
+		if a, b := planToolResultBudget(cfg, prompt, costs, failures), planToolResultBudgetWhole(cfg, prompt, costs, failures, make([]bool, len(costs))); !reflect.DeepEqual(a, b) {
+			t.Fatalf("iteration %d: no whole results changed the plan: %+v / %+v", iteration, a, b)
+		}
+	}
+}
