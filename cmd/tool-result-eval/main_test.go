@@ -8,7 +8,6 @@ import (
 	"reflect"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/yosukeno/pogo/agent"
 	"github.com/yosukeno/pogo/llm"
@@ -29,8 +28,8 @@ func TestDeterministicFixtureOracle(t *testing.T) {
 
 func TestSDKManagedResultRoundTripWithoutModel(t *testing.T) {
 	// This checks 50 durable pages and exact recovery, not a latency target.
-	// Race instrumentation can spend over 20 seconds decoding those pages.
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	// Share the evaluator's independent budget, including race-instrumented CI.
+	ctx, cancel := context.WithTimeout(context.Background(), hostRecoveryTimeout)
 	defer cancel()
 	f := makeFixture()
 	local, err := newLocalMCP(ctx, f)

@@ -47,6 +47,11 @@ const taskPrompt = `请从 get_records 返回的 rows 中筛选 region 为“东
 
 const coverageText = "仅依据本次保存的数据范围"
 
+// Host recovery verifies every saved page independently of the model's run.
+// Multi-megabyte integrity checks under -race need their own bounded budget;
+// they do not measure model latency or establish delivered model evidence.
+const hostRecoveryTimeout = 180 * time.Second
+
 func fullSystemPrompt() string { return systemPrompt + "\n\n" + agent.CitationSection() }
 
 type record struct {
@@ -712,7 +717,7 @@ func runOne(parent context.Context, opt options, resolved config.Resolved, f fix
 			}
 		}
 	}
-	recoveryCtx, recoveryCancel := context.WithTimeout(parent, 30*time.Second)
+	recoveryCtx, recoveryCancel := context.WithTimeout(parent, hostRecoveryTimeout)
 	report.Recovery = scenario.recover(recoveryCtx, registry, originalID)
 	recoveryCancel()
 	if scenario.grouped {
@@ -1225,7 +1230,7 @@ func runCLI() int {
 		"dataset_rows": len(f.Rows), "dataset_rows_sha256": digest(f.RowsJSON), "dataset_payload_sha256": digest(f.PayloadJSON), "dataset_payload_bytes": len(f.PayloadJSON),
 		"expected": f.Expected, "runs": runs,
 		"citations_enabled": true, "full_citation_section_appended": true,
-		"limits": map[string]any{"run_timeout_seconds": 180, "request_timeout_seconds": 90, "max_turns": 12, "token_budget": 60000, "client_max_retries": 0},
+		"limits": map[string]any{"run_timeout_seconds": 180, "request_timeout_seconds": 90, "host_recovery_timeout_seconds": int(hostRecoveryTimeout / time.Second), "max_turns": 12, "token_budget": 60000, "client_max_retries": 0},
 		"notes":  []string{"off preserves first-stage storage/preview and disables only model-view token budgeting", "auto_applied=false means default budgeting did not further reduce tool text; do not attribute stochastic or cache differences to a budget that did not apply", "provider usage fields absent or indistinguishable from zero are null; cache read is a subset of input, reasoning is a subset of output", "all modes share the exact task/system/tool declarations; alternating order on repeat 2 partly exposes but does not eliminate cache/order effects", "agent roots contain no fixture/oracle/report/config files; protected read-only file tools remain registered and their use is reported", "events omit reasoning text, credentials and complete tool payloads; host recovery reads saved JSON pages after the agent run without calling MCP again"},
 	}
 	if scenario.logs != nil {

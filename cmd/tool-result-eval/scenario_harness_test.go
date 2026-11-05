@@ -94,7 +94,7 @@ func TestLogsScenarioSDKTextOnlyPersistenceAndIndependentRecovery(t *testing.T) 
 	if scenario.logs == nil || scenario.task != f.TaskPrompt || strings.Contains(scenario.system, string(oracle)) || strings.Contains(scenario.task, string(oracle)) {
 		t.Fatal("scenario passed the host answer oracle into model instructions")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), hostRecoveryTimeout)
 	defer cancel()
 	local, err := scenario.newMCP(ctx)
 	if err != nil {

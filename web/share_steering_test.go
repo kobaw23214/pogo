@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/yosukeno/pogo/llm"
 )
@@ -15,11 +16,13 @@ import (
 // getting lost anywhere between those boundaries.
 func TestShareCreateReadKeepsSteeringAnswerAndStopsAtNextTask(t *testing.T) {
 	release := make(chan struct{})
+	entered := make(chan struct{})
 	var once sync.Once
 	defer once.Do(func() { close(release) })
 	h := newHarness(t, func(n int) (llm.Response, error) {
 		switch n {
 		case 1:
+			close(entered)
 			<-release
 			return textTurn("Working on the original task."), nil
 		case 2:
@@ -31,6 +34,11 @@ func TestShareCreateReadKeepsSteeringAnswerAndStopsAtNextTask(t *testing.T) {
 	sid := h.createSession()
 	stream := h.start(sid, "Original task")
 	defer stream.close()
+	select {
+	case <-entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("provider did not start")
+	}
 	inboxRequest(t, h, sid, map[string]any{"action": "inbox_send", "id": "share-steer", "prompt": "Supplement the original task", "mode": "steer"}, http.StatusOK)
 	inboxRequest(t, h, sid, map[string]any{"action": "inbox_send", "id": "share-next", "prompt": "Separate next task", "mode": "queued"}, http.StatusOK)
 	once.Do(func() { close(release) })

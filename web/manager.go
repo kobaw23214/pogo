@@ -558,25 +558,10 @@ func (m *Manager) rebuildSkillViews() {
 	// here rather than per session: the components cannot differ.
 	m.readRoots = append(append([]string{}, m.skillRoots...), m.cfg.ReadRoots...)
 
-	// The skill roots also join POGO_READ_ROOTS itself, not just this process's
-	// in-memory slice: the environment is the inheritance channel a subagent
-	// child rebuilds its own roots from, and a child's skills tell it to read
-	// files under the skill directory. Union, so anything the operator baked
-	// into the variable survives — and so a reload after an upload keeps the
-	// operator's entries while adding the new roots.
-	if len(m.skillRoots) > 0 {
-		seen := make(map[string]bool)
-		var merged []string
-		for _, r := range append(append([]string{}, m.skillRoots...), filepath.SplitList(os.Getenv(tools.EnvReadRoots))...) {
-			r = strings.TrimSpace(r)
-			if r == "" || seen[r] {
-				continue
-			}
-			seen[r] = true
-			merged = append(merged, r)
-		}
-		os.Setenv(tools.EnvReadRoots, strings.Join(merged, string(os.PathListSeparator)))
-	}
+	// Keep these grants Manager-local. Ordinary subagents reload skillPathFlags;
+	// explicit selections receive readRoots through their command-local Env.
+	// Mutating POGO_READ_ROOTS here retains roots from every Manager and reload,
+	// leaking grants and eventually exceeding the kernel's exec environment limit.
 
 	// Manifest tools come from the same bundles as the skills and inherit their
 	// trust boundary exactly. Failures skip the entry and say so, the skills

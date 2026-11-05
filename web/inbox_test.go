@@ -133,10 +133,12 @@ func TestInboxQueuesDurablyEditsAndWithdrawsWithoutEnteringModel(t *testing.T) {
 
 func TestInboxSteerDeliversInsideSameRunAndKeepsReceiptOnReplay(t *testing.T) {
 	release := make(chan struct{})
+	entered := make(chan struct{})
 	var once sync.Once
 	defer once.Do(func() { close(release) })
 	h := newHarness(t, func(n int) (llm.Response, error) {
 		if n == 1 {
+			close(entered)
 			<-release
 		}
 		return textTurn("answer"), nil
@@ -144,6 +146,11 @@ func TestInboxSteerDeliversInsideSameRunAndKeepsReceiptOnReplay(t *testing.T) {
 	sid := h.createSession()
 	stream := h.start(sid, "original work")
 	defer stream.close()
+	select {
+	case <-entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("provider did not start")
+	}
 	s := h.session(sid)
 	run := s.Hub().Snapshot().Run.RunID
 	item, err := s.ReceiveInput("steer-1", "补充问题，原任务继续", "queued", run)
@@ -518,10 +525,12 @@ func TestInboxPersistenceFailureDoesNotAcknowledgeOrPublish(t *testing.T) {
 
 func TestInboxReceiptFailureStopsBeforeSteeredModelCallAndRecoversWithoutReplay(t *testing.T) {
 	release := make(chan struct{})
+	entered := make(chan struct{})
 	var once sync.Once
 	defer once.Do(func() { close(release) })
 	h := newHarness(t, func(n int) (llm.Response, error) {
 		if n == 1 {
+			close(entered)
 			<-release
 		}
 		return textTurn("done"), nil
@@ -529,6 +538,11 @@ func TestInboxReceiptFailureStopsBeforeSteeredModelCallAndRecoversWithoutReplay(
 	sid := h.createSession()
 	stream := h.start(sid, "first")
 	defer stream.close()
+	select {
+	case <-entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("provider did not start")
+	}
 	s := h.session(sid)
 	if _, err := s.ReceiveInput("persist-boundary", "new instruction", "steer", ""); err != nil {
 		t.Fatal(err)

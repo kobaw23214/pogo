@@ -272,7 +272,14 @@ func TestMemoryDistillationWritesAfterRunEnd(t *testing.T) {
 	if systems, _, _, _ := cap.snapshot(); len(systems) != 2 {
 		t.Errorf("the model saw %d calls, want the run's answer plus the distillation", len(systems))
 	}
+	// The note is written before usage is committed. The distiller holds the
+	// note-root lock through both writes; wait for it, then obey Store's session
+	// lock contract while reading the completed accounting record.
+	unlock := memory.LockNoteRoot(sess.memoryDir)
+	sess.mu.Lock()
 	usage, _ := sess.store.UsageTotals()
+	sess.mu.Unlock()
+	unlock()
 	if usage.Input != 90 || usage.Output != 20 {
 		t.Errorf("recorded usage = %+v, want the distillation's 90/20", usage)
 	}
