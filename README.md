@@ -2,6 +2,7 @@
 
 # Pogo
 
+[![Stars](https://img.shields.io/github/stars/kobaw23214/pogo?style=social)](https://github.com/kobaw23214/pogo/stargazers)
 [![CI](https://github.com/kobaw23214/pogo/actions/workflows/ci.yml/badge.svg)](https://github.com/kobaw23214/pogo/actions/workflows/ci.yml)
 [![License](https://img.shields.io/github/license/kobaw23214/pogo?color=blue)](LICENSE)
 [![Go Version](https://img.shields.io/badge/Go-1.26.5%2B-00ADD8?logo=go&logoColor=white)](https://go.dev)
