@@ -320,3 +320,7 @@ Bug 反馈与功能建议:[提个 Issue](https://github.com/kobaw23214/pogo/issu
 </div>
 
 更多设计文档见 [docs/](docs/)。License 见 [LICENSE](LICENSE)。
+
+---
+
+> 如果 pogo 帮到了你,欢迎点一个 [⭐ Star](https://github.com/kobaw23214/pogo/stargazers) ,让更多人看到它。
