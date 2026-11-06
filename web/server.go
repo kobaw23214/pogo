@@ -215,9 +215,7 @@ type Server struct {
 	closeOnce             sync.Once
 	// shares is the shared-answer snapshot store (web/share.go). Never nil:
 	// NewServer fills it even without a path, so handlers need no guard.
-	shares            *shareStore
-	workflowEmbed     *workflowEmbedRuntime
-	workflowCallbacks *workflowCallbackRuntime
+	shares *shareStore
 }
 
 func NewServer(mgr *Manager, opts ServerOptions) (*Server, error) {
@@ -253,10 +251,6 @@ func NewServer(mgr *Manager, opts ServerOptions) (*Server, error) {
 		return nil, err
 	}
 	s.auth = auth
-	s.workflowEmbed, err = newWorkflowEmbedRuntime(mgr.cfg.SessionDir)
-	if err != nil {
-		return nil, err
-	}
 	if err := s.initOffice(); err != nil {
 		return nil, err
 	}
@@ -348,17 +342,6 @@ func NewServer(mgr *Manager, opts ServerOptions) (*Server, error) {
 		return false
 	}
 	mgr.mu.Unlock()
-	s.bindWorkflowExecutionAuthorization()
-	s.bindWorkflowAuthoringTools()
-	s.startWorkflowCallbacks()
-	if s.workflowCallbacks != nil {
-		mgr.wfruns.callbackMu.Lock()
-		mgr.wfruns.callback = s.workflowCallbacks.record
-		mgr.wfruns.callbackMu.Unlock()
-		mgr.mu.Lock()
-		mgr.workflowCallbackStop = s.stopWorkflowCallbacks
-		mgr.mu.Unlock()
-	}
 	return s, nil
 }
 
@@ -391,9 +374,6 @@ func (s *Server) routes() {
 	s.informationRoutes()
 	s.uiIconRoutes()
 	s.studioRoutes()
-	s.workflowRoutes()
-	s.registerWorkflowEmbedRoutes()
-	s.registerWorkflowCallbackRoutes()
 	// Auth surface first: status is what the SPA's gate branch reads before it
 	// knows anything else about the deployment.
 	s.mux.HandleFunc("GET /api/auth/status", s.handleLoginStatus)
@@ -427,6 +407,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("PUT /api/attachments/policy", s.admin(s.handlePutAttachmentPolicy))
 	s.mux.HandleFunc("GET /api/skills", s.handleSkills)
 	s.authoredSkillRoutes()
+	s.webServiceRoutes()
 	s.mux.HandleFunc("GET /api/tools", s.handleTools)
 	s.mux.HandleFunc("GET /api/skills/content", s.handleSkillContent)
 	s.mux.HandleFunc("POST /api/skills/upload", s.admin(s.handleSkillUpload))
@@ -444,6 +425,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("PUT /api/prefs", s.admin(s.handleSavePrefs))
 	s.mux.HandleFunc("PUT /api/max-turns", s.admin(s.handlePutMaxTurns))
 	s.mux.HandleFunc("PUT /api/memory-auto", s.admin(s.handlePutMemoryAuto))
+	s.memoryManagementRoutes()
 	// The MCP *client* editor (mcp.json — connecting to other servers). Under
 	// /api so the token + Origin middleware covers it like every other
 	// operation; the bare /mcp route below is the opposite direction, the
@@ -590,15 +572,10 @@ func (s *Server) Handler() http.Handler {
 
 func (s *Server) withToken(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Embedded credentials authorize only the dedicated publication API.
-		if strings.HasPrefix(r.URL.Path, workflowEmbedPrefix) {
-			next.ServeHTTP(w, r)
-			return
-		}
 		if token := bearerOrQueryToken(r); strings.HasPrefix(token, "wes_") || strings.HasPrefix(token, "wic_") || strings.HasPrefix(token, "wlc_") {
-			// Preserve operator-configured legacy tokens with coincidental
-			// prefixes, but never let an unrecognized embed bearer fall back
-			// to a login cookie or the unauthenticated loopback compatibility.
+			// Retired platform credential prefixes do not become ordinary
+			// login credentials. Preserve explicitly configured account tokens,
+			// but never fall back to cookies or loopback for an unknown bearer.
 			_, fixedAccount := s.auth.userByToken(token)
 			fixedOperator := s.opts.Token != "" && subtle.ConstantTimeCompare([]byte(token), []byte(s.opts.Token)) == 1
 			if !fixedAccount && !fixedOperator {
@@ -811,9 +788,6 @@ func (s *Server) ownerScope(r *http.Request) (identity.Scope, bool) {
 // config, MCP and skills editors, the scheduler. Local accounts are
 // operator-managed and hold the grant through their account row.
 func (s *Server) adminRequest(r *http.Request) bool {
-	if principal, ok := r.Context().Value(workflowPrincipalContextKey{}).(identity.Principal); ok {
-		return principal.IsOperator()
-	}
 	if caller, ok := identityFrom(r); ok && !caller.Local && (caller.Username != "" || caller.Scope != (identity.Scope{}) || caller.Admin) {
 		return false
 	}
@@ -1115,6 +1089,12 @@ func (s *Server) handleSkills(w http.ResponseWriter, r *http.Request) {
 // the UI's forms and a future MCP server, while the registry answers "what
 // can the model call" and holds only the registered half.
 func (s *Server) handleTools(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	methods, err := s.mcpMethodsForRequest(r)
+	if err != nil {
+		writeErr(w, http.StatusNotFound, err)
+		return
+	}
 	catalog := s.mgr.SynthCatalog()
 	builtin := tools.BuiltinCatalog()
 	var mcpOnly map[string]bool // nil: the whole pool — the default for every caller
@@ -1141,6 +1121,9 @@ func (s *Server) handleTools(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"tools": catalog,
 		"mcp":   s.mcpServerEntries(r, mcpOnly),
+		// The presentation catalog can include disconnected/colliding tools.
+		// Completion must use only this executable, session-scoped projection.
+		"mcp_methods": methods,
 		// Unscoped requests serve the editor's full catalog. A session-scoped
 		// request exposes only its effective registered native capabilities.
 		"builtin": builtin,
@@ -1490,9 +1473,15 @@ func (s *Server) handleCreateSession(w http.ResponseWriter, r *http.Request) {
 		// Workspace is a directory relative to the session's base root ("" =
 		// the root); it becomes the session's working directory. In multi-user
 		// mode the base is the caller's own root, not the server's.
-		Workspace string `json:"workspace"`
+		Workspace    string `json:"workspace"`
+		ApprovalMode string `json:"approval_mode"`
 	}
 	_ = decodeBody(r, &body)
+	mode, validMode := ParseMode(body.ApprovalMode)
+	if body.ApprovalMode != "" && !validMode {
+		writeErr(w, http.StatusBadRequest, errors.New(`approval_mode must be "strict", "standard" or "auto"`))
+		return
+	}
 	var owner *identity.Scope
 	if scope, ok := s.ownerScope(r); ok {
 		owner = &scope
@@ -1501,6 +1490,9 @@ func (s *Server) handleCreateSession(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err)
 		return
+	}
+	if body.ApprovalMode != "" {
+		sess.SetPolicy(mode, 0)
 	}
 	cfg := sess.Model()
 	writeJSON(w, http.StatusCreated, map[string]any{
@@ -1671,6 +1663,12 @@ func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
 	if len(body.ClientID) > 64 {
 		body.ClientID = body.ClientID[:64]
 	}
+	parts, inputErr := canonicalMCPInput(body.Prompt, body.Attachments, body.Parts, body.InputLayout)
+	if inputErr != nil {
+		writeErr(w, http.StatusBadRequest, inputErr)
+		return
+	}
+	body.Parts = parts
 	prompt, files, inputErr := normalizeMessageInput(body.Prompt, body.Attachments, body.Parts, body.InputLayout)
 	if inputErr != nil {
 		writeErr(w, http.StatusBadRequest, inputErr)

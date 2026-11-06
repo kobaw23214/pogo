@@ -1,3 +1,4 @@
+import { getLocale } from "@/i18n";
 import type { InformationEntry } from "@/api/information";
 export function informationPath(entries: readonly InformationEntry[], id: string): InformationEntry[] {
   const byID = new Map(entries.map(entry => [entry.id, entry])); const path: InformationEntry[] = []; const seen = new Set<string>();
@@ -12,7 +13,7 @@ export function informationDescendants(entries: readonly InformationEntry[], id:
 export function informationVisible(entries: readonly InformationEntry[], folder: string, query: string, flat: boolean): InformationEntry[] {
   const needle = query.trim().toLocaleLowerCase();
   return entries.filter(entry => (!flat || entry.kind !== "folder") && (needle ? entry.name.toLocaleLowerCase().includes(needle) : flat || entry.parent_id === folder))
-    .sort((a, b) => (a.kind === "folder" ? 0 : 1) - (b.kind === "folder" ? 0 : 1) || a.name.localeCompare(b.name, "zh-CN", { numeric: true }));
+    .sort((a, b) => (a.kind === "folder" ? 0 : 1) - (b.kind === "folder" ? 0 : 1) || a.name.localeCompare(b.name, getLocale(), { numeric: true }));
 }
 export interface InformationViewState { folder: string; selected: string; mode: "list" | "grid"; flat: boolean; expanded: string[] }
 export function restoreInformationView(raw: string | null, entries: readonly InformationEntry[]): InformationViewState {

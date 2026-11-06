@@ -446,7 +446,7 @@ export function buildTimeline(
         id: m.id,
         text,
         ts: m.ts,
-        ...(m.input_layout || m.content.some(block => block.type === "text" && (block.input_shortcut || block.input_office))
+        ...(m.input_layout || m.content.some(block => block.type === "text" && (block.input_shortcut || block.input_office || block.input_mcp))
           ? { orderedContent: m.content, inputLayout: m.input_layout || "top" } : {}),
         ...(m.steering ? { steering: true } : {}),
         ...(m.run_id ? { runId: m.run_id } : {}),
@@ -729,7 +729,6 @@ export function targetOf(name: ToolName, args: unknown): string {
     return JSON.stringify([a.action, pages, a.full === true]);
   }
   if (name.startsWith("agent_workflow_")) return JSON.stringify([a.workflow_id || "", a.run_id || "", a.action || "", a.expected_revision || "", a.request_id || ""]);
-  if (name.startsWith("workflow_")) return JSON.stringify([a.workflow_id || "", a.action || "", a.expected_revision || "", a.request_id || ""]);
   if (name === "background_task") return JSON.stringify([a.source || "", a.action || "", a.task_id || a.script_path || a.title || ""]);
   if (name === "watch_test") return String(a.watch_id || a.script_path || "");
   if (name === "skill_search") return String(a.query || "");
@@ -769,7 +768,6 @@ export function summarizeArgs(name: ToolName, args: unknown): string {
       ? gt(`timeline.${action}`, { n: items.length }) : gt(`timeline.${action}Pending`);
   }
   if (name.startsWith("agent_workflow_")) return [a.name, a.workflow_id, a.run_id, a.action].filter(Boolean).map(String).join(" · ");
-  if (name.startsWith("workflow_")) return [a.name, a.workflow_id, a.query].filter(Boolean).map(String).join(" · ");
   if (name === "background_task") {
     const action = String(a.action || "");
     const known = ["prepare", "check", "create", "list", "status", "pause", "resume", "remove"].includes(action);

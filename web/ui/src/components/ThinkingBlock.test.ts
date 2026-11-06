@@ -36,6 +36,17 @@ function mount(extra: Record<string, unknown> = {}, state = createCardDisclosure
 }
 
 describe("thinking text presentation", () => {
+  it("lets the reader close a located thought and reveals the same thought again on a new request", async () => {
+    const { props, c, state } = mount({ streaming: false, reveal: true, revealVersion: 1 });
+    expect(c.fullOpen.value).toBe(true);
+    expect(state.choice("m1:thinking")).toBeUndefined();
+    c.toggle(); await nextTick();
+    expect(c.fullOpen.value).toBe(false);
+    expect(state.choice("m1:thinking")).toBe(false);
+    Object.assign(props, { revealVersion: 2 }); await nextTick();
+    expect(c.fullOpen.value).toBe(true);
+    expect(state.choice("m1:thinking")).toBe(false);
+  });
   it("shows an unfinished first fragment immediately and labels it as a recent excerpt", async () => {
     const html = await render({ text: "正在" });
     expect(html).toContain("正在"); expect(html).toContain("最近片段"); expect(html).toContain('data-tool-kind="thinking"');

@@ -88,7 +88,7 @@ const MaxEverySeconds = int64((1<<63 - 1) / time.Second)
 func ValidEverySeconds(seconds int64) bool { return seconds >= 1 && seconds <= MaxEverySeconds }
 
 func NextRun(j Job, now time.Time) *time.Time {
-	if !j.Enabled {
+	if !j.Enabled || j.WorkflowID != "" {
 		return nil
 	}
 	switch j.Kind {

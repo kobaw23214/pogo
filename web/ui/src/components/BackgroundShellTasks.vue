@@ -169,7 +169,7 @@ onBeforeUnmount(() => {
       </div>
       <section v-if="selected" class="shell-detail" :aria-label="t('backgroundShell.output')">
         <div class="shell-detail-heading">
-          <span>{{ t('backgroundShell.state_' + selected.status) }}<template v-if="typeof selected.exit_code === 'number'"> · exit {{ selected.exit_code }}</template></span>
+          <span>{{ t('backgroundShell.state_' + selected.status) }}<template v-if="typeof selected.exit_code === 'number'"> · {{ t('cite.exitCode', { code: selected.exit_code }) }}</template></span>
           <button v-if="['running', 'queued'].includes(selected.status)" type="button" class="shell-stop" :disabled="!connected || !!stopping || !available" @click="stop(selected)">{{ t(stopping === selected.task_id ? 'backgroundShell.stopping' : 'backgroundShell.stop') }}</button>
         </div>
         <pre class="shell-command">$ {{ selected.command }}</pre>

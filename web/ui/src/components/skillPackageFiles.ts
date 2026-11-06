@@ -1,3 +1,4 @@
+import { getLocale } from "@/i18n";
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import type { SkillPackageEntry, SkillPackageFiles } from "@/api/types";
 
@@ -27,7 +28,7 @@ export function useSkillPackageFiles(options: { scope: () => string; load: (path
       if (loading.value.has(path) && !directories.value[path]) out.push({ key: `${path}:loading`, depth, directory: path, state: "loading" });
       if (errors.value[path]) out.push({ key: `${path}:error`, depth, directory: path, state: "error", message: errors.value[path] });
       const dir = directories.value[path]; if (!dir) return;
-      const sorted = [...dir.entries].sort((a, b) => Number(b.kind === "directory") - Number(a.kind === "directory") || Number(b.path === "SKILL.md") - Number(a.path === "SKILL.md") || a.name.localeCompare(b.name, "zh-CN"));
+      const sorted = [...dir.entries].sort((a, b) => Number(b.kind === "directory") - Number(a.kind === "directory") || Number(b.path === "SKILL.md") - Number(a.path === "SKILL.md") || a.name.localeCompare(b.name, getLocale()));
       for (const entry of sorted) {
         out.push({ key: entry.path, entry, depth, directory: path });
         if (entry.kind === "directory" && entry.expandable !== false && expanded.value.has(entry.path)) walk(entry.path, depth + 1);

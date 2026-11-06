@@ -3,7 +3,7 @@ import { effectScope, nextTick, reactive, type Ref } from "vue";
 
 const host = vi.hoisted(() => ({ configuration: vi.fn(), fileContent: vi.fn(), fileRender: vi.fn(), cleanups: [] as (() => void)[] }));
 vi.mock("vue", async original => ({ ...await original<typeof import("vue")>(), onBeforeUnmount: (fn: () => void) => host.cleanups.push(fn), useSSRContext: () => ({ modules: new Set() }) }));
-vi.mock("vue-i18n", () => ({ useI18n: () => ({ t: (key: string) => key, d: () => "" }) }));
+vi.mock("vue-i18n", async original => { const { ref } = await import("vue"); return { ...await original<typeof import("vue-i18n")>(), useI18n: () => ({ t: (key: string) => key, d: () => "", locale: ref("zh-CN") }) }; });
 vi.mock("@/api/client", () => ({ api: { fileContent: host.fileContent, fileRender: host.fileRender }, authHeaders: () => ({}), fileDownloadURL: (path: string) => `/download/${path}`, fileRawURL: (path: string) => `/raw/${path}` }));
 vi.mock("@/agent/officeTransport", () => ({ officeApi: { configuration: host.configuration }, officePathMounted: () => false }));
 vi.mock("./CodeBlock.vue", () => ({ default: {} }));
@@ -34,10 +34,18 @@ describe("Workspace Office opens directly and preserves its only editor", () => 
     }
     expect(host.fileContent).not.toHaveBeenCalled(); expect(host.fileRender).not.toHaveBeenCalled();
   });
-  it("uses view mode for quick previews and enters edit only after an explicit action", async () => {
+  it("uses view mode for quick previews and waits for its close acknowledgement before entering edit", async () => {
     const { controller } = mount("uploads/view-only.docx"); await flush();
     expect(controller.officeBinding.value?.mode).toBe("view");
+    let acknowledgeClose!: (closed: boolean) => void;
+    const closeAcknowledgement = new Promise<boolean>(resolve => { acknowledgeClose = resolve; });
+    const prepareClose = vi.fn(() => closeAcknowledgement);
+    controller.officeEditor.value = { prepareClose, refreshStatus: vi.fn() };
     controller.editSavedOffice();
+    await flush();
+    expect(prepareClose).toHaveBeenCalledOnce();
+    expect(controller.officeBinding.value?.mode).toBe("view");
+    acknowledgeClose(true); await flush();
     expect(controller.officeBinding.value?.mode).toBe("edit");
   });
   it("shows an unavailable error instead of falling back to a stale read-only document", async () => {

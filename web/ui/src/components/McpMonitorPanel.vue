@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { getLocale } from "@/i18n";
 // MCP call monitor panel ("调用监控"), embedded by SettingsDialog as its own
 // sheet. Unlike the legacy inbound HTTP diagnostics (McpLogsPanel), this page
 // covers both directions — Pogo calling external MCP servers and external
@@ -31,6 +32,7 @@ import {
 } from "@/components/mcpMonitor";
 import { MCP_ENTRYPOINTS } from "@/components/mcpMonitor";
 import ObserveStatusCard from "@/components/ObserveStatusCard.vue";
+import StudioEntrySkeleton from "@/components/studio/StudioEntrySkeleton.vue";
 import McpMatchText from "@/components/McpMatchText.vue";
 import { mcpCallFailed, mcpHighlightQueries, mcpHighlightSegments } from "@/components/mcpMonitorPresentation";
 import type {
@@ -83,7 +85,7 @@ const detailError = ref(false);
 const auto = ref(true);
 const pagedHistory = ref(false);
 const knownAgents = ref<Record<string, string>>({});
-const agentChoices = computed(() => Object.entries(knownAgents.value).map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name)));
+const agentChoices = computed(() => Object.entries(knownAgents.value).map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name, getLocale())));
 const scopeReady = computed(() => props.scope !== "agent" || /^[A-Za-z0-9_-]{1,160}$/.test(props.agentId));
 const committedFilter = ref(snapshotMonitorFilter(filter.value));
 let timer: number | undefined;
@@ -167,11 +169,14 @@ async function reload(snapshot: McpMonitorFilter) {
 
 function refresh() {
   if (!props.active) return;
+  const snapshot = snapshotMonitorFilter(filter.value);
   pagedHistory.value = false;
   closeDetail();
-  calls.value = [];
-  stats.value = null;
-  return reload(snapshotMonitorFilter(filter.value));
+  if (JSON.stringify(snapshot) !== JSON.stringify(committedFilter.value)) {
+    calls.value = [];
+    stats.value = null;
+  }
+  return reload(snapshot);
 }
 
 // Historical pages use a fixed query window and pause polling.
@@ -423,7 +428,7 @@ onBeforeUnmount(() => {
 
     <ObserveStatusCard v-if="scope === 'global'" :active="active" />
 
-    <div class="mm-stats" aria-label="statistics">
+    <div class="mm-stats" :aria-label="t('uiCoverage.statistics')">
       <div class="mm-stat"><span class="mm-stat-label">{{ t("mcpMonitor.statTotal") }}</span><span class="mm-stat-value">{{ statText(stats?.total) }}</span></div>
       <div class="mm-stat"><span class="mm-stat-label">{{ t("mcpMonitor.statRunning") }}</span><span class="mm-stat-value running">{{ statText(stats?.running) }}</span></div>
       <div class="mm-stat"><span class="mm-stat-label">{{ t("mcpMonitor.statOk") }}</span><span class="mm-stat-value ok">{{ statText(stats?.ok) }}</span></div>
@@ -548,7 +553,7 @@ onBeforeUnmount(() => {
       <div class="mm-spacer" />
       <span class="mm-auto">{{ t("mcpMonitor.autoRefresh") }}</span>
       <el-switch v-model="auto" size="small" :aria-label="t('mcpMonitor.autoRefresh')" />
-      <el-button size="small" :icon="Refresh" :loading="loading" @click="refresh">
+      <el-button size="small" :icon="Refresh" :loading="loading && !!stats" :disabled="loading" @click="refresh">
         {{ t("mcpMonitor.refresh") }}
       </el-button>
     </div>
@@ -581,7 +586,7 @@ onBeforeUnmount(() => {
 
     <div class="mm-body" :class="{ 'detail-open': selected }">
       <div class="mm-list" role="list" :aria-busy="loading">
-        <div v-if="loading && !calls.length" class="mm-empty">{{ t("mcpMonitor.loading") }}</div>
+        <div v-if="loading && !stats" role="status" :aria-label="t('mcpMonitor.loading')"><StudioEntrySkeleton area="sessions" /></div>
         <div v-else-if="!calls.length && !errorKey" class="mm-empty">
           <el-empty :description="t('mcpMonitor.empty')" :image-size="56" />
           <div class="mm-empty-hint">{{ t(scope === 'agent' ? 'mcpMonitor.agentEmptyHint' : 'mcpMonitor.emptyHint') }}</div>
@@ -630,52 +635,54 @@ onBeforeUnmount(() => {
         </div>
       </div>
 
-      <div v-if="selected" class="mm-detail">
+      <div v-if="selected" class="mm-detail" :aria-busy="detailLoading">
         <div class="mm-detail-head">
           <el-button v-if="compact" size="small" text @click="closeDetail">← {{ t("mcpMonitor.backToCalls") }}</el-button>
           <span class="mm-detail-title">{{ t("mcpMonitor.detailTitle") }}</span>
           <el-button size="small" text :aria-label="t('mcpMonitor.closeDetail')" @click="closeDetail">×</el-button>
         </div>
-        <div v-if="detailLoading" class="mm-detail-loading">{{ t("mcpMonitor.loading") }}</div>
-        <div v-else-if="detailError" class="mm-error" role="alert">
-          <span>{{ t("mcpMonitor.detailError") }}</span>
-          <el-button size="small" text @click="openDetail(selected)">{{ t("mcpMonitor.retry") }}</el-button>
-        </div>
-        <section v-if="mcpCallFailed(selected)" class="mm-failure" data-testid="mcp-failure-reason" :aria-label="t('mcpMonitor.failureReason')">
-          <h3>{{ t("mcpMonitor.failureReason") }}</h3>
-          <p v-if="selected.error_summary?.trim()"><McpMatchText :text="selected.error_summary" :queries="highlightQueries()" /></p>
-          <p v-else class="mm-failure-missing">{{ t(detailLoading ? 'mcpMonitor.failureLoading' : detailError ? 'mcpMonitor.failureLoadFailed' : 'mcpMonitor.failureMissing') }}</p>
-          <p v-if="selected.error_summary?.trim() && selected.error_source === 'session'" class="mm-failure-source" data-testid="mcp-error-source">{{ t("mcpMonitor.failureFromSession") }}</p>
-          <p v-if="selected.error_code" class="mm-failure-code"><span>{{ t("mcpMonitor.fErrorCode") }}</span><code><McpMatchText :text="selected.error_code" :queries="highlightQueries()" /></code></p>
-          <el-button v-if="selected.session_id" text size="small" @click="filterSameSession">{{ t("mcpMonitor.filterSameSession") }}</el-button>
-          <small v-else-if="!selected.error_summary?.trim() && !detailLoading">{{ t("mcpMonitor.failureNoSession") }}</small>
-        </section>
-        <dl class="mm-fields">
-          <div class="mm-field"><dt>{{ t("mcpMonitor.fAgent") }}</dt><dd><McpMatchText :text="agentLabel(selected)" :queries="highlightQueries()" /><small v-if="!compact && selected.agent_id && selected.agent_name" class="mm-agent-id mono"><McpMatchText :text="selected.agent_id" :queries="highlightQueries()" /></small><small v-else-if="!selected.agent_id" class="mm-agent-id">{{ t("mcpMonitor.agentUnknownHint") }}</small></dd></div>
-          <div class="mm-field"><dt>{{ t("mcpMonitor.fStatus") }}</dt><dd><span class="mm-status" :class="statusClass(selected.status)">{{ statusLabel(selected.status) }}</span></dd></div>
-          <div class="mm-field"><dt>{{ t("mcpMonitor.fServer") }}</dt><dd><McpMatchText :text="field(selected.server)" :queries="highlightQueries('server')" /></dd></div>
-          <div class="mm-field"><dt>{{ t("mcpMonitor.fTool") }}</dt><dd><McpMatchText :text="field(selected.tool)" :queries="highlightQueries('tool')" /></dd></div>
-          <div class="mm-field"><dt>{{ t("mcpMonitor.fStarted") }}</dt><dd>{{ fmtTime(selected.started_at) }}</dd></div>
-          <div class="mm-field"><dt>{{ t("mcpMonitor.fFinished") }}</dt><dd>{{ selected.finished_at ? fmtTime(selected.finished_at) : t("mcpMonitor.dash") }}</dd></div>
-          <div class="mm-field"><dt>{{ t("mcpMonitor.fDuration") }}</dt><dd>{{ durationText(selected) }}</dd></div>
-          <div class="mm-field"><dt>{{ t("mcpMonitor.fSession") }}</dt><dd class="mono"><McpMatchText :text="field(selected.session_id)" :queries="highlightQueries()" /></dd></div>
-          <div v-if="selected.error_kind" class="mm-field"><dt>{{ t("mcpMonitor.fErrorKind") }}</dt><dd><McpMatchText :text="selected.error_kind" :queries="highlightQueries()" /></dd></div>
-        </dl>
-        <component :is="compact ? 'details' : 'div'" class="mm-technical" data-testid="mcp-technical-details">
-          <summary v-if="compact">{{ t("mcpMonitor.technicalDetails") }}</summary>
+        <div v-if="detailLoading" class="mm-detail-loading" role="status" :aria-label="t('mcpMonitor.loading')"><StudioEntrySkeleton area="form" /></div>
+        <template v-else>
+          <div v-if="detailError" class="mm-error" role="alert">
+            <span>{{ t("mcpMonitor.detailError") }}</span>
+            <el-button size="small" text @click="openDetail(selected)">{{ t("mcpMonitor.retry") }}</el-button>
+          </div>
+          <section v-if="mcpCallFailed(selected)" class="mm-failure" data-testid="mcp-failure-reason" :aria-label="t('mcpMonitor.failureReason')">
+            <h3>{{ t("mcpMonitor.failureReason") }}</h3>
+            <p v-if="selected.error_summary?.trim()"><McpMatchText :text="selected.error_summary" :queries="highlightQueries()" /></p>
+            <p v-else class="mm-failure-missing">{{ t(detailLoading ? 'mcpMonitor.failureLoading' : detailError ? 'mcpMonitor.failureLoadFailed' : 'mcpMonitor.failureMissing') }}</p>
+            <p v-if="selected.error_summary?.trim() && selected.error_source === 'session'" class="mm-failure-source" data-testid="mcp-error-source">{{ t("mcpMonitor.failureFromSession") }}</p>
+            <p v-if="selected.error_code" class="mm-failure-code"><span>{{ t("mcpMonitor.fErrorCode") }}</span><code><McpMatchText :text="selected.error_code" :queries="highlightQueries()" /></code></p>
+            <el-button v-if="selected.session_id" text size="small" @click="filterSameSession">{{ t("mcpMonitor.filterSameSession") }}</el-button>
+            <small v-else-if="!selected.error_summary?.trim() && !detailLoading">{{ t("mcpMonitor.failureNoSession") }}</small>
+          </section>
           <dl class="mm-fields">
-            <div v-for="item in technicalFields(selected)" :key="item.key" class="mm-field"><dt>{{ t(`mcpMonitor.${item.key}`) }}</dt><dd class="mono"><McpMatchText :text="field(item.value)" :queries="highlightQueries()" /></dd></div>
+            <div class="mm-field"><dt>{{ t("mcpMonitor.fAgent") }}</dt><dd><McpMatchText :text="agentLabel(selected)" :queries="highlightQueries()" /><small v-if="!compact && selected.agent_id && selected.agent_name" class="mm-agent-id mono"><McpMatchText :text="selected.agent_id" :queries="highlightQueries()" /></small><small v-else-if="!selected.agent_id" class="mm-agent-id">{{ t("mcpMonitor.agentUnknownHint") }}</small></dd></div>
+            <div class="mm-field"><dt>{{ t("mcpMonitor.fStatus") }}</dt><dd><span class="mm-status" :class="statusClass(selected.status)">{{ statusLabel(selected.status) }}</span></dd></div>
+            <div class="mm-field"><dt>{{ t("mcpMonitor.fServer") }}</dt><dd><McpMatchText :text="field(selected.server)" :queries="highlightQueries('server')" /></dd></div>
+            <div class="mm-field"><dt>{{ t("mcpMonitor.fTool") }}</dt><dd><McpMatchText :text="field(selected.tool)" :queries="highlightQueries('tool')" /></dd></div>
+            <div class="mm-field"><dt>{{ t("mcpMonitor.fStarted") }}</dt><dd>{{ fmtTime(selected.started_at) }}</dd></div>
+            <div class="mm-field"><dt>{{ t("mcpMonitor.fFinished") }}</dt><dd>{{ selected.finished_at ? fmtTime(selected.finished_at) : t("mcpMonitor.dash") }}</dd></div>
+            <div class="mm-field"><dt>{{ t("mcpMonitor.fDuration") }}</dt><dd>{{ durationText(selected) }}</dd></div>
+            <div class="mm-field"><dt>{{ t("mcpMonitor.fSession") }}</dt><dd class="mono"><McpMatchText :text="field(selected.session_id)" :queries="highlightQueries()" /></dd></div>
+            <div v-if="selected.error_kind" class="mm-field"><dt>{{ t("mcpMonitor.fErrorKind") }}</dt><dd><McpMatchText :text="selected.error_kind" :queries="highlightQueries()" /></dd></div>
           </dl>
-          <el-button v-if="compact" size="small" :disabled="!selected.trace_id" @click="filterSameTrace">{{ t("mcpMonitor.filterSameTrace") }}</el-button>
-        </component>
-        <div class="mm-detail-actions">
-          <el-button v-if="!compact" size="small" :disabled="!selected.trace_id" @click="filterSameTrace">
-            {{ t("mcpMonitor.filterSameTrace") }}
-          </el-button>
-          <el-button v-if="!mcpCallFailed(selected)" size="small" :disabled="!selected.session_id" @click="filterSameSession">
-            {{ t("mcpMonitor.filterSameSession") }}
-          </el-button>
-        </div>
+          <component :is="compact ? 'details' : 'div'" class="mm-technical" data-testid="mcp-technical-details">
+            <summary v-if="compact">{{ t("mcpMonitor.technicalDetails") }}</summary>
+            <dl class="mm-fields">
+              <div v-for="item in technicalFields(selected)" :key="item.key" class="mm-field"><dt>{{ t(`mcpMonitor.${item.key}`) }}</dt><dd class="mono"><McpMatchText :text="field(item.value)" :queries="highlightQueries()" /></dd></div>
+            </dl>
+            <el-button v-if="compact" size="small" :disabled="!selected.trace_id" @click="filterSameTrace">{{ t("mcpMonitor.filterSameTrace") }}</el-button>
+          </component>
+          <div class="mm-detail-actions">
+            <el-button v-if="!compact" size="small" :disabled="!selected.trace_id" @click="filterSameTrace">
+              {{ t("mcpMonitor.filterSameTrace") }}
+            </el-button>
+            <el-button v-if="!mcpCallFailed(selected)" size="small" :disabled="!selected.session_id" @click="filterSameSession">
+              {{ t("mcpMonitor.filterSameSession") }}
+            </el-button>
+          </div>
+        </template>
       </div>
     </div>
     <p v-if="scope === 'agent'" class="mm-subtitle mm-history-note">{{ t("mcpMonitor.agentHistoryNote") }}</p>

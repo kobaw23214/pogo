@@ -1,3 +1,4 @@
+import { getLocale } from "@/i18n";
 export function compactionReduction(beforeTokens: number, afterTokens: number): number | null {
   if (!Number.isFinite(beforeTokens) || !Number.isFinite(afterTokens) || beforeTokens <= 0 || afterTokens < 0) return null;
   return Math.max(0, Math.min(100, Math.round((1 - afterTokens / beforeTokens) * 100)));
@@ -7,7 +8,7 @@ export function compactionTokens(value: number): string {
   const n = Math.max(0, Math.round(value));
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(n % 1_000_000 === 0 ? 0 : 1)}M`;
   if (n >= 1000) return `${(n / 1000).toFixed(n >= 100_000 ? 0 : 1)}K`;
-  return n.toLocaleString("en-US");
+  return n.toLocaleString(getLocale());
 }
 
 export function compactionSummaryExcerpt(summary: string, maxLength = 144): string {

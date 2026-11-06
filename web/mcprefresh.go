@@ -26,14 +26,12 @@ func (s *Session) refreshMCP(ctx context.Context) {
 		// the user's message or abort unrelated local work over a list failure.
 		fmt.Fprintf(os.Stderr, "session %s: MCP catalog refresh: %v\n", s.ID, err)
 	}
-	// SnapshotServers applies the pinned Studio selection (nil for ordinary
-	// sessions and legacy definitions): a refresh follows the pool's live
-	// catalogs but can never widen a conversation past the servers its
-	// definition revision selected.
-	all, grants, _ := pool.SnapshotServers(s.mcpOnly)
-	projected, trusted = dedupeMCP(all, grants, s.mcpReserved)
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	// The current run reservation pins the effective idle-applied selection.
+	// Keep the projection and its Skill collision set under the same lock.
+	all, grants, _ := pool.SnapshotServers(s.mcpOnly)
+	projected, trusted = dedupeMCP(all, grants, s.mcpReserved)
 	if err := s.agent.ReplaceMCP(projected); err != nil {
 		s.hub.Publish(Event{Type: EvError, Error: err.Error()})
 		return

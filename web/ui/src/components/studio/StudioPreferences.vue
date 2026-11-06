@@ -2,15 +2,15 @@
 import { useI18n } from "vue-i18n";
 import ThemePicker from "@/components/ThemePicker.vue";
 import { LOCALE_LABELS, SUPPORTED_LOCALES, setLocale, type Locale } from "@/i18n";
-const { locale } = useI18n();
+const { t: tr, locale  } = useI18n();
 </script>
 
 <template>
-  <section class="preferences" aria-label="外观与语言">
-    <div class="preferences-copy"><h2>外观与语言</h2><p>Studio 与对话工作台共用同一套外观。</p></div>
-    <div class="preference-control"><span>主题</span><ThemePicker placement="bottom-start" /></div>
+  <section class="preferences" :aria-label="tr('studioManagement.text500')">
+    <div class="preferences-copy"><h2>{{ tr('studioManagement.text500') }}</h2><p>{{ tr('studioManagement.text501') }}</p></div>
+    <div class="preference-control"><span>{{ tr('studioManagement.text502') }}</span><ThemePicker placement="bottom-start" /></div>
     <div class="preference-control">
-      <label for="studio-language">语言</label>
+      <label for="studio-language">{{ tr('studioManagement.text503') }}</label>
       <select id="studio-language" :value="locale" @change="setLocale(($event.target as HTMLSelectElement).value as Locale)">
         <option v-for="language in SUPPORTED_LOCALES" :key="language" :value="language">{{ LOCALE_LABELS[language] }}</option>
       </select>

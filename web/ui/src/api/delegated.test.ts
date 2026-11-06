@@ -64,10 +64,12 @@ async function boot(opts: { pathname?: string; search?: string; configOrigins?: 
   const win = {
     parent,
     addEventListener: (type: string, fn: Listener) => {
-      (type === "message" ? messageListeners : pagehideListeners).add(fn as () => void);
+      if (type === "message") messageListeners.add(fn);
+      else if (type === "pagehide") pagehideListeners.add(fn as () => void);
     },
     removeEventListener: (type: string, fn: Listener) => {
-      (type === "message" ? messageListeners : pagehideListeners).delete(fn as () => void);
+      if (type === "message") messageListeners.delete(fn);
+      else if (type === "pagehide") pagehideListeners.delete(fn as () => void);
     },
   };
   const pathname = opts.pathname ?? "/embed/";
@@ -97,6 +99,7 @@ async function boot(opts: { pathname?: string; search?: string; configOrigins?: 
 
   const client = await import("./client");
   const delegated = await import("./delegated");
+  (await import("@/i18n")).setLocale("zh-CN");
 
   const sendFromParent = (data: unknown, evOpts: { source?: unknown; origin?: string } = {}) => {
     const event = { source: evOpts.source === undefined ? parent : evOpts.source, origin: evOpts.origin ?? PARENT_ORIGIN, data };
@@ -271,6 +274,14 @@ describe("delegated embed transport", () => {
     expect(h.rpcRequests()).toHaveLength(0);
   });
 
+  it("localizes bridge failures without weakening the request boundary", async () => {
+    const h = await bootReady();
+    (await import("@/i18n")).setLocale("en");
+    vi.stubGlobal("crypto", undefined);
+    await expect(h.client.api.models()).rejects.toMatchObject({ name: "DelegatedError", status: 500, message: "A secure request identifier could not be generated" });
+    expect(h.rpcRequests()).toHaveLength(0);
+  });
+
   it("maps list/create/get/rename/delete/message/cancel onto the RPC actions", async () => {
     const h = await bootReady();
 
@@ -347,10 +358,11 @@ describe("delegated embed transport", () => {
     expect(h.rpcRequests()).toHaveLength(0);
   });
 
-  it("rejects explicit model/workspace, pinning, attachments, and other control actions", async () => {
+  it("rejects explicit model/workspace/policy, pinning, attachments, and other control actions", async () => {
     const h = await bootReady();
     await expect(h.client.api.createSession("model-b")).rejects.toMatchObject({ status: 403 });
     await expect(h.client.api.createSession(undefined, "ws")).rejects.toMatchObject({ status: 403 });
+    await expect(h.client.api.createSession(undefined, undefined, "auto")).rejects.toMatchObject({ status: 403 });
     await expect(h.client.api.updateSession("sess-1", { pinned: true })).rejects.toMatchObject({ status: 403 });
     await expect(h.client.api.send("sess-1", "hi", ["uploads/a.txt"])).rejects.toMatchObject({ status: 403 });
     await expect(h.client.api.send("sess-1", "")).rejects.toMatchObject({ status: 400 });

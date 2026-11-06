@@ -2,6 +2,7 @@
 import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import ThinkingBlock from "./ThinkingBlock.vue";
+import ActivityRuns from "./ActivityRuns.vue";
 import ToolCall from "./ToolCall.vue";
 import AnswerText from "./AnswerText.vue";
 import AnswerReviewStatus from "./AnswerReviewStatus.vue";
@@ -16,6 +17,8 @@ import { answerReviewNoticeText, showAnswerReviewNotice } from "@/agent/answerRe
 import { summarizeArgs, type TimelineCall, type TurnItem } from "@/agent/timeline";
 import { toolCallState } from "@/agent/toolPresentation";
 import { worklogRevealRow } from "@/agent/worklogPrefs";
+import { executionDetailMode } from "@/agent/worklogPrefs";
+import { isIndependentActivityCall } from "@/agent/activityRuns";
 import type { Exchange } from "@/agent/exchanges";
 import type { OpenFileTarget, OpenSheetRequest } from "./dockSheets";
 
@@ -32,6 +35,8 @@ const props = defineProps<{
    * views (subagent and sentinel transcripts) keep them, because there the
    * turn is the unit people navigate by. */
   plainTurns?: boolean;
+  layered?: boolean;
+  waitingForModel?: boolean;
 }>();
 const emit = defineEmits<{
   suggest: [string];
@@ -67,6 +72,7 @@ const summaries = computed(() => new Map(groups.value.map(group => {
 const summary = (group: ActivityToolGroup) => summaries.value.get(group.id)!;
 
 function isGroupOpen(group: ActivityToolGroup): boolean {
+  if (executionDetailMode.value === "full") return true;
   const key = activityDisclosureKey(props.exchange.id, group.id);
   if (disclosure?.available()) {
     const saved = disclosure.choice(key) ?? disclosure.choice(activityDisclosureKey(props.exchange.id, legacyActivityRowId(group)));
@@ -77,6 +83,7 @@ function isGroupOpen(group: ActivityToolGroup): boolean {
 }
 
 function setGroupOpen(group: ActivityToolGroup, open: boolean) {
+  if (executionDetailMode.value === "full") return;
   const key = activityDisclosureKey(props.exchange.id, group.id);
   if (disclosure?.available()) {
     disclosure.set(key, open);
@@ -86,13 +93,13 @@ function setGroupOpen(group: ActivityToolGroup, open: boolean) {
 
 const grouped = (group: ActivityToolGroup) => group.explore && group.calls.length > 1;
 const needsAttention = (call: TimelineCall) => activityCallNeedsAttention(call, props.exchange.finished);
-const visibleGroup = (group: ActivityToolGroup) => !props.workFolded || group.calls.some(needsAttention);
-const visibleCall = (group: ActivityToolGroup, call: TimelineCall) => needsAttention(call) || (!props.workFolded && (!grouped(group) || isGroupOpen(group)));
+const visibleGroup = (group: ActivityToolGroup) => executionDetailMode.value === "full" || !props.workFolded || group.calls.some(needsAttention);
+const visibleCall = (group: ActivityToolGroup, call: TimelineCall) => executionDetailMode.value === "full" || needsAttention(call) || (!props.workFolded && (!grouped(group) || isGroupOpen(group)));
 // The outer fold covers the whole process, including narration and its source
 // overviews. Keep the actual conclusion and live work outside that fold. Using
 // v-show below retains every mounted row and its disclosure/scroll state.
-const visibleProse = (turn: TurnItem) => !props.workFolded || (props.exchange.finished && turn.id === props.exchange.answer?.id) || turn.streaming;
-const visibleTurn = (turn: TurnItem) => !props.workFolded ||
+const visibleProse = (turn: TurnItem) => executionDetailMode.value === "full" || !props.workFolded || (props.exchange.finished && turn.id === props.exchange.answer?.id) || turn.streaming;
+const visibleTurn = (turn: TurnItem) => executionDetailMode.value === "full" || !props.workFolded ||
   (visibleProse(turn) && !!turn.text) || turn.streaming || !!turn.incoming?.length ||
   turn.answerReview?.state === "running" || turn.calls.some(needsAttention);
 
@@ -109,7 +116,11 @@ watch(worklogRevealRow, revealRow);
 </script>
 
 <template>
-  <div class="activity-list">
+  <ActivityRuns v-if="layered" :exchange="exchange" :run-active="runActive" :work-folded="workFolded"
+    :skills="skills" :cwd="cwd" :todo-pinned="todoPinned" :server-offset="serverOffset" :reveal-id="revealId" :waiting-for-model="waitingForModel"
+    @suggest="emit('suggest', $event)" @decide="emit('decide', $event)" @freeze="emit('freeze', $event)"
+    @thaw="emit('thaw', $event)" @open-sheet="emit('open-sheet', $event)" @open-file="emit('open-file', $event)" />
+  <div v-else class="activity-list">
     <template v-for="node in nodes" :key="node.id">
       <SteeringMessage v-if="node.kind === 'steering'" :message="node.message" @open-file="emit('open-file', $event)" />
       <div v-else-if="node.kind === 'notice' && showAnswerReviewNotice(node.notice.text, exchange.turns)" v-show="!workFolded" class="activity-notice" :data-mid="node.notice.id">{{ answerReviewNoticeText(node.notice.text) }}</div>
@@ -120,7 +131,7 @@ watch(worklogRevealRow, revealRow);
           <span v-if="node.turn.streaming" class="live">{{ t('turnCard.streaming') }}</span>
         </div>
         <div v-if="node.turn.thinking" v-show="!workFolded || node.turn.streaming" class="thinking-row" :data-rid="`${node.turn.id}:thinking`">
-          <ThinkingBlock :id="node.turn.id" :text="node.turn.thinking" :streaming="node.turn.streaming" :duration-ms="node.turn.thinkingMs" :compact="!!workFolded" />
+          <ThinkingBlock :id="node.turn.id" :text="node.turn.thinking" :streaming="node.turn.streaming" :duration-ms="node.turn.thinkingMs" :compact="!!workFolded" :full-details="executionDetailMode === 'full'" />
         </div>
         <!-- A model turn is stored as thinking, then text, then tool calls, so
              the narration ("let me check the file:") goes above the calls it
@@ -155,6 +166,8 @@ watch(worklogRevealRow, revealRow);
               :key="call.callId"
               v-show="visibleCall(group, call)"
               :call="call"
+              :layered="!isIndependentActivityCall(call)"
+              :full-details="executionDetailMode === 'full'"
               :run-active="runActive"
               :skills="skills"
               :cwd="cwd"

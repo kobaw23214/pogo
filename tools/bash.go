@@ -95,6 +95,7 @@ func (t *Bash) Description() string {
 	if t.Jobs != nil {
 		desc += " Use run_in_background=true for a long command, or yield_after (seconds) to wait briefly before handing the same process to the background. Continue only independent work while it runs; commands can still change shared files. The hard timeout is unchanged. Use shell_tasks, shell_output and shell_stop to manage this session's jobs."
 	}
+	desc += " Keep generated searches and retry loops bounded. A timeout terminates the process; inspect its output and any partial effects before changing or repeating the command."
 	return desc
 }
 
@@ -166,7 +167,7 @@ func (t *Bash) InputSchema() map[string]any {
 		"command": prop("string", "Bash command to execute"),
 		"workdir": prop("string", "Directory to run in, relative to the working directory or "+
 			"absolute. Defaults to the working directory; use this instead of a cd prefix."),
-		"timeout": prop("number", "Timeout in seconds"),
+		"timeout": map[string]any{"type": "number", "minimum": 0, "maximum": MaxBashTimeout.Seconds(), "description": "Timeout in seconds; omit or use 0 for the default. Positive values are capped at 600 seconds."},
 	}
 	if t.Jobs != nil {
 		props["run_in_background"] = prop("boolean", "Return a managed task ID immediately; completion is reported automatically")
@@ -179,6 +180,9 @@ func (t *Bash) InputSchema() map[string]any {
 // Schema returns the JSON schema for bash tool using reflection.
 func (t *Bash) Schema() map[string]any {
 	schema := GenerateSchema(reflect.TypeOf(bashArgs{}))
+	if props, ok := schema["properties"].(map[string]any); ok {
+		props["timeout"] = t.InputSchema()["properties"].(map[string]any)["timeout"]
+	}
 	if t.Jobs == nil {
 		if props, ok := schema["properties"].(map[string]any); ok {
 			delete(props, "run_in_background")
@@ -293,8 +297,8 @@ func (t *Bash) executeCommand(ctx context.Context, a bashArgs, onPartial func(Pa
 	// still stops the work, because the group leader is bwrap and its PID
 	// namespace dies with it.
 	//
-	// An error here is only ever the enforce refusal, and it must surface as the
-	// tool's error rather than as a command that quietly ran unconfined.
+	// Isolation or host-protection failures must surface before execution. A
+	// refused capability has no command exit code and never falls back unconfined.
 	wrap := wrapCommand
 	if t.ProtectionManifest != "" {
 		wrap = func(cmd *exec.Cmd) error { return wrapCommandWithProtection(cmd, t.ProtectionManifest) }
@@ -307,7 +311,7 @@ func (t *Bash) executeCommand(ctx context.Context, a bashArgs, onPartial func(Pa
 		wrap = func(cmd *exec.Cmd) error { return WrapScopedCommand(cmd, &scope) }
 	}
 	if err := wrap(cmd); err != nil {
-		return Result{}, err
+		return commandUnavailableResult(err)
 	}
 	// Kill the whole process group, not just bash.
 	//

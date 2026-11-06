@@ -1,0 +1,27 @@
+export default {
+  namespace: "webServices",
+  messages: {
+    "zh-CN": {
+      delete: "删除", confirmDelete: "确认删除", closeDelete: "关闭", deleting: "正在删除…", deleteTitle: "删除“{name}”网站？", deleteHint: "网站会停止运行，网站的运行数据将被永久删除。工作区中的源码和当前会话会保留，此操作无法撤销。", deleteUnknown: "尚未确认删除完成：{message}。可重试删除或刷新状态。", deletePending: "网站正在停止并清理，完成后会自动从列表移除。若一直未完成，可重试删除。",
+      previewPending: "网站正在打开，请稍后重试。",
+      storageCheckRetrying: "存储检查暂时不可用，正在重试；网站继续运行。", storageCheckUnavailable: "存储检查暂时不可用。",
+      startAgain: "重新启动", generation: "第 {generation} 版", waitForStop: "正在确认原实例停止，确认后才可重新启动。", missingSpec: "缺少可复用的启动配置，请让 Agent 检查项目后重新启动。",
+      label: "网站", heading: "此会话的网站", view: "查看此会话的网站", readyCount: "{count} 可访问", refresh: "刷新状态", empty: "此会话还没有受管网站。", loading: "正在读取…",
+      state_preparing: "准备中", state_starting: "启动中", state_ready: "可访问", state_degraded: "连接异常", state_reconciling: "核对中", state_stopping: "停止中", state_stopped: "已停止", state_expired: "已到期", state_failed: "运行异常", state_interrupted: "已中断",
+      serviceLease: "服务运行期限", previewLease: "网站运行期限", remaining: "剩余 {minutes} 分钟", expired: "已到期", open: "打开网站", reopen: "重新加载网站", renew: "续期", restart: "重启更新", stop: "停止", logs: "日志", nextPage: "下一页", noOutput: "暂无日志输出。", logTruncated: "日志已截断；这里只显示有界的一页。", logFailed: "日志读取失败。",
+      pending: "请求已受理，正在等待状态确认。", retryRequest: "重试原请求", actionFailed: "操作未完成，请刷新状态。", actionUnknown: "尚未确认结果：{message}。重试会复用原请求。", stale: "状态更新暂时失败，当前显示上次结果；可刷新后重试。", loadFailed: "网站列表读取失败。", invalidResponse: "服务返回了无效数据，请刷新后重试。", notFound: "此会话找不到该网站，或当前账号没有访问权限。",
+      closeHint: "关闭此页面不会停止网站，网站按设置的期限运行。", sourceHint: "源码修改后点击“重启更新”才会生效，数据保留。", previewHint: "网站地址在运行期限内持续有效，续期后保持不变。", previewIdle: "点击打开网站。", previewExpired: "网站已到期，请重新启动。", previewChanged: "网站正在更新，恢复后会重新加载。", previewUnavailable: "网站尚不可访问，请先查看状态或日志。", previewFailed: "未能打开网站，请重试。", closeFailed: "未能关闭页面，请重试。", closing: "正在关闭页面…", previewTitle: "受管网站", grantsIndependent: "打开或查看日志不会自动续期。", operationStop: "停止请求", operationRestart: "重启请求", operationRenew: "续期请求",
+    },
+    en: {
+      delete: "Delete", confirmDelete: "Confirm deletion", closeDelete: "Close", deleting: "Deleting…", deleteTitle: 'Delete “{name}”?', deleteHint: "This stops the website and permanently deletes its runtime data. Workspace source files and this conversation are kept. This cannot be undone.", deleteUnknown: "Deletion is not yet confirmed: {message}. Retry deletion or refresh the status.", deletePending: "The website is stopping and being cleaned up. It will disappear when deletion completes. Retry deletion if it remains pending.",
+      previewPending: "The website is opening. Try again shortly.",
+      storageCheckRetrying: "Storage checks are temporarily unavailable and will retry. The website is still running.", storageCheckUnavailable: "Storage checks are temporarily unavailable.",
+      startAgain: "Start again", generation: "Version {generation}", waitForStop: "Waiting for the old instance to stop before starting again.", missingSpec: "Reusable startup settings are unavailable. Ask the Agent to check the project and start it again.",
+      label: "Websites", heading: "This conversation's websites", view: "View websites in this conversation", readyCount: "{count} ready", refresh: "Refresh status", empty: "No managed websites in this conversation.", loading: "Loading…",
+      state_preparing: "Preparing", state_starting: "Starting", state_ready: "Ready", state_degraded: "Connection issue", state_reconciling: "Reconciling", state_stopping: "Stopping", state_stopped: "Stopped", state_expired: "Expired", state_failed: "Failed", state_interrupted: "Interrupted",
+      serviceLease: "Service lifetime", previewLease: "Website lifetime", remaining: "{minutes} minutes remaining", expired: "Expired", open: "Open website", reopen: "Reload website", renew: "Renew", restart: "Restart with updates", stop: "Stop", logs: "Logs", nextPage: "Next page", noOutput: "No log output yet.", logTruncated: "The log was truncated; only one bounded page is shown.", logFailed: "Could not read the log.",
+      pending: "Request accepted; awaiting confirmed status.", retryRequest: "Retry original request", actionFailed: "Action did not complete. Refresh the status.", actionUnknown: "Outcome not confirmed: {message}. Retrying reuses the original request.", stale: "Status update failed. Showing the last result; refresh to retry.", loadFailed: "Could not load websites.", invalidResponse: "Invalid service response. Refresh to retry.", notFound: "This website is unavailable in this conversation or for this account.",
+      closeHint: "Closing this page does not stop the website. It runs until its configured deadline.", sourceHint: "Restart with updates applies source changes and keeps service data.", previewHint: "The website address remains valid throughout its lifetime and stays the same after renewal.", previewIdle: "Click to open the website.", previewExpired: "The website expired. Start it again.", previewChanged: "The website is updating and will reload when it is ready.", previewUnavailable: "The website is not ready. Check its status or logs first.", previewFailed: "Could not open the website. Try again.", closeFailed: "Could not close the page. Try again.", closing: "Closing page…", previewTitle: "Managed website", grantsIndependent: "Opening or reading logs does not renew the service.", operationStop: "Stop request", operationRestart: "Restart request", operationRenew: "Renew request",
+    },
+  },
+};

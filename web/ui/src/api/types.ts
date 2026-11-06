@@ -1,11 +1,11 @@
 // Mirror of web/wire.go. That file is the source of truth; when the two
 // disagree, it wins.
-import type { WorkflowAuthoringDetails } from "@/agent/workflowAuthoringReceipt";
 import type { AgentWorkflowDetails } from "@/agent/agentWorkflowNavigation";
+import type { WebServiceRecord } from "./webServices";
 
 // Built-in tool names. Delegated agents cannot delegate further; external MCP
 // tools also travel over the wire using their server-provided names.
-export type ToolName =
+export type BuiltinToolName =
   | "read"
   | "ls"
   | "find"
@@ -13,6 +13,7 @@ export type ToolName =
   | "write"
   | "edit"
   | "bash"
+  | "web_service"
   | "browser"
   | "analyze_image"
   | "shortcut_query"
@@ -31,13 +32,6 @@ export type ToolName =
   | "skill_read"
   | "skill_save"
   | "background_task"
-  | "workflow_discover"
-  | "workflow_read"
-  | "workflow_validate"
-  | "workflow_edit"
-  | "workflow_test"
-  | "workflow_run"
-  | "workflow_publish"
   | "agent_workflow_read"
   | "agent_workflow_edit"
   | "agent_workflow_enable"
@@ -51,8 +45,12 @@ export type ToolName =
   | "subagent_tasks"
   | "todo";
 
+// MCP, skill manifests and newly registered built-ins use arbitrary wire
+// names. This is display typing, not an authorization allowlist.
+export type ToolName = BuiltinToolName | string;
+
 export type Block =
-  | { type: "text"; text: string; input_element?: boolean; input_element_favicon?: string; input_skill?: string; input_office?: OfficeReferenceSnapshot; input_shortcut?: { id: string; title: string; text: string; icon?: string; language?: string; parts?: MessageInputPart[]; block_count?: number } }
+  | { type: "text"; text: string; input_element?: boolean; input_element_favicon?: string; input_skill?: string; input_mcp?: { server: string; name: string }; input_office?: OfficeReferenceSnapshot; input_shortcut?: { id: string; title: string; text: string; icon?: string; language?: string; parts?: MessageInputPart[]; block_count?: number } }
   // duration_ms is how long the thinking took to stream, measured server-side;
   // absent on transcripts recorded before the field existed.
   | { type: "thinking"; text: string; duration_ms?: number }
@@ -134,6 +132,7 @@ export type InputLayout = "top" | "inline";
 export type MessageInputPart =
   | { type: "text"; text: string }
   | { type: "skill"; name: string }
+  | { type: "mcp"; server: string; name: string }
   | { type: "shortcut"; shortcut_id: string; title: string; text: string; icon?: string; language?: string; parts?: MessageInputPart[] }
   | { type: "office"; office: OfficeReferenceSnapshot }
   | { type: "element"; text: string; favicon?: string }
@@ -402,7 +401,6 @@ export type ToolDetails =
   | SkillDetails
   | ShortcutDetails
   | SkillAuthoringDetails
-  | WorkflowAuthoringDetails
   | AgentWorkflowDetails
   | UserInputDetails
   | BrowserDetails;
@@ -1057,6 +1055,7 @@ export type EventType =
   | "model_changed"
   | "model_config_pending"
   | "tool_config"
+  | "capabilities_changed"
   | "rewound"
   | "compacted"
   | "subagent_start"
@@ -1065,6 +1064,7 @@ export type EventType =
   | "shell_task_start"
   | "shell_task_output"
   | "shell_task_end"
+  | "web_service_changed"
   | "attachment_uploaded"
   | "browser_downloads"
   | "shortcuts_changed"
@@ -1133,6 +1133,7 @@ export interface AgentEvent {
   task_id?: string;
   /** Complete, revisioned record on shell_task_* events. */
   shell_task?: ShellJobRecord;
+  web_service?: WebServiceRecord;
   /**
    * On `subagent_end`, the task's capped frame list: the only copy a client
    * that missed frames live can ever get, since frames are not replayed. See
@@ -1341,6 +1342,29 @@ export interface MemoryCatalog {
   directory: string;
   notes: MemoryNote[];
 }
+
+/** Scope IDs are host-authored selectors, never client filesystem paths. */
+export interface ManagedMemoryScope {
+  id: string;
+  scope: "user" | "project" | "agent";
+  agent_id?: string;
+  label?: string;
+  directory: string;
+  notes: MemoryNote[];
+  writable: boolean;
+}
+
+export interface ManagedMemoryCatalog {
+  scopes: ManagedMemoryScope[];
+  auto_generate: boolean;
+  auto_generate_editable: boolean;
+}
+
+export type ManagedMemoryNoteInput = Pick<MemoryNote, "path" | "type" | "content"> & {
+  /** The version reviewed when editing began, rather than the latest catalog. */
+  expected_modified?: string;
+  create_only?: boolean;
+};
 
 export interface SkillPackageEntry {
   name: string;

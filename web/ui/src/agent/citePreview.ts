@@ -1,3 +1,4 @@
+import { gt } from "@/i18n";
 import type { CiteSource } from "@/api/types";
 
 export interface SourcePreview {
@@ -172,7 +173,7 @@ function previewResult(text: string, matched: boolean, kind: SourcePreview["kind
     matched,
     kind,
     ...(browserContent ? { browserContent } : {}),
-    ...(page === undefined ? {} : { page, location: `第 ${page} 页（输出标记）` }),
+    ...(page === undefined ? {} : { page, location: gt("uiCoverage.citation.outputPage", { page }) }),
   };
 }
 
@@ -336,7 +337,7 @@ function pdfOutputTitle(src: CiteSource & { content?: string }): string | undefi
 /** Source identity stays separate from the excerpt and any acquisition tool. */
 export function sourceIdentity(src: CiteSource & { content?: string }): SourceIdentity {
   if (src.type === "information") {
-    return { title: src.title.trim() || "信息库", detail: src.information ? `v${src.information.version}` : "information", kind: "library" };
+    return { title: src.title.trim() || gt("uiCoverage.citation.information"), detail: src.information ? `v${src.information.version}` : "information", kind: "library" };
   }
   const url = safeSourceURL(src);
   if (url) {
@@ -347,7 +348,7 @@ export function sourceIdentity(src: CiteSource & { content?: string }): SourceId
   if (pdfTitle) return { title: pdfTitle, detail: "PDF", kind: "file" };
   if (src.type === "file_read" || src.type === "file_write" || src.locator.startsWith("file://")) {
     const path = src.locator.replace(/^file:\/\//, "");
-    return { title: src.title.trim() || path || "文件", detail: path, kind: "file" };
+    return { title: src.title.trim() || path || gt("uiCoverage.citation.file"), detail: path, kind: "file" };
   }
-  return { title: src.title.trim() || "工具输出", detail: src.type, kind: "tool" };
+  return { title: src.title.trim() || gt("uiCoverage.citation.toolOutput"), detail: src.type, kind: "tool" };
 }

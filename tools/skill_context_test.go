@@ -7,7 +7,9 @@ import (
 	"path/filepath"
 	"slices"
 	"testing"
+	"time"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/yosukeno/pogo/skillruntime"
 )
 
@@ -60,6 +62,53 @@ func TestSkillContextRejectsNativeNameCollisionBeforeApply(t *testing.T) {
 	r := New(Options{Cwd: t.TempDir(), Todo: true})
 	if _, _, err := r.WithSkillContext(SkillContextUpdate{Tools: []Tool{&Todo{}}}); err == nil {
 		t.Fatal("native tool collision accepted")
+	}
+	external := []Tool{}
+	if _, _, err := r.WithSkillContext(SkillContextUpdate{Tools: []Tool{&Todo{}}, MCP: &external}); err == nil {
+		t.Fatal("MCP reprojection weakened native tool collision checks")
+	}
+}
+
+func TestSkillContextReprojectsMCPCollisionsWithoutMutatingPreviousRegistry(t *testing.T) {
+	external, err := NewMCPTool("srv", mcpSpec("echo", "external echo", nil), time.Second,
+		func(context.Context, string, json.RawMessage) (*mcp.CallToolResult, error) {
+			return textResult("external"), nil
+		})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cwd := t.TempDir()
+	r := New(Options{Cwd: cwd, MCP: []Tool{external}})
+	old, _ := r.Get(external.Name())
+	skill := &SynthTool{info: SynthInfo{WireName: external.Name(), Description: "Skill echo", InputSchema: map[string]any{"type": "object"}}}
+	projection := []Tool{external}
+	next, apply, err := r.WithSkillContext(SkillContextUpdate{Tools: []Tool{skill}, MCP: &projection, Cwd: cwd})
+	if err != nil {
+		t.Fatal("a newly selected Skill could not take over the external wire name", err)
+	}
+	if got, _ := r.Get(external.Name()); got != old {
+		t.Fatal("preparing a Skill update changed the existing MCP registry")
+	}
+	apply()
+	if got, _ := next.Get(external.Name()); got == nil {
+		t.Fatal("colliding Skill was dropped")
+	} else if _, ok := got.(*SynthTool); !ok {
+		t.Fatal("external tool retained precedence over the selected Skill")
+	}
+	restored, restore, err := next.WithSkillContext(SkillContextUpdate{Previous: []Tool{skill}, MCP: &projection, Cwd: cwd})
+	if err != nil {
+		t.Fatal(err)
+	}
+	restore()
+	if got, _ := restored.Get(external.Name()); got == nil {
+		t.Fatal("removing the Skill did not restore the selected external tool")
+	} else if _, ok := got.(*MCPTool); !ok {
+		t.Fatal("removed Skill remained at the external wire name")
+	}
+	if got, _ := next.Get(external.Name()); got == nil {
+		t.Fatal("restoring MCP mutated the preceding Skill registry")
+	} else if _, ok := got.(*SynthTool); !ok {
+		t.Fatal("preceding Skill registry lost its original tool")
 	}
 }
 

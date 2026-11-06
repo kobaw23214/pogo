@@ -506,11 +506,6 @@ func (s *Session) sealedAgentWorkflow() (bool, error) {
 	return true, nil
 }
 
-func (m *Manager) platformWorkflowBackendForConversation(_ *Session) tools.WorkflowBackend {
-	// Platform workflows are managed only through the authenticated management
-	// surface. No Agent conversation, restored binding or execution gets a host.
-	return nil
-}
 func (m *Manager) backgroundBackendForConversation(s *Session) tools.BackgroundTaskBackend {
 	if m.agentWorkflowMarker(s.ID) != nil {
 		return nil

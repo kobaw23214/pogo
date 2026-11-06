@@ -1,3 +1,4 @@
+import { getLocale } from "@/i18n";
 // Relative time for the sidebar's session rows: "5 分钟前", "3 小时前".
 // Intl.RelativeTimeFormat does the language work; this file only picks the
 // unit — and keeps that choice testable without a clock.
@@ -16,7 +17,7 @@ const UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
  * the caller's to attach as a tooltip — the list shows relative, the hover
  * shows exact, the pattern every researched product settled on.
  */
-export function fmtRel(ms: number, now = Date.now(), locale = "zh-CN"): string {
+export function fmtRel(ms: number, now = Date.now(), locale: string = getLocale()): string {
   const rtf = new Intl.RelativeTimeFormat(locale, { style: "narrow" });
   const diff = Math.max(0, Math.floor((now - ms) / 1000));
   for (const [unit, secs] of UNITS) {

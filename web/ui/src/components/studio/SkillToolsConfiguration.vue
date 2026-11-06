@@ -1,7 +1,10 @@
 <script setup lang="ts">
+import { useI18n } from "vue-i18n";
+const { t: tr } = useI18n();
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { platformApi } from '@/api/platform';
 import SkillExecutionNotice from '@/components/SkillExecutionNotice.vue';
+import { knownHostReason } from '@/agent/hostStatusCopy';
 import type { PlatformCapabilities, SkillSelection, SkillSelectionPlan } from '@/agent/platformTypes';
 
 const props = defineProps<{ selection: SkillSelection; catalog: PlatformCapabilities }>();
@@ -43,17 +46,17 @@ onBeforeUnmount(() => { disposed = true; generation++; });
 
 <template>
   <div class="skill-config">
-    <div v-if="active" class="dependency-card" aria-label="Skill 依赖与就绪状态">
-      <div class="dependency-head"><strong>工具与资源</strong><span :class="{ ready: plan?.ready }">{{ pending ? '正在检查…' : plan?.ready ? '配置已就绪' : '待完成配置' }}</span></div>
-      <p class="hint">由所选 Skill 的声明自动关联；保存后固定版本，新配置对新的对话生效。</p>
-      <p v-if="plan?.execution?.label" class="hint">执行方式：{{ plan.execution.label }}。{{ plan.execution.resource_limits }}</p>
-      <p v-if="error" class="error" role="alert">{{ error }} <button type="button" @click="resolve">重新检查</button></p>
+    <div v-if="active" class="dependency-card" :aria-label="tr('studioManagement.text254')">
+      <div class="dependency-head"><strong>{{ tr('studioManagement.text255') }}</strong><span :class="{ ready: plan?.ready }">{{ pending ? tr('studioManagement.text256') : plan?.ready ? tr('studioManagement.text257') : tr('studioManagement.text258') }}</span></div>
+      <p class="hint">{{ tr('studioManagement.text259') }}</p>
+      <p v-if="plan?.execution?.label" class="hint">{{ tr('studioSentences.executionMode', { label: knownHostReason(plan.execution.label), limits: knownHostReason(plan.execution.resource_limits) }) }}</p>
+      <p v-if="error" class="error" role="alert">{{ error }} <button type="button" @click="resolve">{{ tr('studioManagement.text261') }}</button></p>
       <SkillExecutionNotice :execution="plan?.execution" :issues="plan?.issues" />
       <div v-if="plan?.tools.length" class="tool-chips"><span v-for="tool in plan.tools" :key="tool.id" :title="tool.description">{{ tool.provider_id }}<small>{{ tool.package_name }}</small></span></div>
-      <div v-if="bundledResourceCount" class="resource"><strong>Skill内置资源</strong><span class="scope">已自动关联 {{ bundledResourceCount }} 项随包数据或规则，无需单独导入。</span></div>
+      <div v-if="bundledResourceCount" class="resource"><strong>{{ tr('studioManagement.text262') }}</strong><span class="scope">{{ tr('studioSentences.bundledResources', { count: bundledResourceCount }) }}</span></div>
       <div v-for="resource in plan?.resources ?? []" :key="resource.packageId + resource.slotId" class="resource">
         <strong>{{ resource.description }}</strong>
-        <span class="scope">{{ resource.kind === 'files' ? '仅限当前对话上传的文件' : '当前对话的私有分析产物' }}</span>
+        <span class="scope">{{ resource.kind === 'files' ? tr('studioManagement.text265') : tr('studioManagement.text266') }}</span>
       </div>
     </div>
 

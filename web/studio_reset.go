@@ -34,6 +34,7 @@ func (s *studioStore) resetFormat(raw []byte) error {
 		a.Skills, a.MCPServers = &emptySkills, &emptyMCP
 		a.SkillBinding = nil
 		a.Status, a.ConversationCount = "draft", 0
+		a.UserMessageCount = 0
 		a.Revision++
 		a.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
 		next.Agents[id] = a

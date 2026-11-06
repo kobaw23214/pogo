@@ -5,6 +5,11 @@ import ApprovalBar from "@/components/ApprovalBar.vue";
 import UserInputBar from "@/components/UserInputBar.vue";
 import { approvalUiKey } from "@/agent/approvalState";
 import { provideCardDisclosure } from "@/agent/cardDisclosure";
+import { provideToolIdentityCatalog } from "@/agent/toolIdentity";
+import { provideActivityReading, activityContainsSelection } from "@/agent/activityReading";
+import { createActivityExecutionLedger } from "@/agent/activityExecution";
+import { provideActivityExecution } from "@/agent/activityExecutionContext";
+import { useActivityAttention } from "@/agent/activityAttention";
 import { useResizeObserver } from "@vueuse/core";
 import { ElMessageBox } from "element-plus";
 import {
@@ -41,7 +46,7 @@ import InformationEntryDialog from "@/components/InformationEntryDialog.vue";
 import { resolveInformationEntry, type InformationEntry } from "@/api/information";
 import { informationComposerParts, informationInsertionCurrent } from "@/agent/informationComposer";
 import { shortcutAssetsApi, resolveStarterShortcut, type ShortcutSnapshot } from "@/api/shortcuts";
-import { cloneInputParts, inputPartsHaveFiles, inputPartsSkills, validateInputParts } from "@/agent/shortcutStructure";
+import { cloneInputParts, inputPartsHaveFiles, inputPartsSkills, inputPartsMcps, validateInputParts } from "@/agent/shortcutStructure";
 import StarterCardsDialog from "@/components/StarterCardsDialog.vue";
 import StarterCardsTrigger from "@/components/StarterCardsTrigger.vue";
 import { cloneStarterDraft, starterCardComposerParts, type StarterDraft, type PreparedStarterDraft } from "@/components/starterCardDraft";
@@ -67,6 +72,12 @@ import type { InboxItem } from "@/api/types";
 import DescribeCards from "@/components/DescribeCards.vue";
 import SessionPulse from "@/components/SessionPulse.vue";
 import TodoBar from "@/components/TodoBar.vue";
+import ManagedWebServices from "@/components/ManagedWebServices.vue";
+import { webServiceLink } from "@/agent/webServiceLinks";
+import { useWebServiceLinkReveal, type WebServiceRevealHandle } from "@/agent/useWebServiceLinkReveal";
+import type { OpenWebServiceRequest } from "@/api/webServices";
+import { isWebServiceRecord } from "@/api/webServices";
+import { websiteBrowserRequestCurrent, type WebsiteBrowserRequest } from "@/agent/browserPreviewNavigation";
 import TaskTodoCard from "@/components/TaskTodoCard.vue";
 import ContextMeter from "@/components/ContextMeter.vue";
 import CompactionCard from "@/components/CompactionCard.vue";
@@ -75,6 +86,7 @@ import MinimizedSessionBar from "@/components/MinimizedSessionBar.vue";
 import DockArea from "@/components/DockArea.vue";
 import { agentWorkflowNavigationKey, validAgentWorkflowId, type AgentWorkflowLocation } from "@/agent/agentWorkflowNavigation";
 import { officeComposerPart } from "@/agent/composerParts";
+import { builtinSkillDescription } from "@/agent/builtinToolCopy";
 import type { OfficeReferenceSnapshot } from "@/api/types";
 import OfficeReference from "@/components/OfficeReference.vue";
 import { shortcutDraftSourceKey } from "@/agent/shortcutDraftSource";
@@ -83,14 +95,15 @@ import TokenGate from "@/components/TokenGate.vue";
 import ModelPicker from "@/components/ModelPicker.vue";
 import PolicyPicker from "@/components/PolicyPicker.vue";
 import SlashCommandMenu from "@/components/SlashCommandMenu.vue";
-import { composerSuggestions, composerSuggestionAction, moveComposerSuggestion } from "@/agent/composerSuggestions";
-import { composerSlashQuery, completeComposerTextSkill, type ComposerSlashQuery } from "@/agent/composerSlash";
+import { composerSuggestions, composerSuggestionAction, moveComposerSuggestion, type ComposerMcpMethod } from "@/agent/composerSuggestions";
+import { composerSlashQuery, completeComposerTextSkill, completeComposerTextMcp, type ComposerSlashQuery } from "@/agent/composerSlash";
+import { parseMcpInvocation, validMcpReference } from "@/agent/mcpInvocation";
 import ComposerToken from "@/components/ComposerToken.vue";
 import InlineComposer from "@/components/InlineComposer.vue";
 import OrderedMessageContent from "@/components/OrderedMessageContent.vue";
-import { composerDisplayText, composerOccurrenceID, composerTypedText, elementComposerPart, fileComposerPart, skillComposerPart, shortcutComposerPart, normalizeComposerParts, replaceComposerTypedText, type ComposerPart, type ComposerReferencePart } from "@/agent/composerParts";
+import { composerDisplayText, composerOccurrenceID, composerTypedText, elementComposerPart, fileComposerPart, shortcutComposerPart, normalizeComposerParts, replaceComposerTypedText, type ComposerPart, type ComposerReferencePart } from "@/agent/composerParts";
 import { blocksComposerParts, composerInputParts, inputPartsBlocks, orderedDisplayParts, pickFromDisplay, snapshotComposerElementIcons } from "@/agent/orderedInput";
-import { canonicalUserSkillText, composerDraftWithToken, normalizeComposerTokenInput, readComposerToken, replaceComposerToken, skillMessageBlock } from "@/agent/composerTokens";
+import { canonicalUserSkillText, composerDraftWithToken, normalizeComposerTokenInput, readComposerToken, readMcpComposerToken, replaceComposerToken, skillMessageBlock } from "@/agent/composerTokens";
 import { createContextUsageReader } from "@/agent/contextUsage";
 import SkillBlock from "@/components/SkillBlock.vue";
 import WorkspacePicker from "@/components/WorkspacePicker.vue";
@@ -134,6 +147,7 @@ import { buildTimeline, formatDuration, isTaskNotification, parseTaskNotificatio
 import { describeSource, numberCitations, rewriteCitations } from "@/agent/cite";
 import { citationFileTarget, informationCitationTarget, citeNavigationKey } from "@/agent/citeNavigation";
 import { workspaceFileNavigationKey, type WorkspaceFileScope } from "@/agent/workspaceFileNavigation";
+import { webArtifactNavigationKey } from "@/agent/webArtifactNavigation";
 import type { WorkspaceFileTarget } from "@/agent/workspaceFileLinks";
 import { createAnswerFileNavigation } from "@/agent/answerFileNavigation";
 import { requestedSentinelId, sentinelDeepLink, sentinelTab } from "@/agent/sentinelNavigation";
@@ -148,6 +162,7 @@ import {
   PREVIEW_PREFIX,
   SKILL_PREFIX,
   HTML_PREFIX,
+  WEBSITE_PREFIX,
   restoreTabs,
   SHEET_KEY,
   SUBAGENT_PREFIX,
@@ -192,7 +207,10 @@ import type { PlatformAgent, PlatformAgentInput } from "@/agent/platformTypes";
 import { starterToWire } from "@/agent/studioPresentation";
 import { canSelectStudioModel, studioSessionModels, type StudioSessionCapabilities } from "@/agent/studioSessionCapabilities";
 import { createStudioToolSync } from "@/agent/studioToolSync";
+import { studioCapabilityFingerprint, syncStudioMcpCapabilities } from "@/agent/studioCapabilitySync";
 import StudioToolPolicyNotice from "@/components/StudioToolPolicyNotice.vue";
+import StudioEntrySkeleton from "@/components/studio/StudioEntrySkeleton.vue";
+import { createStudioEntryState } from "@/agent/studioEntry";
 import { STUDIO_LAST_SESSION, chooseBootSession, requestedSessionId, studioKey, studioPath, studioStarters } from "@/agent/studioContext";
 
 // Studio previews and published links mount this same Pogo workbench. The
@@ -234,7 +252,7 @@ type OptionalUiFeature = "conversation" | "settings" | "workspaces" | "terminal"
 function canUse(feature: OptionalUiFeature): boolean {
   return !isDelegatedEmbed || delegatedUi.value?.capabilities[feature] === true;
 }
-const unavailableTip = computed(() => locale.value === "zh-CN" ? "当前接入模式未开放此功能" : "Unavailable in this connection");
+const unavailableTip = computed(() => t("uiCoverage.app.unavailable"));
 function unsupported(): void {
   showFlash(unavailableTip.value, "error");
 }
@@ -248,15 +266,40 @@ const studioModelDeferred = ref(false);
 let studioCapabilitiesRequest = 0;
 const studioToolSync = createStudioToolSync(sid => api.syncStudioToolConfig(studioAgentId, sid));
 const studioToolState = studioToolSync.state, studioToolSyncing = studioToolSync.syncing, studioToolRevision = studioToolSync.catalogVersion;
-const studioToolPending = computed(() => studioToolState.value?.pending === true);
+const studioCapabilityRevision = ref(0);
+let studioCapabilitySnapshot = "";
+const skillConfigError = ref("");
+const studioToolPending = computed(() => studioToolState.value?.pending === true || skillConfigDeferred.value
+  || studioCapabilities.value?.skills_pending === true || studioCapabilities.value?.mcp_pending === true);
+const studioConfigurationError = computed(() => skillConfigError.value || studioCapabilitiesError.value || studioToolState.value?.error || "");
+const studioConfigurationSyncing = computed(() => studioToolSyncing.value || studioModelSyncing.value || skillCatalogState.value === "loading");
 const pickerModels = computed(() => isStudio ? studioSessionModels(models.value, studioCapabilities.value) : models.value);
-const studioModelTip = computed(() => locale.value === "zh-CN"
-  ? (studioCapabilities.value ? "此会话只启用了一个模型" : "正在读取本会话的模型选择")
-  : (studioCapabilities.value ? "This conversation has one enabled model" : "Loading this conversation's models"));
+const studioModelTip = computed(() => t(studioCapabilities.value ? "uiCoverage.app.singleModel" : "uiCoverage.app.loadingModels"));
 const cwd = ref("");
 const current = ref<string | null>(null);
+const studioEntryResolving = ref(isStudio || isDelegatedEmbed);
+const studioEntry = createStudioEntryState({
+  enabled: isStudio || isDelegatedEmbed,
+  selected: current,
+  displayed: stream.displaySessionId,
+  resolving: studioEntryResolving,
+  switching: stream.switching,
+});
+const studioEntryLoading = studioEntry.loading;
+const studioEmptyReady = studioEntry.emptyReady;
+const initialWebsiteLink = webServiceLink(location.search);
+const managedWebsites = ref<WebServiceRevealHandle | null>(null);
+let websiteOpenSequence = 0;
+provideToolIdentityCatalog(() => stream.displaySessionId.value ?? undefined, () => `${studioToolRevision.value}:${studioCapabilityRevision.value}`);
+useActivityAttention(() => ({
+  sessionId: stream.displaySessionId.value ?? undefined,
+  enabled: !stream.switching.value,
+  approvalIds: stream.live.value.pending_gates.map(gate => gate.gate_id),
+  answerIds: stream.live.value.pending_user_inputs.map(question => question.request_id),
+}));
 const NEW_SESSION_DRAFT_KEY = "__new_session__";
 const pendingWorkspace = ref<string | null>(localStorage.getItem(storeKey("pogo:new-session-workspace")));
+const draftPolicyMode = ref<PolicyMode>("standard");
 const inboxChanges = ref<string[]>([]);
 const inboxErrors = ref<Record<string, string>>({});
 // Keep the same id after an uncertain HTTP result: retry must not duplicate a
@@ -685,6 +728,15 @@ function setWorkflowConversationOpen(open: boolean) {
 function restoreFloatingConversation(focus = false) {
   if (floatingConversationActive.value) void activeConversation.value.restore(focus);
 }
+async function restoreWebsiteConversation() {
+  if (floatingConversationActive.value) await activeConversation.value.restore(false);
+  await nextTick();
+}
+const websiteLinkRevealed = useWebServiceLinkReveal(initialWebsiteLink, () => ({
+  sessionId: current.value, displaySessionId: stream.displaySessionId.value, switching: stream.switching.value, widget: managedWebsites.value,
+  surfaceReady: !floatingConversationActive.value || chatVisible.value && !chatMinimized.value && !chatAnimating.value && !activeConversation.value.motionPhase.value,
+  restoreSurface: restoreWebsiteConversation,
+}));
 watch(workflowCanvasActive, active => {
   if (active) workflowFloating.enter();
   else if (workflowFloating.active.value || workflowFloating.motionPhase.value === "entering") workflowFloating.exit(false);
@@ -825,7 +877,7 @@ watch([hubTabs, hubActiveTab], () => {
   // Favicon bytes are transient display metadata supplied by live state.
   // Keeping them out of browser storage avoids accumulating image payloads
   // for every conversation in the persisted tab strip.
-  const out: StoredTabs = { open: hubTabs.value.map(({ favicon: _favicon, htmlPreviewId: _htmlPreviewId, ...tab }) => tab.kind === "html" ? { ...tab, url: undefined } : tab), active: hubActiveTab.value, browserActive: browserSelections.value };
+  const out: StoredTabs = { open: hubTabs.value.map(({ favicon: _favicon, htmlPreviewId: _htmlPreviewId, websiteOpenRequest: _websiteOpenRequest, ...tab }) => tab.kind === "html" || tab.kind === "website" ? { ...tab, url: undefined } : tab), active: hubActiveTab.value, browserActive: browserSelections.value };
   localStorage.setItem(storeKey(TABS_KEY), JSON.stringify(out));
 });
 // Rewrite the migrated sheet id now rather than waiting for the first change,
@@ -1130,6 +1182,21 @@ async function openHTMLPreviewBrowser(request: HTMLBrowserPreviewRequest) {
     if (!accepted) void api.revokeHTMLPreview(request.sessionId, request.id).catch(() => {});
   }
 }
+async function openWebsiteBrowser(request: WebsiteBrowserRequest) {
+  const sid = current.value, epoch = browserSessionEpoch;
+  const valid = () => !viewClosed && !isDelegatedEmbed && sid === current.value && epoch === browserSessionEpoch && websiteBrowserRequestCurrent(request, current.value, hubTabs.value);
+  if (!valid() || browserMutationBusy.value) return;
+  try {
+    // Recheck status, not open: the existing lifecycle URL remains stable and
+    // a native view must never start or renew a service as a side effect.
+    const record = await api.webService(request.sessionId, request.serviceId);
+    if (!valid() || !isWebServiceRecord(record) || record.service_id !== request.serviceId || record.state !== "ready" || Date.parse(record.lease_expires_at) <= Date.now()) return;
+    const opened = await openBrowserURL(request.url);
+    if (opened && valid()) { hubActiveTab.value = opened.id; activeSheet.value = "hub"; }
+  } catch (error) {
+    if (valid()) showFlash(error instanceof Error ? error.message : t("webServices.actionFailed"), "error");
+  }
+}
 watch(() => hubTabs.value.map(tab => tab.id), ids => {
   const live = new Set(ids);
   for (const id of htmlBrowserCapabilities.keys()) if (!live.has(id)) releaseHTMLBrowserCapability(id);
@@ -1218,6 +1285,35 @@ async function closeHubTab(id: string) {
   removeClosedTab();
 }
 
+function openManagedWebsite(request: OpenWebServiceRequest) {
+  if (isDelegatedEmbed || !current.value || request.sessionId !== current.value || stream.switching.value) return;
+  const id = `${WEBSITE_PREFIX}${request.sessionId}:${request.serviceId}`;
+  const tab: DockTab = { id, kind: "website", parentSession: request.sessionId, webServiceId: request.serviceId, label: request.label, closable: true,
+    ...(request.open ? { websiteOpenRequest: ++websiteOpenSequence } : {}) };
+  hubTabs.value = openTab(hubTabs.value, tab); hubActiveTab.value = id; selectActiveSheet("hub");
+}
+function deletedManagedWebsite(request: { sessionId: string; serviceId: string }) {
+  if (isDelegatedEmbed || request.sessionId !== current.value || stream.switching.value) return;
+  const link = webServiceLink(location.search);
+  if (link.sessionId === request.sessionId && link.serviceId === request.serviceId) {
+    const url = new URL(location.href);
+    url.searchParams.delete("web_service");
+    history.replaceState(history.state, "", url.pathname + url.search + url.hash);
+  }
+  const tab = hubTabs.value.find(item => item.kind === "website" && item.parentSession === request.sessionId && item.webServiceId === request.serviceId);
+  if (!tab) return;
+  const { active } = closeTab(visibleHubTabs.value, hubActiveTab.value, tab.id);
+  hubTabs.value = hubTabs.value.filter(item => item.id !== tab.id);
+  hubActiveTab.value = active;
+}
+function openManagedWebsiteEntry() {
+  if (!initialWebsiteLink.present) return false;
+  if (!initialWebsiteLink.sessionId || !initialWebsiteLink.serviceId || !sessions.value.some(s => s.id === initialWebsiteLink.sessionId)) {
+    showFlash(t("webServices.notFound"), "error"); return true;
+  }
+  pendingWorkspace.value = null; open(initialWebsiteLink.sessionId); return true;
+}
+
 // Which delegations are still running, off the conversation's own timeline:
 // the strip's status dots and each sheet's polling both read this.
 const liveTabs = computed(() => {
@@ -1263,9 +1359,8 @@ async function openStarterCards() {
 
 async function saveCurrentStarterDraft() {
   if (!canSaveStarterDraft.value) return;
-  const prefix = composerToken.value?.kind === "skill" ? skillComposerPart(composerToken.value.name) : null;
   const draft = cloneStarterDraft({ inputLayout: composerLayout.value, parts: [
-    ...(prefix ? [prefix] : []), ...composerParts.value,
+    ...composerDraftWithToken(composerParts.value, composerToken.value),
   ] });
   const sid = current.value;
   const files = captureStarterFiles(draft.parts, attachments.value);
@@ -1307,6 +1402,12 @@ localStorage.removeItem("pogo:files-layout");
 // Scrolling up to read history and being yanked back down is the single most
 // annoying thing a streaming UI can do.
 const stickToBottom = ref(true);
+let scrollIntentUntil = 0;
+watch(stickToBottom, value => { if (!value) scrollIntentUntil = 0; }, { flush: "sync" });
+provideActivityReading({
+  following: computed(() => stickToBottom.value && !stream.switching.value),
+  pause: () => { scrollIntentUntil = 0; stickToBottom.value = false; },
+});
 
 const timeline = computed(() => {
   // liveVersion is throttled by the stream, so streaming deltas rebuild this at
@@ -1324,6 +1425,14 @@ const timeline = computed(() => {
   );
 });
 
+// An empty array is not evidence of an empty conversation. Only a deliberate
+// draft or the selected session's committed snapshot may show starter cards.
+const conversationLoading = computed(() => studioEntryLoading.value || (
+  !timeline.value.length && !stream.compactions.value.length && (
+    stream.switching.value || !studioEmptyReady.value
+  )
+));
+
 // Plans belong to accepted user tasks, not to the entire conversation. Upload
 // placeholders and queued inbox messages have not started a task: only the
 // server's user_message can move ownership; steering keeps its parent plan.
@@ -1331,7 +1440,9 @@ const todoState = computed(() => projectTaskTodos(timeline.value, new Set(stream
 const todos = computed(() => todoState.value.current?.todos.length ? todoState.value.current.todos : undefined);
 
 const busy = computed(() => stream.busy.value);
-const policy = computed(() => stream.policy.value);
+const policy = computed(() => !current.value && pendingWorkspace.value !== null
+  ? { mode: draftPolicyMode.value }
+  : stream.policy.value);
 const immersiveAttention = computed(() => stream.live.value.pending_gates.length > 0);
 watch(immersiveAttention, (waiting) => {
   // A collapsed transcript must not hide the decision that is holding up a run.
@@ -1369,6 +1480,22 @@ watch(followupPick, (pick) => {
 // the live one stays flat. The timeline itself is untouched — the rail, the
 // todo bar and the follow-up chips all still read it.
 const exchanges = computed(() => buildConversationExchanges(timeline.value, stream.compactions.value, busy.value));
+const executionLedger = createActivityExecutionLedger();
+const executionEvidence = ref<ReturnType<typeof executionLedger.update>>({ callOrigins: new Map(), endReasons: new Map() });
+provideActivityExecution(executionEvidence);
+watch([exchanges, stream.run, stream.liveVersion, stream.displaySessionId, stream.switching], () => {
+  executionEvidence.value = executionLedger.update({
+    sessionId: stream.switching.value ? undefined : stream.displaySessionId.value ?? undefined,
+    exchanges: exchanges.value, live: stream.live.value, runInfo: stream.run.value,
+  });
+}, { immediate: true });
+const waitingForModel = computed(() => {
+  const live = stream.live.value;
+  return busy.value && stream.connected.value && !stream.switching.value && !stream.retry.value && !stream.streamError.value &&
+    !live.pending_tools.length && !live.pending_gates.length && !live.pending_user_inputs.length && !live.incoming?.length &&
+    !live.text && !live.thinking && stream.answerReview.value?.state !== "running" &&
+    !compacting.value;
+});
 
 // runStartedAt backs the live header's clock for exchanges whose user message
 // carries no ts; the exchange's own startedAt wins whenever it exists.
@@ -1418,8 +1545,8 @@ async function refreshActivity() {
   try {
     adoptActivity((await api.sessionsActivity()).busy);
     // A background child can outlive its parent's busy indicator. Retry only
-    // while a Skill update is explicitly deferred, without changing the draft.
-    if (isStudio && skillConfigDeferred.value && !busy.value && !stream.switching.value && skillCatalogState.value !== "loading") void loadSkills();
+    // while a capability update is explicitly deferred, without changing the draft.
+    if (isStudio && studioToolPending.value && !busy.value && !stream.switching.value && !studioConfigurationSyncing.value) void refreshStudioConfiguration();
   } catch {
     // Non-fatal: the indicators simply lag one cycle.
   }
@@ -1502,6 +1629,8 @@ const gated = computed(() => {
 
 async function loadDelegatedPage() {
   const epoch = ++delegatedBootEpoch;
+  studioEntryResolving.value = true;
+  studioEntry.reset();
   authMode.value = "delegated";
   tokenRejected.value = false;
   delegatedUiError.value = null;
@@ -1519,25 +1648,25 @@ async function loadDelegatedPage() {
     adoptActivity(res.sessions.filter((s) => s.busy).map((s) => s.id));
     if (pendingWorkspace.value === null && sessions.value.length > 0) open(sessions.value[0].id);
     else if (sessions.value.length === 0 && pendingWorkspace.value === null) await createSession();
+    else studioEntry.finishWithoutSession();
   } catch (err) {
     if (!viewClosed && epoch === delegatedBootEpoch) delegatedUiError.value = (err as Error).message;
+  } finally {
+    if (!viewClosed && epoch === delegatedBootEpoch) studioEntryResolving.value = false;
   }
 }
 
 // Studio boot: the bound Agent's definition is the page's identity — name,
-// welcome, default model — and its fetch gates the whole workbench. A 401
-// rides the ordinary token gate; anything else (missing, draft, forbidden)
-// becomes a page-level error with a way back to Agent Studio, never a silent
-// fallback to the generic agent.
+// welcome, default model. A 401 rides the ordinary token gate; anything else
+// (missing, draft, forbidden) becomes a page-level error with a way back to
+// Agent Studio, never a silent fallback to the generic agent.
 async function loadStudioAgent(): Promise<boolean> {
   try {
     const agent = await platformApi.agent(studioAgentId);
     if (viewClosed) return false;
     if (agent.status !== "ready") {
       studioError.value =
-        locale.value === "zh-CN"
-          ? (managedChat ? `“${agent.name}”还在草稿中，请先完成配置并发布。` : `“${agent.name}”尚未发布，请联系这位 Agent 的管理员。`)
-          : (managedChat ? `"${agent.name}" is still a draft. Finish and publish it before chatting.` : `"${agent.name}" is not published. Please contact its administrator.`);
+        t(managedChat ? "uiCoverage.app.draftAgent" : "uiCoverage.app.unpublishedAgent", { name: agent.name });
       return false;
     }
     studioAgent.value = agent;
@@ -1549,7 +1678,7 @@ async function loadStudioAgent(): Promise<boolean> {
       return false;
     }
     studioError.value =
-      e.message || (locale.value === "zh-CN" ? "暂时无法打开这位 Agent。" : "This Agent cannot be opened right now.");
+      e.message || t("uiCoverage.app.cannotOpenAgent");
     return false;
   }
 }
@@ -1565,29 +1694,50 @@ function backToStudio() {
 // fresh load would have.
 async function retryStudio() {
   if (!isStudio || viewClosed) return;
+  studioEntryResolving.value = true;
+  try {
+    await retryStudioEntry();
+  } finally {
+    studioEntryResolving.value = false;
+  }
+}
+
+async function retryStudioEntry() {
+  studioEntry.reset();
   studioError.value = null;
   if (!(await loadStudioAgent())) return;
-  await Promise.all([loadSessions(), loadModels(), loadSkills(), loadPanels(), loadStarters()]);
-  if (viewClosed) return;
+  const [sessionsLoaded] = await Promise.all([loadSessions(), loadModels(), loadSkills(), loadMcpMethods(), loadPanels(), loadStarters()]);
+  if (viewClosed || !sessionsLoaded) return;
   if (tokenRejected.value) return;
   await restoreDock();
+  if (openManagedWebsiteEntry()) { studioEntry.finishWithoutSession(); return; }
   const requestedTaskResult = requestedTaskSessionId();
-  if (requestedTaskResult) { await openTaskResultEntry(requestedTaskResult); return; }
+  if (requestedTaskResult) {
+    await openTaskResultEntry(requestedTaskResult);
+    studioEntry.finishWithoutSession();
+    return;
+  }
   if (pendingWorkspace.value === null) {
     const sid = chooseBootSession(
       sessions.value,
       requestedSessionId(location.search),
       localStorage.getItem(storeKey(STUDIO_LAST_SESSION)),
     );
-    if (await openLegacySentinelEntry(requestedSessionId(location.search) || localStorage.getItem(storeKey(STUDIO_LAST_SESSION)))) return;
+    if (await openLegacySentinelEntry(requestedSessionId(location.search) || localStorage.getItem(storeKey(STUDIO_LAST_SESSION)))) {
+      studioEntry.finishWithoutSession();
+      return;
+    }
     if (sid) open(sid);
     else await createSession();
-  }
+  } else studioEntry.finishWithoutSession();
   const sentinel = requestedSentinelId(location.search);
-  if (sentinel) await openSentinelSession(sentinel);
+  if (sentinel) {
+    await openSentinelSession(sentinel);
+    studioEntry.finishWithoutSession();
+  }
 }
 
-onMounted(async () => {
+async function initializeConversation() {
   if (isDelegatedEmbed) {
     await loadDelegatedPage();
     return;
@@ -1608,8 +1758,8 @@ onMounted(async () => {
   }
   if (gated.value) return;
   if (isStudio && !(await loadStudioAgent())) return;
-  await Promise.all([loadSessions(), loadModels(), loadSkills(), loadPanels(), loadStarters()]);
-  if (viewClosed) return;
+  const [sessionsLoaded] = await Promise.all([loadSessions(), loadModels(), loadSkills(), loadMcpMethods(), loadPanels(), loadStarters()]);
+  if (viewClosed || !sessionsLoaded) return;
   // The attachment allowlist the door check and the picker's accept attribute
   // read. Seeded with the server's default so both work before (or without)
   // the fetch; the server stays the authority and re-reads it per upload.
@@ -1626,8 +1776,13 @@ onMounted(async () => {
   // Panels are in now: the strip can be rebuilt with the full pinned set.
   await restoreDock();
   if (isStudio) {
+    if (openManagedWebsiteEntry()) { studioEntry.finishWithoutSession(); return; }
     const requestedTaskResult = requestedTaskSessionId();
-    if (requestedTaskResult) { await openTaskResultEntry(requestedTaskResult); return; }
+    if (requestedTaskResult) {
+      await openTaskResultEntry(requestedTaskResult);
+      studioEntry.finishWithoutSession();
+      return;
+    }
     // Deep link (?c=) → this Agent's remembered session → the list's first
     // row. A candidate absent from THIS Agent's list is ignored (never adopt
     // another Agent's memory), and a requested one that failed validation is
@@ -1635,24 +1790,38 @@ onMounted(async () => {
     if (pendingWorkspace.value === null) {
       const requested = requestedSessionId(location.search);
       const remembered = localStorage.getItem(storeKey(STUDIO_LAST_SESSION));
-      if (await openLegacySentinelEntry(requested || remembered)) return;
+      if (await openLegacySentinelEntry(requested || remembered)) {
+        studioEntry.finishWithoutSession();
+        return;
+      }
       const sid = chooseBootSession(sessions.value, requested, remembered);
       if (requested && requested !== sid) {
         showFlash(
-          locale.value === "zh-CN"
-            ? "这段对话不存在或不属于当前 Agent。"
-            : "That conversation does not exist or belongs to another Agent.",
+          t("uiCoverage.app.foreignConversation"),
           "error",
         );
         if (!sid) history.replaceState(null, "", conversationPath());
       }
       if (sid) open(sid);
       else await createSession();
-    }
+    } else studioEntry.finishWithoutSession();
     const sentinel = requestedSentinelId(location.search);
-    if (sentinel) await openSentinelSession(sentinel);
+    if (sentinel) {
+      await openSentinelSession(sentinel);
+      studioEntry.finishWithoutSession();
+    }
   } else if (pendingWorkspace.value === null && sessions.value.length > 0) open(sessions.value[0].id);
   else if (sessions.value.length === 0 && pendingWorkspace.value === null) await createSession();
+}
+
+onMounted(async () => {
+  try {
+    await initializeConversation();
+  } finally {
+    // Agent identity, catalog and dock restoration are intermediate steps.
+    // The entry placeholder also waits for the final session selection.
+    studioEntryResolving.value = false;
+  }
 });
 
 // A session's workspace relative to the server root; "" means the root
@@ -1821,34 +1990,53 @@ async function openAnswerHTMLPreview(target: WorkspaceFileTarget, origin: Pick<W
   await openCurrentHTMLPreviewBrowser({ url: preview.url, id: preview.id, sessionId: scope.conversationId, path: fullPath });
 }
 provide(workspaceFileNavigationKey, { scope: answerFileScope, open: answerFileNavigation.open, openHTML: openAnswerHTMLPreview });
+provide(webArtifactNavigationKey, {
+  scope: () => !isDelegatedEmbed && !viewClosed && !stream.switching.value && current.value && stream.displaySessionId.value === current.value ? { sessionId: current.value } : null,
+  openDock: openManagedWebsite,
+  openBrowser: async request => {
+    // Reuse the existing website navigation and its status/ownership recheck.
+    // The inline pane obtained this lifecycle URL from the authenticated API.
+    openManagedWebsite({ sessionId: request.sessionId, serviceId: request.serviceId, label: request.title, open: false });
+    await openWebsiteBrowser(request);
+  },
+});
 watch(() => {
   const scope = answerFileScope();
   return scope ? JSON.stringify([scope.conversationId, scope.cwd, scope.workspace, scope.root]) : "";
 }, () => answerFileNavigation.cancel(), { flush: "sync" });
 onBeforeUnmount(answerFileNavigation.cancel);
 
-async function loadSessions() {
+async function loadSessions(): Promise<boolean> {
   try {
     if (isStudio) {
       // Agent scope comes from the platform endpoint and from nowhere else:
       // no account-wide list is ever merged in, and on failure the previous
       // agent-scoped list stays — there is no all-session fallback.
       const res = await platformApi.sessions(studioAgentId);
+      if (viewClosed) return false;
       sessions.value = res.sessions;
       if (res.cwd) cwd.value = res.cwd;
       adoptActivity(res.sessions.filter((s) => s.busy).map((s) => s.id));
-      return;
+      return true;
     }
     const res = await api.sessions();
+    if (viewClosed) return false;
     sessions.value = res.sessions;
     cwd.value = res.cwd;
     adoptActivity(res.sessions.filter((s) => s.busy).map((s) => s.id));
+    return true;
   } catch (err) {
+    if (viewClosed) return false;
     if ((err as { status?: number }).status === 401 || (isDelegatedEmbed && (err as { status?: number }).status === 403)) {
       tokenRejected.value = true;
-      return;
+      return false;
     }
-    showFlash(t("agentView.flash.loadSessionsFailed", { msg: (err as Error).message }), "error");
+    const message = t("agentView.flash.loadSessionsFailed", { msg: (err as Error).message });
+    // A failed catalog is unknown, not empty. Never turn an entry failure
+    // into a new draft while the user's saved sessions are still unresolved.
+    if (isStudio && studioEntryLoading.value) studioError.value = message;
+    else showFlash(message, "error");
+    return false;
   }
 }
 
@@ -1973,7 +2161,8 @@ function doLocate() {
   // as "the locate missed" even when it scrolled to the right string.
   let el: HTMLElement | null = null;
   for (const mid of findAnchorMessages(stream.messages.value, p.anchor)) {
-    const cand = convInner.value.querySelector<HTMLElement>(`[data-mid="${CSS.escape(mid)}"]`);
+    const cand = convInner.value.querySelector<HTMLElement>(`[data-prose-mid="${CSS.escape(mid)}"]`) ??
+      convInner.value.querySelector<HTMLElement>(`[data-mid="${CSS.escape(mid)}"]`);
     if (!cand) continue;
     el ??= cand;
     if (!isFoldedAway(cand)) {
@@ -2043,6 +2232,7 @@ async function loadSkills() {
   const sid = current.value;
   const request = ++skillCatalogRequest;
   skillCatalogState.value = "loading";
+  skillConfigError.value = "";
   if (isStudio && !sid) { skills.value = []; return; }
   try {
     if (isStudio) {
@@ -2054,12 +2244,36 @@ async function loadSkills() {
     if (viewClosed || request !== skillCatalogRequest || (isStudio && current.value !== sid)) return;
     skills.value = result.skills;
     skillCatalogState.value = "ready";
-  } catch {
+  } catch (error) {
     // No fallback to a global list when a scoped request fails.
     if (request === skillCatalogRequest && (!isStudio || current.value === sid)) {
-      skills.value = [];
+      skillConfigError.value = error instanceof Error ? error.message : String(error);
       skillCatalogState.value = "failed";
     }
+  }
+}
+
+// The invocation catalog contains only methods callable under the effective
+// conversation policy; the MCP panel's display catalog is intentionally broader.
+async function loadMcpMethods() {
+  if (isDelegatedEmbed) return;
+  const sid = current.value;
+  const request = ++mcpCatalogRequest;
+  mcpCatalogState.value = "loading";
+  try {
+    const result = await api.tools(sid ?? undefined, isStudio ? studioAgentId : undefined);
+    if (viewClosed || request !== mcpCatalogRequest || current.value !== sid) return;
+    // An older host has no invocation catalog. Do not suggest methods from a
+    // broader display catalog that may include disabled or conflicting entries.
+    if (!Array.isArray(result.mcp_methods)) throw new Error("MCP invocation catalog unavailable");
+    mcpMethods.value = result.mcp_methods.filter(validMcpReference).map(method => ({
+      server: method.server, name: method.name, description: typeof method.description === "string" ? method.description : "",
+    }));
+    mcpCatalogState.value = "ready";
+  } catch {
+    if (viewClosed || request !== mcpCatalogRequest || current.value !== sid) return;
+    mcpMethods.value = [];
+    mcpCatalogState.value = "failed";
   }
 }
 
@@ -2080,27 +2294,57 @@ async function loadStudioCapabilities() {
       result = { ...result, model: synced.model, models: synced.models };
       studioModelDeferred.value = synced.deferred;
     } else studioModelDeferred.value = false;
+    result = await syncStudioMcpCapabilities(result, () => api.syncStudioMcpConfig(studioAgentId, sid));
+    if (!isCurrent()) return;
     studioToolSync.observeCapabilities(sid, result);
     if (result.tools_sync) await studioToolSync.sync();
     if (!isCurrent()) return;
     const toolState = studioToolState.value;
     if (toolState?.sessionId === sid) result = { ...result, tools: toolState.tools, tools_revision: toolState.revision, tools_pending: toolState.pending, tools_desired_revision: toolState.desiredRevision };
+    const fingerprint = studioCapabilityFingerprint(result);
+    if (fingerprint !== studioCapabilitySnapshot) {
+      studioCapabilitySnapshot = fingerprint;
+      studioCapabilityRevision.value++;
+    }
     studioCapabilities.value = result;
   } catch (err) {
     if (!isCurrent()) return;
-    studioCapabilities.value = null;
     studioCapabilitiesError.value = (err as Error).message;
   } finally {
     if (isCurrent()) studioModelSyncing.value = false;
   }
 }
 
+// Saves may emit one signal per committed policy. Coalesce them while retaining
+// a trailing refresh, so a commit during an HTTP request cannot be lost.
+let studioConfigurationRefresh: { sessionId: string; again: boolean; work: Promise<void> } | null = null;
+function refreshStudioConfiguration(): Promise<void> {
+  const sid = current.value;
+  if (!isStudio || !sid || viewClosed) return Promise.resolve();
+  if (studioConfigurationRefresh?.sessionId === sid) {
+    studioConfigurationRefresh.again = true;
+    return studioConfigurationRefresh.work;
+  }
+  const refresh = { sessionId: sid, again: false, work: Promise.resolve() };
+  studioConfigurationRefresh = refresh;
+  refresh.work = (async () => {
+    do {
+      refresh.again = false;
+      await loadSkills();
+      if (viewClosed || current.value !== sid) return;
+      await loadStudioCapabilities();
+      if (viewClosed || current.value !== sid) return;
+      await loadMcpMethods();
+    } while (refresh.again && !viewClosed && current.value === sid);
+  })().finally(() => { if (studioConfigurationRefresh === refresh) studioConfigurationRefresh = null; });
+  return refresh.work;
+}
+
 // Refresh on return to a conversation and after a busy run. The server applies
-// model, Skill and native-tool policies at idle boundaries; instructions remain pinned.
+// model, MCP, Skill and native-tool policies at idle boundaries; instructions remain pinned.
 watch([busy, () => stream.switching.value], ([running, switching], [wasRunning, wasSwitching]) => {
   if (isStudio && !running && !switching && (wasRunning || wasSwitching)) {
-    void loadStudioCapabilities();
-    void loadSkills();
+    void refreshStudioConfiguration();
   }
 });
 watch(stream.modelChangeVersion, () => {
@@ -2109,8 +2353,7 @@ watch(stream.modelChangeVersion, () => {
   if (current.value && !viewClosed && !stream.switching.value) {
     void loadModels();
     if (isStudio) {
-      void loadStudioCapabilities();
-      void loadSkills();
+      void refreshStudioConfiguration();
     }
   }
 });
@@ -2120,15 +2363,19 @@ watch(stream.toolConfig, receipt => {
   const tools = studioToolState.value;
   if (tools && studioCapabilities.value) studioCapabilities.value = { ...studioCapabilities.value, tools: tools.tools, tools_revision: tools.revision, tools_pending: tools.pending, tools_desired_revision: tools.desiredRevision };
 });
+watch(stream.capabilitiesChanged, change => {
+  if (isStudio && !viewClosed && change?.sessionId === current.value && !stream.switching.value) void refreshStudioConfiguration();
+});
 watch(stream.connected, connected => {
   // Replayed policy events are not current authority; reconcile after reconnect.
-  if (connected && isStudio && current.value && !viewClosed) void loadStudioCapabilities();
+  if (connected && isStudio && current.value && !viewClosed) void refreshStudioConfiguration();
+  else if (connected && !isStudio && !viewClosed) void loadMcpMethods();
 });
 function refreshStudioModelOnFocus() {
   if (isStudio && current.value && !viewClosed && !stream.switching.value && document.visibilityState === "visible") {
-    if (!studioModelSyncing.value) void loadStudioCapabilities();
-    if (skillCatalogState.value !== "loading") void loadSkills();
+    void refreshStudioConfiguration();
   }
+  else if (!viewClosed && !isDelegatedEmbed && document.visibilityState === "visible") void loadMcpMethods();
 }
 onMounted(() => { window.addEventListener("focus", refreshStudioModelOnFocus); document.addEventListener("visibilitychange", refreshStudioModelOnFocus); });
 onBeforeUnmount(() => { studioCapabilitiesRequest++; studioToolSync.select(null); window.removeEventListener("focus", refreshStudioModelOnFocus); document.removeEventListener("visibilitychange", refreshStudioModelOnFocus); });
@@ -2333,6 +2580,9 @@ function resolveCommand(word: string): string | null {
 // is never interrupted.
 const skills = ref<SkillInfo[]>([]);
 const skillCatalogState = ref<"loading" | "ready" | "failed">("loading");
+const mcpMethods = ref<ComposerMcpMethod[]>([]);
+const mcpCatalogState = ref<"loading" | "ready" | "failed">("loading");
+let mcpCatalogRequest = 0;
 const skillConfigDeferred = ref(false);
 let skillCatalogRequest = 0;
 const composerTokenControl = ref<InstanceType<typeof ComposerToken> | null>(null);
@@ -2341,13 +2591,21 @@ const tokenPickerInput = ref<HTMLInputElement | null>(null);
 const tokenPickerFocused = ref(false);
 const tokenPickerComposing = ref(false);
 const editingSkillID = ref<string | null>(null);
+const editingMcpID = ref<string | null>(null);
 const suggestionPopover = ref<HTMLElement | null>(null);
 let tokenPickerSelection = [0, 0];
 watch(current, () => {
   tokenPickerQuery.value = null;
   tokenPickerComposing.value = false;
+  editingSkillID.value = null;
+  editingMcpID.value = null;
+  mcpMethods.value = [];
+  mcpCatalogState.value = "loading";
+  mcpCatalogRequest++;
+  if (!isStudio || !current.value) void loadMcpMethods();
   if (!isStudio) return;
   studioCapabilities.value = null;
+  studioCapabilitySnapshot = "";
   studioToolSync.select(current.value);
   studioCapabilitiesError.value = "";
   studioModelDeferred.value = false;
@@ -2355,8 +2613,8 @@ watch(current, () => {
   studioCapabilitiesRequest++;
   skills.value = [];
   skillConfigDeferred.value = false;
-  void loadStudioCapabilities();
-  void loadSkills();
+  skillConfigError.value = "";
+  void refreshStudioConfiguration();
 }, { flush: "sync" });
 const suggestionMenuId = `composer-suggestions-${useId()}`;
 const composerCard = ref<HTMLElement | null>(null);
@@ -2366,12 +2624,15 @@ const dismissedSuggestionInput = ref<string | null>(null);
 const selectedSuggestionId = ref<string | null>(null);
 const suggestionPopupStyle = ref<Record<string, string>>({});
 const compactSuggestionDescription = computed(() => t("agentView.commands.compactContext", {
-  used: contextReading.value.source === "unknown" ? "—" : `${contextReading.value.source === "estimated" ? (locale.value.startsWith("zh") ? "约 " : "~") : ""}${contextReading.value.used.toLocaleString("en-US")}`,
-  total: ctxWindow.value > 0 ? ctxWindow.value.toLocaleString("en-US") : "—",
+  used: contextReading.value.source === "unknown" ? "—" : `${contextReading.value.source === "estimated" ? t("uiCoverage.app.approximateValue", { value: contextReading.value.used.toLocaleString(locale.value) }) : contextReading.value.used.toLocaleString(locale.value)}`,
+  total: ctxWindow.value > 0 ? ctxWindow.value.toLocaleString(locale.value) : "—",
 }));
 // The canonical draft remains plain text for starters, retries and the server.
 // Only the native textarea's displayed value excludes the selected prefix.
-const composerToken = computed(() => composerParts.value.some(part => part.type === "skill") ? null : readComposerToken(input.value, skills.value, COMMANDS.map(command => command.name)));
+// A typed MCP identity survives a catalog outage or revocation. Availability
+// controls validation below, rather than changing the editable draft's shape.
+const composerToken = computed(() => composerParts.value.some(part => part.type === "skill" || part.type === "mcp") ? null
+  : readMcpComposerToken(input.value) ?? readComposerToken(input.value, skills.value, COMMANDS.map(command => command.name), mcpMethods.value));
 provide(shortcutDraftSourceKey, () => {
   const sid = current.value;
   const parts = JSON.parse(JSON.stringify(composerDraftWithToken(composerParts.value, composerToken.value))) as ComposerPart[];
@@ -2396,6 +2657,7 @@ provide(shortcutDraftSourceKey, () => {
   };
 });
 const composerSkills = computed(() => composerParts.value.filter(part => part.type === "skill"));
+const composerMcps = computed(() => composerParts.value.filter(part => part.type === "mcp"));
 const composerShortcuts = computed(() => composerParts.value.filter(part => part.type === "shortcut"));
 const composerOffices = computed(() => composerParts.value.filter(part => part.type === "office"));
 const officePreview = ref<OfficeReferenceSnapshot | null>(null);
@@ -2413,8 +2675,15 @@ const composerBody = computed({
   get: () => composerToken.value?.body ?? input.value,
   set: (body: string) => { input.value = composerToken.value ? replaceComposerToken(composerToken.value, body) : body; },
 });
+const composerSkillDescription = (name: string) => {
+  const skill = skills.value.find(skill => skill.name === name || skill.aliases?.includes(name));
+  return skill ? builtinSkillDescription(skill.name, skill.description, skill.source === "embedded") : "";
+};
+const composerSuggestionSkills = computed(() => skills.value.map(skill => ({ ...skill, description: composerSkillDescription(skill.name) })));
 const composerTokenLabel = computed(() => composerToken.value?.kind === "command" ? t("agentView.commands.compactTokenLabel") : composerToken.value?.name ?? "");
-const composerTokenDescription = computed(() => composerToken.value?.kind === "command" ? compactSuggestionDescription.value : skills.value.find(skill => skill.name === composerToken.value?.name)?.description ?? "");
+const composerTokenDescription = computed(() => composerToken.value?.kind === "command" ? compactSuggestionDescription.value
+  : composerToken.value?.kind === "mcp" ? mcpMethods.value.find(method => method.server === composerToken.value?.mcp?.server && method.name === composerToken.value?.mcp?.name)?.description ?? ""
+  : composerSkillDescription(composerToken.value?.name ?? ""));
 const nestedSkillNames = computed(() => composerShortcuts.value.flatMap(part => inputPartsSkills(part.parts ?? [])));
 const skillInvocation = computed(() => composerSkills.value.length > 0 || input.value.trimStart().startsWith("/skill:"));
 const skillInvocationName = computed(() => /^\/skill:([^ \t\r\n\f\v]+)(?:[ \t\r\n\f\v]|$)/.exec(input.value.trimStart())?.[1] ?? "");
@@ -2431,22 +2700,54 @@ const composerSkillError = computed(() => {
   return "";
 });
 const composerSkillWaiting = computed(() => skillInvocation.value && busy.value);
+const nestedMcpMethods = computed(() => composerShortcuts.value.flatMap(part => inputPartsMcps(part.parts ?? [])));
+const mcpInvocation = computed(() => composerMcps.value.length > 0 || nestedMcpMethods.value.length > 0 || input.value.trimStart().startsWith("/mcp:"));
+const composerMcpError = computed(() => {
+  if (!mcpInvocation.value) return "";
+  if (mcpCatalogState.value === "loading") return t("agentView.commands.mcpLoading");
+  if (mcpCatalogState.value === "failed") return t("agentView.commands.mcpFailed");
+  if (!mcpMethods.value.length) return t("agentView.commands.noMcp");
+  const references = [...composerMcps.value, ...nestedMcpMethods.value];
+  if (input.value.trimStart().startsWith("/mcp:")) {
+    const invocation = parseMcpInvocation(input.value.trimStart());
+    if (!invocation) return t("agentView.commands.selectMcpMethod");
+    references.push(invocation);
+  }
+  const unavailable = references.find(reference => !mcpMethods.value.some(method => method.server === reference.server && method.name === reference.name));
+  return unavailable ? t("agentView.commands.unknownMcpMethod", { name: `${unavailable.server}/${unavailable.name}` }) : "";
+});
+const composerMcpWaiting = computed(() => mcpInvocation.value && busy.value);
+const composerInvocationError = computed(() => composerSkillError.value || composerMcpError.value);
+const composerInvocationWaiting = computed(() => composerSkillWaiting.value || composerMcpWaiting.value);
+const composerWaitingMessage = computed(() => t(composerMcpWaiting.value ? "agentView.commands.mcpWaiting" : "agentView.commands.skillWaiting"));
 watch([input, skills, composerComposing], () => {
   if (composerComposing.value) return;
   const normalized = normalizeComposerTokenInput(input.value, skills.value);
   if (normalized !== input.value) input.value = normalized;
 }, { flush: "post" });
 const suggestionQuery = computed(() => tokenPickerQuery.value !== null
-  ? `${composerToken.value?.kind === "command" ? "/" : "/skill:"}${tokenPickerQuery.value}`
+  ? `${composerToken.value?.kind === "command" ? "/" : editingMcpID.value || composerToken.value?.kind === "mcp" ? "/mcp:" : "/skill:"}${tokenPickerQuery.value}`
   : composerLayout.value === "inline" ? inlineSlashQuery.value?.text ?? "" : textareaSlashQuery.value?.text ?? "");
 const suggestionItems = computed(() => isDelegatedEmbed ? [] : composerSuggestions(suggestionQuery.value,
   (tokenPickerQuery.value !== null
     ? composerToken.value?.kind === "command" ? COMMANDS : []
-    : composerToken.value || composerParts.value.some(part => part.type !== "text") || input.value.trim() !== suggestionQuery.value ? [] : COMMANDS).map(command => ({ name: command.name, label: t(command.labelKey), description: command.name === "/compact" ? compactSuggestionDescription.value : t(command.hintKey) })), skills.value,
-  { label: t("agentView.commands.skillEntryName"), description: t("agentView.commands.skillEntry") }));
+    : composerToken.value || composerParts.value.some(part => part.type !== "text") || input.value.trim() !== suggestionQuery.value ? [] : COMMANDS).map(command => ({ name: command.name, label: t(command.labelKey), description: command.name === "/compact" ? compactSuggestionDescription.value : t(command.hintKey) })), composerSuggestionSkills.value,
+  { label: t("agentView.commands.skillEntryName"), description: t("agentView.commands.skillEntry") }, mcpMethods.value,
+  { label: t("agentView.commands.mcpEntryName"), description: t("agentView.commands.mcpEntry") }));
+watch(suggestionQuery, (query, previous) => {
+  // Connections may finish after the initial catalog request. Opening the
+  // method picker reconciles cached capabilities once, rather than on every key.
+  if (query.startsWith("/mcp:") && !previous.startsWith("/mcp:")) void loadMcpMethods();
+});
 const suggestionMenuVisible = computed(() => tokenPickerQuery.value !== null
   ? tokenPickerFocused.value
   : !composerComposing.value && composerFocused.value && dismissedSuggestionInput.value !== input.value && suggestionItems.value.length > 0);
+const mcpPickerActive = computed(() => !!editingMcpID.value || composerToken.value?.kind === "mcp");
+const emptySuggestionMessage = computed(() => mcpPickerActive.value
+  ? mcpCatalogState.value === "loading" ? t("agentView.commands.mcpLoading")
+    : mcpCatalogState.value === "failed" ? t("agentView.commands.mcpFailed")
+    : !mcpMethods.value.length ? t("agentView.commands.noMcp") : t("agentView.commands.noMatchingSkill")
+  : t("agentView.commands.noMatchingSkill"));
 const selectedSuggestionOption = computed(() => suggestionMenuVisible.value && selectedSuggestionId.value ? `${suggestionMenuId}-${selectedSuggestionId.value}` : undefined);
 watch([input, tokenPickerQuery], () => {
   dismissedSuggestionInput.value = null;
@@ -2464,6 +2765,13 @@ function completeSuggestion(id = selectedSuggestionId.value) {
   if (tokenPickerComposing.value) return;
   const item = suggestionItems.value.find(item => item.id === id);
   if (!item) return;
+  if (editingMcpID.value && item.kind === "mcp" && item.mcp) {
+    const id = editingMcpID.value, method = item.mcp;
+    updateComposerParts(composerParts.value.map(part => part.type === "mcp" && part.id === id
+      ? { ...part, server: method.server, name: method.name, label: `${method.server}/${method.name}` } : part));
+    editingMcpID.value = null; tokenPickerQuery.value = null; tokenPickerFocused.value = false;
+    void nextTick(focusComposer); return;
+  }
   if (editingSkillID.value && item.kind === "skill") {
     const id = editingSkillID.value, name = item.value.slice(7).trim();
     updateComposerParts(composerParts.value.map(part => part.type === "skill" && part.id === id ? { ...part, name, label: name } : part));
@@ -2471,7 +2779,7 @@ function completeSuggestion(id = selectedSuggestionId.value) {
     void nextTick(focusComposer); return;
   }
   if (composerLayout.value === "inline" && tokenPickerQuery.value === null && item.kind !== "command") {
-    if (inlineComposer.value?.completeSlash(item.value, item.kind === "skill" ? item.value.slice(7).trim() : undefined)) {
+    if (inlineComposer.value?.completeSlash(item.value, item.kind === "skill" ? item.value.slice(7).trim() : undefined, item.mcp)) {
       dismissedSuggestionInput.value = null;
       void nextTick(updateInlineSelection);
       return;
@@ -2481,9 +2789,10 @@ function completeSuggestion(id = selectedSuggestionId.value) {
     const query = textareaSlashQuery.value;
     if (!query) return;
     let caret = query.from;
-    if (item.kind === "skill") {
+    if (item.kind === "skill" || item.kind === "mcp" && item.mcp) {
       const parts = composerDraftWithToken(replaceComposerTypedText(composerParts.value, composerBody.value), composerToken.value);
-      updateComposerParts(completeComposerTextSkill(parts, query, item.value.slice(7).trim()));
+      updateComposerParts(item.kind === "mcp" && item.mcp ? completeComposerTextMcp(parts, query, item.mcp)
+        : completeComposerTextSkill(parts, query, item.value.slice(7).trim()));
     } else {
       composerBody.value = composerBody.value.slice(0, query.from) + item.value + composerBody.value.slice(query.to);
       caret += item.value.length;
@@ -2494,7 +2803,7 @@ function completeSuggestion(id = selectedSuggestionId.value) {
   }
   const replacing = tokenPickerQuery.value !== null;
   const body = replacing ? composerBody.value : "";
-  input.value = item.value + (replacing && item.kind === "skill" ? body : "");
+  input.value = item.value + (replacing && (item.kind === "skill" || item.kind === "mcp") ? body : "");
   tokenPickerQuery.value = null;
   tokenPickerFocused.value = false;
   tokenPickerComposing.value = false;
@@ -2506,6 +2815,8 @@ function completeSuggestion(id = selectedSuggestionId.value) {
 }
 function changeComposerToken() {
   editingSkillID.value = null;
+  editingMcpID.value = null;
+  if (composerToken.value?.kind === "mcp") void loadMcpMethods();
   tokenPickerSelection = [inputBox.value?.selectionStart ?? 0, inputBox.value?.selectionEnd ?? 0];
   tokenPickerQuery.value = "";
   tokenPickerFocused.value = true;
@@ -2519,11 +2830,15 @@ function removeComposerToken() {
   tokenPickerQuery.value = null;
   tokenPickerFocused.value = false;
   tokenPickerComposing.value = false;
+  editingSkillID.value = null;
+  editingMcpID.value = null;
   void nextTick(() => { focusComposer(); inputBox.value?.setSelectionRange(0, 0); });
 }
 function dismissSuggestions() {
   if (tokenPickerQuery.value !== null) {
     tokenPickerQuery.value = null;
+    editingSkillID.value = null;
+    editingMcpID.value = null;
     tokenPickerFocused.value = false;
     tokenPickerComposing.value = false;
     void nextTick(() => focusComposer());
@@ -2533,7 +2848,11 @@ function onTokenPickerBlur() {
   tokenPickerFocused.value = false;
   tokenPickerComposing.value = false;
   void nextTick(() => {
-    if (!suggestionPopover.value?.contains(document.activeElement)) tokenPickerQuery.value = null;
+    if (!suggestionPopover.value?.contains(document.activeElement)) {
+      tokenPickerQuery.value = null;
+      editingSkillID.value = null;
+      editingMcpID.value = null;
+    }
   });
 }
 function measureSuggestionPopup() {
@@ -2582,7 +2901,10 @@ function open(sid: string) {
   if (isStudio) {
     // Remembered per Agent, and the deep link stays honest: /a/{id}?c={sid}.
     localStorage.setItem(storeKey(STUDIO_LAST_SESSION), sid);
-    history.replaceState(null, "", conversationPath(sid));
+    const websiteQuery = initialWebsiteLink.present && !websiteLinkRevealed.value && sid === initialWebsiteLink.sessionId && initialWebsiteLink.serviceId;
+    const target = new URL(conversationPath(sid), location.origin);
+    if (websiteQuery) target.searchParams.set("web_service", initialWebsiteLink.serviceId!);
+    history.replaceState(null, "", target.pathname + target.search);
   }
   stickToBottom.value = true;
   // The rail's dots are measured from the DOM, so they have to wait for the
@@ -2595,7 +2917,7 @@ function open(sid: string) {
 // appears just because someone clicked the button. The workspace choice stays explicit.
 const pickerOpen = ref(false);
 function startNewSession() {
-  if (!canUse("conversation")) return;
+  if (!canUse("conversation") || studioEntryLoading.value) return;
   if (!isStudio && canUse("workspaces")) pickerOpen.value = true;
   else void createSession();
 }
@@ -2612,6 +2934,7 @@ async function createSession(workspace = pendingWorkspace.value ?? "") {
   if (viewClosed || !canUse("conversation")) return;
   current.value = null;
   pendingWorkspace.value = workspace;
+  draftPolicyMode.value = "standard";
   stream.disconnect();
   stream.pendingUser.value = [];
   stream.uploads.value = [];
@@ -2619,6 +2942,7 @@ async function createSession(workspace = pendingWorkspace.value ?? "") {
     seq: 0, messages: [], results: {}, live: emptyLive(), run: { active: false },
     policy: { mode: "standard" }, usage: { input: 0, output: 0 }, context_tokens: 0,
   } });
+  studioEntry.finishWithoutSession();
   if (isStudio) history.replaceState(null, "", conversationPath());
 }
 
@@ -2626,11 +2950,15 @@ async function createSessionForFirstMessage(): Promise<string | null> {
   if (current.value) return current.value;
   const workspace = pendingWorkspace.value;
   if (workspace === null) return null;
+  const approvalMode = draftPolicyMode.value === "standard" ? undefined : draftPolicyMode.value;
   sending.value = true;
   try {
     const sid = isStudio
-      ? (await platformApi.createSession(studioAgentId, workspace ? { workspace } : undefined)).id
-      : (await api.createSession(undefined, workspace)).session_id;
+      ? (await platformApi.createSession(studioAgentId, {
+        ...(workspace ? { workspace } : {}),
+        ...(approvalMode ? { approvalMode } : {}),
+      })).id
+      : (await api.createSession(undefined, workspace, approvalMode)).session_id;
     if (viewClosed || current.value || pendingWorkspace.value !== workspace) return null;
     await loadSessions();
     if (viewClosed || current.value || pendingWorkspace.value !== workspace) return null;
@@ -3203,17 +3531,12 @@ function openSentinelFile(file: { path: string; name: string; lineStart?: number
   openAttachmentPreview(file);
 }
 
-function openScheduleWorkflowRun(runId: string, workflowId?: string) {
-  if (!workflowId) return;
-  scheduleOpen.value = false;
-  void navigateStudio(`/manage/workflows/${encodeURIComponent(workflowId)}?run=${encodeURIComponent(runId)}`);
-}
-
 // Reload the conversation's effective catalog after imports or configuration changes.
 function onSkillsChanged(event?: Event) {
   const agentId = (event as CustomEvent<{ agentId?: string }> | undefined)?.detail?.agentId;
   if (agentId && agentId !== studioAgentId) return;
   void loadSkills();
+  void loadMcpMethods();
 }
 
 async function renameSession(s: SessionInfo) {
@@ -3239,24 +3562,24 @@ async function renameSession(s: SessionInfo) {
 }
 
 async function send() {
-  if (sending.value) return;
+  if (sending.value || studioEntryLoading.value || stream.switching.value) return;
   if (isDelegatedEmbed && (!canUse("conversation") || busy.value || sending.value || gated.value)) return;
   const draft = input.value;
   const text = normalizeComposerTokenInput(draft.trim(), skills.value);
   let draftParts = normalizeComposerParts(composerParts.value);
   const draftLayout = composerLayout.value;
-  const prefix = composerToken.value?.kind === "skill" ? composerToken.value.prefix : "";
-  const submittedSkill = skillInvocation.value;
+  const prefix = composerToken.value?.kind === "skill" || composerToken.value?.kind === "mcp" ? composerToken.value.prefix : "";
+  const submittedInvocation = skillInvocation.value || mcpInvocation.value;
   const sendable = sendableAttachments.value;
-  if ((!text && !elementPicks.value.length && !sendable.length && !composerSkills.value.length && !composerShortcuts.value.length && !composerOffices.value.length) || (!current.value && pendingWorkspace.value === null)) return;
-  if (composerSkillError.value) {
-    showFlash(composerSkillError.value, "error");
+  if ((!text && !elementPicks.value.length && !sendable.length && !composerSkills.value.length && !composerMcps.value.length && !composerShortcuts.value.length && !composerOffices.value.length) || (!current.value && pendingWorkspace.value === null)) return;
+  if (composerInvocationError.value) {
+    showFlash(composerInvocationError.value, "error");
     return;
   }
   // Steering accepts ordinary prose, while a skill invocation is expanded by
   // the next message endpoint. Preserve this draft until the current run ends.
-  if (composerSkillWaiting.value) {
-    showFlash(t("agentView.commands.skillWaiting"));
+  if (composerInvocationWaiting.value) {
+    showFlash(composerWaitingMessage.value);
     return;
   }
 
@@ -3274,7 +3597,7 @@ async function send() {
   // (that is where the skill file is readable), so it goes to /messages.
   // A command runs on the typed text alone; picks stay put, because a command
   // like /model never consumed context in the first place.
-  if (!submittedSkill && text.startsWith("/") && !text.startsWith("/skill:")) {
+  if (!submittedInvocation && text.startsWith("/") && !text.startsWith("/skill:") && !text.startsWith("/mcp:")) {
     if (!current.value && pendingWorkspace.value !== null) return;
     input.value = "";
     await runCommand(text);
@@ -3320,7 +3643,7 @@ async function send() {
     // One submission path for prose, even when the live busy flag has not yet
     // caught up with the server. Idle submissions start normally; busy ones
     // queue durably. Attachments and explicit skill expansion keep /messages.
-    if (!isDelegatedEmbed && !submittedSkill && sendable.length === 0) {
+    if (!isDelegatedEmbed && !submittedInvocation && sendable.length === 0) {
       const sid = submittedSession;
       const parts = buildParts();
       const signature = JSON.stringify({ parts, input_layout: draftLayout });
@@ -3418,6 +3741,7 @@ async function send() {
           : part.type === "shortcut" ? inputPartsBlocks([{ type: "shortcut", shortcut_id: part.shortcutId, title: part.title, text: part.text, icon: part.icon, language: part.language, parts: part.parts }])
           : part.type === "office" ? inputPartsBlocks([{ type: "office", office: part.office }])
           : part.type === "skill" ? [{ type: "text", text: `/skill:${part.name} `, input_skill: part.name }]
+          : part.type === "mcp" ? inputPartsBlocks([{ type: "mcp", server: part.server, name: part.name }])
           : [{ type: "text", text: part.text, ...(part.type === "element" ? { input_element: true, ...(part.favicon ? { input_element_favicon: part.favicon } : {}) } : {}) }]),
         input_layout: draftLayout,
         ts: sentAt,
@@ -3532,7 +3856,7 @@ async function send() {
       else stream.sendOptimistic(outgoing);
     }
     try {
-      if (!isDelegatedEmbed && !submittedSkill) {
+      if (!isDelegatedEmbed && !submittedInvocation) {
         const signature = JSON.stringify({ parts, input_layout: draftLayout });
         const id = inboxDrafts.submission(sid, signature);
         const receipt = await api.inboxSend(sid, id, message, "queued", undefined, parts, draftLayout);
@@ -4148,9 +4472,13 @@ async function compactSession(instructions = "") {
 
 async function applyPolicy(mode: PolicyMode, turns?: number) {
   if (isDelegatedEmbed) return unsupported();
+  if (!current.value) {
+    if (pendingWorkspace.value !== null) draftPolicyMode.value = mode;
+    return;
+  }
   // No success feedback of its own: the picker button already says which mode
   // is on (完全访问 in orange), which is exactly where the user is looking.
-  await api.setPolicy(current.value!, mode, turns);
+  await api.setPolicy(current.value, mode, turns);
 }
 
 async function pickPolicy(mode: PolicyMode) {
@@ -4171,9 +4499,7 @@ async function switchModel(id: string) {
   // tool permissions remain tied to the conversation's own capability binding.
   if (isStudio && !canSelectStudioModel(studioCapabilities.value, id)) {
     showFlash(
-      locale.value === "zh-CN"
-        ? "这个模型未被选入当前会话的 Agent 配置。"
-        : "This model is not selected in this conversation's Agent configuration.",
+      t("uiCoverage.app.modelNotSelected"),
       "error",
     );
     return;
@@ -4305,7 +4631,7 @@ function syncComposerReferences() {
   for (const file of attachments.value) composerFileCatalog.set(String(file.key), file);
   const files = new Map(attachments.value.map(file => [String(file.key), file]));
   const picks = new Map(elementPicks.value.map(pick => [pick.key, pick]));
-  let next = composerParts.value.filter(part => part.type === "text" || part.type === "skill" || part.type === "shortcut" || part.type === "office" ||
+  let next = composerParts.value.filter(part => part.type === "text" || part.type === "skill" || part.type === "mcp" || part.type === "shortcut" || part.type === "office" ||
     (part.type === "file" ? files.has(part.key) : !!part.pick && picks.has(part.pick.key)));
   next = next.map(part => {
     if (part.type !== "file") return part;
@@ -4328,7 +4654,7 @@ function syncComposerReferences() {
 }
 
 function updateComposerParts(parts: ComposerPart[]) {
-  const prefix = parts.some(part => part.type === "skill") ? "" : composerToken.value?.prefix ?? "";
+  const prefix = parts.some(part => part.type === "skill" || part.type === "mcp") ? "" : composerToken.value?.prefix ?? "";
   syncingComposer = true;
   try {
     composerParts.value = normalizeComposerParts(parts);
@@ -4387,8 +4713,15 @@ function activateComposerReference(part: ComposerReferencePart) {
   } else if (part.type === "office") {
     officePreview.value = { ...part.office, ...(part.office.locator ? { locator: { ...part.office.locator } } : {}) };
   } else if (part.type === "skill") {
+    editingMcpID.value = null;
     editingSkillID.value = part.id;
     tokenPickerQuery.value = ""; tokenPickerFocused.value = true; tokenPickerComposing.value = false;
+    void nextTick(() => tokenPickerInput.value?.focus());
+  } else if (part.type === "mcp") {
+    editingSkillID.value = null;
+    editingMcpID.value = part.id;
+    tokenPickerQuery.value = ""; tokenPickerFocused.value = true; tokenPickerComposing.value = false;
+    void loadMcpMethods();
     void nextTick(() => tokenPickerInput.value?.focus());
   }
 }
@@ -4398,10 +4731,10 @@ watch([input, composerComposing], () => {
 }, { flush: "sync" });
 watch([composerLayout, composerToken, composerComposing], () => {
   const token = composerToken.value;
-  if (composerLayout.value !== "inline" || token?.kind !== "skill" || composerComposing.value) return;
+  if (composerLayout.value !== "inline" || !token || token.kind === "command" || composerComposing.value) return;
   // The selected prefix becomes a movable atom exactly once. Text/file/page
   // positions already in the draft stay anchored when changing presentation.
-  updateComposerParts([skillComposerPart(token.name), ...composerParts.value]);
+  updateComposerParts(composerDraftWithToken(composerParts.value, token));
   void nextTick(updateInlineSelection);
 }, { flush: "post" });
 watch([attachments, elementPicks], syncComposerReferences, { deep: true, flush: "sync" });
@@ -4538,8 +4871,17 @@ function suggest(text: string) {
 function onScroll() {
   const el = scroller.value;
   if (!el) return;
-  stickToBottom.value = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+  // Only a user scroll can resume following after reading or a disclosure.
+  // Folding content can itself produce a scroll event near the bottom.
+  if ((stickToBottom.value || Date.now() <= scrollIntentUntil) && !activityContainsSelection(el)) {
+    stickToBottom.value = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+  }
   updateRail();
+}
+function onConversationScrollIntent(event: Event) {
+  if (typeof KeyboardEvent !== "undefined" && event instanceof KeyboardEvent && !["ArrowDown", "ArrowUp", "PageDown", "PageUp", "Home", "End", " "].includes(event.key)) return;
+  if (typeof PointerEvent !== "undefined" && event instanceof PointerEvent && event.target !== scroller.value) return;
+  scrollIntentUntil = Date.now() + 700;
 }
 
 // jumpToLatest is the pill's click: smooth rather than instant, because the
@@ -4549,6 +4891,7 @@ function onScroll() {
 function jumpToLatest() {
   const el = scroller.value;
   if (!el) return;
+  scrollIntentUntil = Date.now() + 700;
   el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
 }
 
@@ -4698,7 +5041,11 @@ onBeforeUnmount(() => {
   if (railRaf) cancelAnimationFrame(railRaf);
 });
 
+function activityReadingProtected(): boolean {
+  return activityContainsSelection(scroller.value) || !!scroller.value?.querySelector("[data-reading-output='true']");
+}
 watch([timeline, compaction, () => stream.liveVersion.value], async () => {
+  if (activityReadingProtected()) { stickToBottom.value = false; return; }
   if (!stickToBottom.value || (floatingConversationActive.value && chatMinimized.value)) return;
   await nextTick();
   // The follow-scroll must not win against whoever claimed the position while
@@ -4708,6 +5055,7 @@ watch([timeline, compaction, () => stream.liveVersion.value], async () => {
   // scrolled back to the bottom before the reader ever sees it.
   if (!stickToBottom.value || (floatingConversationActive.value && chatMinimized.value)) return;
   const el = scroller.value;
+  if (activityReadingProtected()) { stickToBottom.value = false; return; }
   if (el) el.scrollTop = el.scrollHeight;
 });
 watch([floatingConversationActive, chatMinimized], async () => {
@@ -4996,32 +5344,23 @@ function rewindStatusLabel(status: string) {
 </script>
 
 <template>
-  <!-- Studio's hard gates: the bound Agent failed to load (unavailable,
-       still a draft, forbidden) or is still loading. Auth failures never
-       come here — they land on the ordinary token gate inside the shell —
-       and there is deliberately no fallback to the generic workbench. -->
+  <!-- Studio's hard gate is reserved for an Agent that failed to load.
+       Ordinary entry keeps the workbench frame visible and fills its data
+       regions with skeletons until the selected snapshot is known. -->
   <div v-if="isStudio && studioError" class="studio-gate">
     <div class="studio-gate-card">
       <span class="studio-gate-eyebrow">{{ managedChat ? "AGENT STUDIO" : "POGO" }}</span>
-      <h1>{{ locale === "zh-CN" ? "这位 Agent 暂时不能对话。" : "This Agent is not available for chat." }}</h1>
+      <h1>{{ t("uiCoverage.app.agentUnavailable") }}</h1>
       <p>{{ studioError }}</p>
       <div class="studio-gate-actions">
-        <button v-if="managedChat" class="studio-gate-btn" @click="backToStudio">{{ locale === "zh-CN" ? "返回 Agent Studio" : "Back to Agent Studio" }}</button>
-        <button class="studio-gate-btn primary" @click="retryStudio">{{ locale === "zh-CN" ? "重试" : "Retry" }}</button>
+        <button v-if="managedChat" class="studio-gate-btn" @click="backToStudio">{{ t("uiCoverage.app.backToStudio") }}</button>
+        <button class="studio-gate-btn primary" @click="retryStudio">{{ t("common.retry") }}</button>
       </div>
     </div>
   </div>
-  <div v-else-if="isStudio && !studioAgent && !gated" class="studio-gate">
-    <div class="studio-gate-card">
-      <div class="studio-orbit" />
-      <p>{{ locale === "zh-CN" ? "正在打开 Agent…" : "Opening the Agent…" }}</p>
-    </div>
-  </div>
-  <div v-else class="shell" :class="{ 'browser-immersive': browserImmersive, 'hub-max': hubMaximized && activeSheet === 'hub' && !browserImmersive, 'workflow-workspace': workflowCanvasActive, 'workflow-conversation-open': workflowCanvasActive && workflowConversationOpen, 'agent-embedded': embedded, 'agent-surface': isStudio }">
-    <!-- The conversation's only live region: milestones (a run finished, how
-         long it took), never the stream itself — a role="log" on the
-         transcript would read shredded sentences at streaming rate. -->
-    <div class="sr-only" role="status" aria-live="polite">{{ announcement }}</div>
+  <div v-else class="shell" :class="{ 'browser-immersive': browserImmersive, 'hub-max': hubMaximized && activeSheet === 'hub' && !browserImmersive, 'workflow-workspace': workflowCanvasActive, 'workflow-conversation-open': workflowCanvasActive && workflowConversationOpen, 'agent-embedded': embedded, 'agent-surface': isStudio }" :aria-busy="studioEntryLoading || undefined">
+    <!-- Announce milestones or entry loading, never the streaming transcript. -->
+    <div class="sr-only" role="status" aria-live="polite">{{ studioEntryLoading ? t("uiCoverage.app.openingAgent") : announcement }}</div>
     <ShareDialog v-if="canUse('sharing')" v-model="shareOpen" :path="shareLink?.url" />
     <aside ref="sidebarEl" class="sidebar" :class="{ collapsed }">
       <!-- Both states stay mounted and crossfade (opacity, same 0.3s as the
@@ -5035,7 +5374,7 @@ function rewindStatusLabel(status: string) {
         <div class="brand" :class="{ unbranded: isStudio }">
           <Logo v-if="!isStudio" />
           <strong v-if="!isStudio">pogo</strong>
-          <button class="new" :class="{ wide: isStudio }" @click="startNewSession">
+          <button class="new" :class="{ wide: isStudio }" :disabled="studioEntryLoading" @click="startNewSession">
             <el-icon><EditPen /></el-icon>
             {{ t("agentView.sidebar.newSession") }}
           </button>
@@ -5055,7 +5394,8 @@ function rewindStatusLabel(status: string) {
           <input
             v-model="sessionQuery"
             class="s-input"
-            :placeholder="isDelegatedEmbed || isStudio ? (locale === 'zh-CN' ? '搜索会话标题' : 'Search conversation titles') : t('agentView.sidebar.searchPh')"
+            :placeholder="isDelegatedEmbed || isStudio ? t('uiCoverage.app.searchConversations') : t('agentView.sidebar.searchPh')"
+            :disabled="studioEntryLoading"
             spellcheck="false"
             type="search"
           />
@@ -5068,7 +5408,8 @@ function rewindStatusLabel(status: string) {
              and the sessions live under their project. The scroll stops at
              the recents strip: two independent regions, one column. -->
         <div class="sessions-scroll">
-          <template v-if="sessionHits !== null">
+          <StudioEntrySkeleton v-if="studioEntryLoading" area="sessions" />
+          <template v-else-if="sessionHits !== null">
             <div v-if="!sessionHits.length" class="s-empty">
               {{ t("agentView.sidebar.searchNoResults", { q: sessionQuery.trim() }) }}
             </div>
@@ -5085,7 +5426,7 @@ function rewindStatusLabel(status: string) {
                 </div>
                 <div class="sub">
                   <span v-if="hitProject(h)" class="s-proj">{{ hitProject(h) }}</span>
-                  <span v-if="h.updated" :title="new Date(h.updated).toLocaleString()">{{ fmtRel(h.updated) }}</span>
+                  <span v-if="h.updated" :title="new Date(h.updated).toLocaleString(locale)">{{ fmtRel(h.updated, Date.now(), locale) }}</span>
                 </div>
                 <!-- What matched, not just which session: each block quotes
                      one cluster of hits — near matches share a block, distant
@@ -5231,8 +5572,8 @@ function rewindStatusLabel(status: string) {
             <span
               v-if="s.updated"
               class="recent-time"
-              :title="new Date(s.updated).toLocaleString()"
-            >{{ fmtRel(s.updated) }}</span>
+              :title="new Date(s.updated).toLocaleString(locale)"
+            >{{ fmtRel(s.updated, Date.now(), locale) }}</span>
             <span class="recent-proj">
               <el-icon><Folder /></el-icon>
               <span class="recent-proj-name">{{ recentProject(s) }}</span>
@@ -5270,7 +5611,7 @@ function rewindStatusLabel(status: string) {
         <button class="rail-icon" :title="t('agentView.sidebar.expand')" @click="expandSidebar">
           <el-icon><Expand /></el-icon>
         </button>
-        <button class="rail-icon" :title="t('agentView.sidebar.newSession')" @click="startNewSession">
+        <button class="rail-icon" :title="t('agentView.sidebar.newSession')" :disabled="studioEntryLoading" @click="startNewSession">
           <el-icon><EditPen /></el-icon>
         </button>
         <ThemePicker class="rail-theme" icon placement="right-start" />
@@ -5316,15 +5657,18 @@ function rewindStatusLabel(status: string) {
           <button
             v-if="managedChat"
             class="studio-back"
-            :title="locale === 'zh-CN' ? '返回 Agent Studio' : 'Back to Agent Studio'"
+            :title="t('uiCoverage.app.backToStudio')"
             @click="backToStudio"
           >
             <el-icon><ArrowLeft /></el-icon>
-            <span>{{ locale === "zh-CN" ? "返回 Agent Studio" : "Back to Agent Studio" }}</span>
+            <span>{{ t("uiCoverage.app.backToStudio") }}</span>
           </button>
           <span class="studio-agent" :title="studioAgent?.name">
-            <span class="studio-agent-dot" :style="{ background: studioAgent?.color || 'var(--el-color-primary)' }" />
-            {{ studioAgent?.name }}
+            <template v-if="studioAgent">
+              <span class="studio-agent-dot" :style="{ background: studioAgent.color || 'var(--el-color-primary)' }" />
+              {{ studioAgent.name }}
+            </template>
+            <StudioEntrySkeleton v-else area="agent" />
           </span>
         </div>
         <!-- Server root moved here from the sidebar: it describes the whole
@@ -5352,15 +5696,16 @@ function rewindStatusLabel(status: string) {
       <!-- Conversation above, composer below: a plain vertical stack. -->
       <div class="chat">
       <div class="conv-wrap">
-        <div ref="scroller" class="conversation" @scroll.passive="onScroll">
-          <!-- Session switch: the old conversation stays (faded, sinking
-               4px) until the new session's snapshot lands, then fades back —
-               a crossfade, not a blank-and-pop. useAgentStream.hold. -->
-          <div ref="convInner" class="conv-inner" :class="{ switching: stream.switching.value }">
+        <div ref="scroller" class="conversation" :aria-busy="studioEntryLoading || stream.switching.value || undefined" @scroll.passive="onScroll" @wheel.passive="onConversationScrollIntent"
+          @touchmove.passive="onConversationScrollIntent" @keydown="onConversationScrollIntent" @pointerdown="onConversationScrollIntent">
+          <StudioEntrySkeleton v-if="conversationLoading" area="conversation" />
+          <!-- Keep the old conversation readable as context, but inert, until
+               the new snapshot replaces it. Entry never guesses emptiness. -->
+          <div v-else ref="convInner" class="conv-inner" :class="{ switching: stream.switching.value }" :inert="stream.switching.value || undefined">
             <!-- The empty state is where a deployment says what it is for. With
                  no skill-provided cards this is the original one-line hint, so
                  a plain pogo looks exactly as before. -->
-            <template v-if="!timeline.length && !stream.compactions.value.length">
+            <template v-if="studioEmptyReady && !timeline.length && !stream.compactions.value.length">
               <!-- The card grid is always mounted now: with no cards at all
                    it still carries the add/import/sample toolbar, which is the
                    way back from an emptied set. -->
@@ -5548,6 +5893,8 @@ function rewindStatusLabel(status: string) {
                 :active="ex.id === liveExchangeId"
                 :live="ex.id === liveExchangeId ? liveState : undefined"
                 :run-started-at="runStartedAt"
+                :waiting-for-model="ex.id === liveExchangeId && waitingForModel"
+                :end-reason="executionEvidence.endReasons.get(ex.id)"
                 :server-offset="serverClockOffset"
                 :skills="skills"
                 :cwd="cwd"
@@ -5702,7 +6049,7 @@ function rewindStatusLabel(status: string) {
       <!-- Auxiliary work stays in a bounded stack. The input is its own
            sibling, so a long plan or queue never covers or scrolls it away. -->
       <div class="compose-support" data-testid="composer-support">
-      <StudioToolPolicyNotice v-if="isStudio && current" :pending="studioToolPending" :error="studioToolState?.error" :syncing="studioToolSyncing" @retry="studioToolSync.sync()" @inspect="selectActiveSheet('skills')" />
+      <StudioToolPolicyNotice v-if="isStudio && current && !studioEntryLoading" :pending="studioToolPending" :error="studioConfigurationError" :syncing="studioConfigurationSyncing" @retry="refreshStudioConfiguration()" @inspect="selectActiveSheet('skills')" />
       <TodoBar v-if="todos" :key="todoState.currentUserId" :todos="todos" :busy="busy" data-testid="current-task-todo" :data-user-id="todoState.currentUserId" />
       <ConversationInbox
         v-if="!isDelegatedEmbed && !stream.switching.value"
@@ -5723,7 +6070,10 @@ function rewindStatusLabel(status: string) {
             <input ref="tokenPickerInput" v-model="tokenPickerQuery" data-testid="composer-token-search" :placeholder="t('agentView.commands.searchTokens')" :aria-label="t('agentView.commands.searchTokens')" aria-autocomplete="list" :aria-controls="suggestionItems.length ? suggestionMenuId : undefined" :aria-activedescendant="selectedSuggestionOption" @focus="tokenPickerFocused = true" @blur="onTokenPickerBlur" @keydown="onTokenPickerKeydown" @compositionstart="tokenPickerComposing = true" @compositionend="tokenPickerComposing = false" />
           </div>
           <SlashCommandMenu :id="suggestionMenuId" :items="suggestionItems" :context-percent="contextReading.percent" :selected-id="selectedSuggestionId" data-testid="composer-command-menu" @pick="completeSuggestion" @highlight="highlightSuggestion" />
-          <div v-if="tokenPickerQuery !== null && !suggestionItems.length" class="composer-token-empty">{{ t('agentView.commands.noMatchingSkill') }}</div>
+          <div v-if="tokenPickerQuery !== null && !suggestionItems.length" class="composer-token-empty" role="status">
+            {{ emptySuggestionMessage }}
+            <button v-if="mcpPickerActive && (mcpCatalogState === 'failed' || mcpCatalogState === 'ready' && !mcpMethods.length)" type="button" @mousedown.prevent @click="loadMcpMethods">{{ t('common.retry') }}</button>
+          </div>
         </div>
       </Teleport>
 
@@ -5738,7 +6088,8 @@ function rewindStatusLabel(status: string) {
       <!-- Drop targets the card, not the textarea: a file dragged anywhere
            over the composer lands as a chip. dragover must be prevented for
            drop to fire at all. -->
-      <div ref="composerCard" class="input-card" @dragover.prevent @drop.prevent="onDrop">
+      <div ref="composerCard" class="input-card" :class="{ 'entry-loading': studioEntryLoading }" :aria-busy="studioEntryLoading || undefined" :inert="studioEntryLoading || stream.switching.value || undefined" @dragover.prevent @drop.prevent="onDrop">
+          <StudioEntrySkeleton v-if="studioEntryLoading" area="composer" class="composer-entry" />
           <div class="composer-file-actions">
           <BackgroundShellTasks
             v-if="!isDelegatedEmbed"
@@ -5749,9 +6100,20 @@ function rewindStatusLabel(status: string) {
             :disabled="stream.switching.value"
             @updated="stream.acceptShellTask"
           />
+          <ManagedWebServices
+            v-if="!isDelegatedEmbed"
+            ref="managedWebsites"
+            :session-id="current"
+            :display-session-id="stream.displaySessionId.value"
+            :disabled="stream.switching.value"
+            :connected="stream.connected.value"
+            :change="stream.webServiceChanged.value"
+            @open="openManagedWebsite"
+            @deleted="deletedManagedWebsite"
+          />
           <BackgroundTasksButton
             :agent-id="studioAgentId"
-            :enabled="isStudio && !isDelegatedEmbed"
+            :enabled="isStudio && !isDelegatedEmbed && !studioEntryLoading"
             :opening="taskOpening"
             @open="openBackgroundTask"
             @center="openScheduleCenter"
@@ -5888,7 +6250,10 @@ function rewindStatusLabel(status: string) {
             </el-tooltip>
           </div>
           <div v-if="composerLayout === 'top' && composerSkills.length" class="composer-token-row">
-            <ComposerToken v-for="part in composerSkills" :key="part.id" kind="skill" :name="part.name" :label="part.label" :type-label="t('agentView.commands.skillTokenLabel')" :description="skills.find(skill => skill.name === part.name || skill.aliases?.includes(part.name))?.description || ''" :disabled="isDelegatedEmbed" @change="activateComposerReference(part)" @remove="updateComposerParts(composerParts.filter(item => item.type === 'text' || item.id !== part.id))" />
+            <ComposerToken v-for="part in composerSkills" :key="part.id" kind="skill" :name="part.name" :label="part.label" :type-label="t('agentView.commands.skillTokenLabel')" :description="composerSkillDescription(part.name)" :disabled="isDelegatedEmbed" @change="activateComposerReference(part)" @remove="updateComposerParts(composerParts.filter(item => item.type === 'text' || item.id !== part.id))" />
+          </div>
+          <div v-if="composerLayout === 'top' && composerMcps.length" class="composer-token-row">
+            <ComposerToken v-for="part in composerMcps" :key="part.id" kind="mcp" :name="`${part.server}/${part.name}`" :label="part.label" :type-label="t('agentView.commands.mcpTokenLabel')" :description="mcpMethods.find(method => method.server === part.server && method.name === part.name)?.description || ''" :disabled="isDelegatedEmbed" @change="activateComposerReference(part)" @remove="updateComposerParts(composerParts.filter(item => item.type === 'text' || item.id !== part.id))" />
           </div>
           <div v-if="composerLayout === 'top' && composerShortcuts.length" class="composer-shortcut-row">
             <span v-for="part in composerShortcuts" :key="part.id" class="composer-shortcut-chip">
@@ -5903,7 +6268,7 @@ function rewindStatusLabel(status: string) {
             </span>
           </div>
           <div v-if="composerToken" class="composer-token-row">
-            <ComposerToken ref="composerTokenControl" :kind="composerToken.kind" :context-percent="contextReading.percent" :name="composerToken.kind === 'command' ? composerToken.name.slice(1) : composerToken.name" :label="composerTokenLabel" :type-label="t(composerToken.kind === 'skill' ? 'agentView.commands.skillTokenLabel' : 'agentView.commands.commandTokenLabel')" :description="composerTokenDescription" :disabled="isDelegatedEmbed" @change="changeComposerToken" @remove="removeComposerToken" />
+            <ComposerToken ref="composerTokenControl" :kind="composerToken.kind" :context-percent="contextReading.percent" :name="composerToken.kind === 'command' ? composerToken.name.slice(1) : composerToken.name" :label="composerTokenLabel" :type-label="t(composerToken.kind === 'mcp' ? 'agentView.commands.mcpTokenLabel' : composerToken.kind === 'skill' ? 'agentView.commands.skillTokenLabel' : 'agentView.commands.commandTokenLabel')" :description="composerTokenDescription" :disabled="isDelegatedEmbed" @change="changeComposerToken" @remove="removeComposerToken" />
           </div>
           <div v-if="composerToken?.kind === 'command'" class="composer-command-context">{{ compactSuggestionDescription }}</div>
           <InlineComposer
@@ -5933,9 +6298,9 @@ function rewindStatusLabel(status: string) {
             :aria-haspopup="suggestionMenuVisible ? 'listbox' : undefined"
             :aria-controls="suggestionMenuVisible && tokenPickerQuery === null ? suggestionMenuId : undefined"
             :aria-activedescendant="tokenPickerQuery === null ? selectedSuggestionOption : undefined"
-            :aria-describedby="composerSkillError || composerSkillWaiting ? `${suggestionMenuId}-status` : undefined"
+            :aria-describedby="composerInvocationError || composerInvocationWaiting ? `${suggestionMenuId}-status` : undefined"
             :placeholder="
-              composerToken?.kind === 'command' ? t('agentView.commands.compactFocusPlaceholder') : composerToken?.kind === 'skill' ? t('agentView.commands.skillTaskPlaceholder') : busy
+              composerToken?.kind === 'command' ? t('agentView.commands.compactFocusPlaceholder') : composerToken?.kind === 'mcp' ? t('agentView.commands.mcpTaskPlaceholder') : composerToken?.kind === 'skill' ? t('agentView.commands.skillTaskPlaceholder') : busy
                 ? t('agentView.composer.placeholderBusy')
                 : t('agentView.composer.placeholder')
             "
@@ -5951,9 +6316,10 @@ function rewindStatusLabel(status: string) {
             @keydown="onKeydown"
             @paste="onPaste"
           />
-          <div v-if="(composerSkillError && !suggestionMenuVisible) || composerSkillWaiting" :id="`${suggestionMenuId}-status`" class="composer-token-status" :class="{ invalid: !!composerSkillError }" data-testid="composer-token-status" :role="composerSkillError ? 'alert' : 'status'">
-            <span>{{ composerSkillError || t('agentView.commands.skillWaiting') }}</span>
-            <button v-if="skillCatalogState === 'failed'" type="button" @click="loadSkills">{{ t('common.retry') }}</button>
+          <div v-if="(composerInvocationError && !suggestionMenuVisible) || composerInvocationWaiting" :id="`${suggestionMenuId}-status`" class="composer-token-status" :class="{ invalid: !!composerInvocationError }" data-testid="composer-token-status" :role="composerInvocationError ? 'alert' : 'status'">
+            <span>{{ composerInvocationError || composerWaitingMessage }}</span>
+            <button v-if="composerSkillError && skillCatalogState === 'failed'" type="button" @click="loadSkills">{{ t('common.retry') }}</button>
+            <button v-else-if="composerMcpError && (mcpCatalogState === 'failed' || mcpCatalogState === 'ready' && !mcpMethods.length)" type="button" @click="loadMcpMethods">{{ t('common.retry') }}</button>
           </div>
           <div v-if="isStudio && skillConfigDeferred" class="composer-token-status" role="status" data-testid="studio-skill-deferred">{{ t('agentView.commands.skillConfigDeferred') }}</div>
           <div class="input-bar">
@@ -5965,7 +6331,7 @@ function rewindStatusLabel(status: string) {
               @change="switchModel"
             />
             <button v-if="isStudio && studioCapabilitiesError" class="studio-model-retry" :title="studioCapabilitiesError" @click="loadStudioCapabilities">
-              {{ locale === 'zh-CN' ? '重试加载模型' : 'Retry models' }}
+              {{ t('uiCoverage.app.retryModels') }}
             </button>
             <span v-if="stream.run.value.model_config_pending ?? (isStudio && studioModelDeferred)" class="studio-model-sync-note" role="status" data-testid="studio-model-deferred">{{ t('agentView.modelSync.deferred') }}</span>
             <ContextMeter
@@ -6077,12 +6443,12 @@ function rewindStatusLabel(status: string) {
                    button blue so the changed action gets a changed look. -->
               <button
                 class="send-btn"
-                :class="{ steering: busy && !isDelegatedEmbed && !skillInvocation }"
-                :disabled="sending || !!composerSkillError || composerSkillWaiting || (isDelegatedEmbed && (busy || gated || !canUse('conversation'))) || (!input.trim() && !elementPicks.length && !sendableAttachments.length && !composerShortcuts.length && !composerSkills.length && !composerOffices.length)"
-                :title="composerSkillWaiting ? t('agentView.commands.skillWaiting') : busy && !isDelegatedEmbed ? t('conversationInbox.sendTitle') : t('common.send')"
+                :class="{ steering: busy && !isDelegatedEmbed && !skillInvocation && !mcpInvocation }"
+                :disabled="studioEntryLoading || stream.switching.value || sending || !!composerInvocationError || composerInvocationWaiting || (isDelegatedEmbed && (busy || gated || !canUse('conversation'))) || (!input.trim() && !elementPicks.length && !sendableAttachments.length && !composerShortcuts.length && !composerSkills.length && !composerMcps.length && !composerOffices.length)"
+                :title="composerInvocationWaiting ? composerWaitingMessage : busy && !isDelegatedEmbed ? t('conversationInbox.sendTitle') : t('common.send')"
                 @click="send"
               >
-                <span>{{ busy && !isDelegatedEmbed && !skillInvocation ? t("conversationInbox.sendLabel") : t("common.send") }}</span>
+                <span>{{ busy && !isDelegatedEmbed && !skillInvocation && !mcpInvocation ? t("conversationInbox.sendLabel") : t("common.send") }}</span>
                 <el-icon><ArrowUp /></el-icon>
               </button>
             </div>
@@ -6102,7 +6468,7 @@ function rewindStatusLabel(status: string) {
          holding the shell, each registered -web-panel, and every subagent
          transcript opened from the timeline. -->
     <DockArea
-      v-if="canUse('workspaces') || canUse('terminal')"
+      v-if="(!isStudio || studioAgent) && (canUse('workspaces') || canUse('terminal'))"
       :immersive="browserImmersive"
       :fullscreen="browserFullscreen"
       :fullscreen-available="immersive.fullscreenAvailable"
@@ -6123,6 +6489,7 @@ function rewindStatusLabel(status: string) {
       :file-revision="stream.workspaceRevision.value"
       :studio-bound="isStudio"
       :tool-revision="studioToolRevision"
+      :capability-revision="studioCapabilityRevision"
       :tools-pending="studioToolPending"
       :agent-id="studioAgentId || undefined"
       :workflow-selection="internalWorkflowSelection"
@@ -6157,6 +6524,7 @@ function rewindStatusLabel(status: string) {
       @browser-recover="recoverBrowser"
       @browser-reopen="reopenBrowserTab"
       @open-html-browser="openHTMLPreviewBrowser"
+      @open-website-browser="openWebsiteBrowser"
       @open-current-html-browser="openCurrentHTMLPreviewBrowser"
       @claim-html-capability="claimHTMLBrowserCapability"
     >
@@ -6175,7 +6543,6 @@ function rewindStatusLabel(status: string) {
           @attention="scheduleAttention = $event"
           @open-task="openTaskSheet"
           @open-sentinel="openSentinelSession"
-          @open-workflow-run="openScheduleWorkflowRun"
           @request-draft="scheduleCurrentDraft"
         />
       </template>
@@ -6407,7 +6774,7 @@ function rewindStatusLabel(status: string) {
          loop still closes it by itself the moment a reconnect lands. -->
     <Unreachable
       v-if="stream.unreachable.value || (isDelegatedEmbed && gated)"
-      :outage="isDelegatedEmbed && gated ? { attempts: 1, gaveUp: true, message: delegatedUiError || (locale === 'zh-CN' ? '当前登录已失效或无权访问，请返回主系统确认。' : 'Sign-in expired or access denied. Return to the parent application.') } : stream.outage.value"
+      :outage="isDelegatedEmbed && gated ? { attempts: 1, gaveUp: true, message: delegatedUiError || t('uiCoverage.app.parentSignInExpired') } : stream.outage.value"
       @retry="isDelegatedEmbed && gated ? loadDelegatedPage() : stream.retryNow()"
     />
 
@@ -6854,6 +7221,7 @@ function rewindStatusLabel(status: string) {
   align-items: center;
   gap: 7px;
   min-width: 0;
+  min-height: 19px;
   font-size: 12.5px;
   font-weight: 600;
   color: var(--el-text-color-primary);
@@ -6869,8 +7237,7 @@ function rewindStatusLabel(status: string) {
   flex: none;
 }
 
-/* The Studio hard gate (Agent unavailable/draft/forbidden, or still
-   loading): a quiet centered card over the workbench's place. */
+/* Agent failures replace the workbench; ordinary loading never reaches this gate. */
 .studio-gate {
   height: 100dvh;
   display: grid;
@@ -6926,22 +7293,6 @@ function rewindStatusLabel(status: string) {
     background: var(--el-color-primary);
     border-color: var(--el-color-primary);
     color: #fff;
-  }
-}
-
-.studio-orbit {
-  width: 30px;
-  height: 30px;
-  margin: 0 auto 16px;
-  border: 2px solid var(--el-border-color-light);
-  border-top-color: var(--el-color-primary);
-  border-radius: 50%;
-  animation: studio-orbit 1s linear infinite;
-}
-
-@keyframes studio-orbit {
-  to {
-    transform: rotate(360deg);
   }
 }
 
@@ -7562,10 +7913,8 @@ function rewindStatusLabel(status: string) {
   }
 }
 
-/* Session-switch crossfade: opacity/transform only — never a layout
-   property, so a long conversation cannot re-wrap mid-animation. The same
-   class drives both directions: added, the old content sinks out; removed
-   (snapshot arrived), the new content rises in. */
+/* Preserve the transcript's visual context during a session switch. Never
+   animate layout or hide it completely while the next snapshot is pending. */
 .conv-inner {
   /* A reading column, not a window-wide one: prose set across 1900px is
      unreadable — the eye loses the line on the way back — and this transcript is
@@ -7574,13 +7923,28 @@ function rewindStatusLabel(status: string) {
      edge and the scrollbar cannot move as the layout changes. */
   max-width: var(--pg-measure);
   margin: 0 auto;
+  animation: conversation-reveal 0.18s ease-out;
   transition:
-    opacity 0.18s ease,
-    transform 0.18s ease;
+    opacity 0.16s ease,
+    filter 0.16s ease;
 
   &.switching {
-    opacity: 0;
-    transform: translateY(4px);
+    opacity: 0.42;
+    filter: blur(1px);
+  }
+}
+@keyframes conversation-reveal {
+  from { opacity: 0.6; }
+  to { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .conv-inner {
+    animation: none;
+    transition: none;
+
+    &.switching {
+      filter: none;
+    }
   }
 }
 
@@ -8048,6 +8412,17 @@ function rewindStatusLabel(status: string) {
    floating beside it as a corner dot. */
 .input-card {
   position: relative;
+
+  // Keep the real composer's dimensions while its session/model are unknown.
+  // Hiding its children also prevents default model labels flashing at entry.
+  &.entry-loading > :not(.composer-entry) {
+    visibility: hidden;
+  }
+  > .composer-entry {
+    position: absolute;
+    inset: 14px 12px 10px;
+    pointer-events: none;
+  }
 }
 
 .composer-file-actions {
@@ -8059,6 +8434,25 @@ function rewindStatusLabel(status: string) {
   align-items: center;
   gap: 7px;
   max-width: calc(100% - 28px);
+}
+
+@media (max-width: 600px) {
+  .composer-file-actions {
+    left: 8px;
+    right: 8px;
+    max-width: calc(100% - 16px);
+    overflow-x: auto;
+    overflow-y: hidden;
+    white-space: nowrap;
+    padding-bottom: 3px;
+    scrollbar-width: thin;
+    overscroll-behavior-x: contain;
+  }
+  .composer-file-actions > :deep(*),
+  .composer-file-actions :deep(button) {
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
 }
 
 .attach-fab {

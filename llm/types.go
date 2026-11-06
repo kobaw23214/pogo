@@ -54,6 +54,9 @@ type Block struct {
 	// InputSkill is trusted local provenance for an explicitly selected skill
 	// atom. Text contains the host-loaded instructions; providers only see Text.
 	InputSkill string `json:"input_skill,omitempty"`
+	// InputMCP preserves a selected external method for local history/editing.
+	// Providers receive only the host-produced Text, not this metadata.
+	InputMCP *inputref.MCPReference `json:"input_mcp,omitempty"`
 	// InputShortcut is frozen display data for an explicitly referenced user
 	// library entry. Text contains its titled ordinary model-facing prose;
 	// this metadata retains the exact original body for history/editing only.

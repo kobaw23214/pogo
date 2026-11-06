@@ -35,7 +35,7 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH go build -trimpath -ldflags "-s 
 FROM node:24-bookworm-slim AS code-runtime
 
 # ---- Stage 3: 运行时 ----
-FROM debian:bookworm-slim
+FROM debian:bookworm-slim AS pogo-main
 # git:checkpoint 影子仓库;bwrap:OS 沙箱(seccomp profile 见 compose);curl:调试。
 # file: 校验下载产物和二进制文件类型。
 # python venv 固定在 /opt/venv:内置 docs 技能的脚本(docx-info/pdf-info 等)
@@ -83,3 +83,55 @@ WORKDIR /home/pogo
 EXPOSE 7777
 ENTRYPOINT ["pogo"]
 CMD ["-h"]
+
+# Opt-in website release targets. The last stage below keeps the historical
+# default image unchanged; select these targets explicitly when packaging.
+FROM --platform=$BUILDPLATFORM golang:1.26-bookworm AS web-service-build
+ARG TARGETARCH
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY ./ ./
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH go build -trimpath -ldflags "-s -w" -o /out/pogo-web-gateway ./cmd/pogo-web-gateway \
+    && CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH go build -trimpath -ldflags "-s -w" -o /out/pogo-web-runner ./cmd/pogo-web-runner
+
+FROM debian:bookworm-slim AS web-service-control
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl \
+    && rm -rf /var/lib/apt/lists/*
+
+FROM web-service-control AS web-service-gateway
+COPY --from=web-service-build /out/pogo-web-gateway /usr/local/bin/pogo-web-gateway
+USER 1000:1000
+ENTRYPOINT ["pogo-web-gateway"]
+
+FROM web-service-control AS web-service-runner
+COPY --from=web-service-build /out/pogo-web-runner /usr/local/bin/pogo-web-runner
+USER 0:0
+ENTRYPOINT ["pogo-web-runner"]
+
+# Standard library only: no pip/npm installation or build step at run time.
+# The runner pins the resulting image digest and overrides entrypoint/user;
+# its root supervisor drops the application to UID/GID 1000 before execution.
+FROM debian:bookworm-slim AS web-service-python
+RUN apt-get update && apt-get install -y --no-install-recommends python3 \
+    && rm -rf /var/lib/apt/lists/*
+LABEL io.pogo.web.profile="python-web" io.pogo.web.python="/usr/bin/python3"
+USER 1000:1000
+ENTRYPOINT ["/usr/bin/python3"]
+CMD ["--version"]
+
+# Node applications use the same trusted Python supervisor and inherited Linux
+# seccomp outbound-network filter as Python applications. Only the Node binary
+# is copied: npm installation/builds are not part of this runtime profile.
+FROM web-service-python AS web-service-node
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends libstdc++6 \
+    && rm -rf /var/lib/apt/lists/*
+COPY --from=code-runtime /usr/local/bin/node /usr/local/bin/node
+LABEL io.pogo.web.profile="node-web" io.pogo.web.node="/usr/local/bin/node" io.pogo.web.python="/usr/bin/python3"
+USER 1000:1000
+ENTRYPOINT ["/usr/local/bin/node"]
+CMD ["--version"]
+
+# `docker build .` remains the original Pogo main image.
+FROM pogo-main AS release

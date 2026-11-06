@@ -18,6 +18,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -280,6 +281,13 @@ func htmlPreviewRequestOrigin(r *http.Request) (string, error) {
 }
 
 func htmlPreviewBrowserOrigin(r *http.Request) (string, error) {
+	// The HTTP connection can arrive on a private proxy-only network that the
+	// native browser does not join. Prefer the operator's browser-reachable
+	// service origin; forwarded headers and the viewer's localhost are not a
+	// trustworthy or routable substitute for that explicit address.
+	if configured := os.Getenv("POGO_HTML_PREVIEW_BROWSER_ORIGIN"); configured != "" {
+		return htmlPreviewConfiguredBrowserOrigin(configured)
+	}
 	if address, ok := r.Context().Value(http.LocalAddrContextKey).(net.Addr); ok && address.Network() != "unix" {
 		host, port, err := net.SplitHostPort(address.String())
 		if err == nil && port != "" {
@@ -292,6 +300,27 @@ func htmlPreviewBrowserOrigin(r *http.Request) (string, error) {
 		}
 	}
 	return htmlPreviewRequestOrigin(r)
+}
+
+func htmlPreviewConfiguredBrowserOrigin(value string) (string, error) {
+	invalid := errors.New("invalid POGO_HTML_PREVIEW_BROWSER_ORIGIN; expected an http(s) origin without credentials, path, query or fragment")
+	parsed, err := url.Parse(value)
+	if err != nil || parsed == nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Hostname() == "" || parsed.User != nil || parsed.Opaque != "" || parsed.Path != "" || parsed.RawPath != "" || parsed.RawQuery != "" || parsed.ForceQuery || parsed.Fragment != "" || strings.ContainsAny(value, "?#") {
+		return "", invalid
+	}
+	if port := parsed.Port(); port != "" {
+		number, err := strconv.Atoi(port)
+		if err != nil || number < 1 || number > 65535 {
+			return "", invalid
+		}
+	} else if strings.HasSuffix(parsed.Host, ":") {
+		return "", invalid
+	}
+	request := &http.Request{Host: parsed.Host}
+	if _, err := htmlPreviewRequestOrigin(request); err != nil {
+		return "", invalid
+	}
+	return parsed.Scheme + "://" + parsed.Host, nil
 }
 
 func (s *Server) revokeHTMLPreview(token string) {

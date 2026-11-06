@@ -21,6 +21,21 @@ const TELEMETRY_KEY = "pogo:telemetry";
 
 export const worklogExpandAll = ref<boolean>(readPref());
 
+export type ExecutionDetailMode = "summary" | "full";
+const DETAIL_KEY = "pogo:execution-detail";
+function readDetailMode(): ExecutionDetailMode {
+  try {
+    const saved = localStorage.getItem(DETAIL_KEY);
+    if (saved === "full" || saved === "summary") return saved;
+  } catch { /* Private mode keeps the preference in memory. */ }
+  return worklogExpandAll.value ? "full" : "summary";
+}
+export const executionDetailMode = ref<ExecutionDetailMode>(readDetailMode());
+export function setExecutionDetailMode(mode: ExecutionDetailMode): void {
+  executionDetailMode.value = mode;
+  try { localStorage.setItem(DETAIL_KEY, mode); } catch { /* Session-only. */ }
+}
+
 // A one-shot "open this one log" signal, set by search-hit locating when the
 // message it jumps to lives inside a fold. Unlike the global escape hatch it
 // changes no preference: the named log opens, everything else keeps its fold.

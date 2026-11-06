@@ -1,3 +1,4 @@
+import { gt } from "@/i18n";
 import type { CiteSource } from "@/api/types";
 import type { SourcePreview } from "./citePreview";
 import { browserFavicon } from "./browserFavicon";
@@ -254,7 +255,7 @@ export function collectSources(calls: { result?: { source?: CiteSource; text?: s
 export function sourceTypeName(type: string): string {
   switch (type) {
     case "information":
-      return "信息库";
+      return gt("uiCoverage.citation.information");
     case "command_exec":
       return "bash";
     case "file_read":

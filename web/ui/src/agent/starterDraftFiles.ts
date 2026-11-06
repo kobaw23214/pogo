@@ -1,3 +1,4 @@
+import { gt } from "@/i18n";
 import type { MessageInputPart } from "@/api/types";
 import { composerInputParts } from "./orderedInput";
 import type { ComposerPart } from "./composerParts";
@@ -33,10 +34,10 @@ export async function prepareStarterFileParts(
     if (part.type !== "file") continue;
     const file = files.get(part.key);
     if (part.status === "error" || part.status === "uploading" || file?.status === "error" || file?.status === "uploading") {
-      throw new Error(file?.error || `文件尚未准备好：${part.label}`);
+      throw new Error(file?.error || gt("uiCoverage.files.notReady", { name: part.label }));
     }
-    if (!part.path && !file?.path && !file?.file && !file?.members?.length) throw new Error(`无法找到文件：${part.label}`);
-    if (file?.members?.some(member => !member.path && !member.file)) throw new Error(`文件夹中有文件不可用：${part.label}`);
+    if (!part.path && !file?.path && !file?.file && !file?.members?.length) throw new Error(gt("uiCoverage.files.notFound", { name: part.label }));
+    if (file?.members?.some(member => !member.path && !member.file)) throw new Error(gt("uiCoverage.files.folderUnavailable", { name: part.label }));
   }
   for (const part of parts) {
     if (part.type !== "file" || resolved.has(part.key)) continue;

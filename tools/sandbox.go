@@ -44,6 +44,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"sync/atomic"
 )
 
@@ -179,6 +180,36 @@ type SandboxPolicy struct {
 	PrivateDirs []string
 }
 
+// Deployment mode and machine capabilities have different lifetimes. An off
+// baseline must not cache "no bwrap" forever: an operator can enable confinement
+// later through the settings dialog, including an override restored at startup.
+type sandboxPolicyCache struct {
+	baselineOnce sync.Once
+	baseline     SandboxPolicy
+	probeOnce    sync.Once
+	facts        atomic.Pointer[sandboxProbeFacts]
+}
+
+type sandboxProbeFacts struct {
+	bwrap, unavailable string
+	proc               bool
+}
+
+func (c *sandboxPolicyCache) resolve(read func() SandboxPolicy, probe func(SandboxPolicy) SandboxPolicy) SandboxPolicy {
+	c.baselineOnce.Do(func() { c.baseline = read() })
+	p := applyOverride(c.baseline)
+	if p.Mode != SandboxOff {
+		c.probeOnce.Do(func() {
+			observed := probe(p)
+			c.facts.Store(&sandboxProbeFacts{bwrap: observed.Bwrap, unavailable: observed.Unavailable, proc: observed.Proc})
+		})
+	}
+	if facts := c.facts.Load(); facts != nil {
+		p.Bwrap, p.Unavailable, p.Proc = facts.bwrap, facts.unavailable, facts.proc
+	}
+	return p
+}
+
 // SandboxPolicyFromEnv reads the mode and the deployment's additions. It does
 // not probe anything: the caller fills Bwrap/Unavailable/Proc, because those
 // need to run a process and this has to stay testable everywhere.
@@ -222,6 +253,9 @@ func runtimeSkillPrivateDirs() []string {
 	if store := strings.TrimSpace(os.Getenv("POGO_SKILL_RUNTIME_STORE")); store != "" {
 		add(store)
 	}
+	for _, dir := range registeredHostPrivateDirs() {
+		add(dir)
+	}
 	return dirs
 }
 
@@ -236,13 +270,10 @@ func ProtectRuntimeSkillHostCommand(cmd *exec.Cmd) error {
 
 // sandboxEnvPass merges the always-carried names with a deployment's extras.
 func sandboxEnvPass(extra string) []string {
-	out := append([]string{}, sandboxEnvAlways...)
-	seen := make(map[string]bool, len(out))
-	for _, n := range out {
-		seen[n] = true
-	}
-	for _, n := range strings.Split(extra, ",") {
-		if n = strings.TrimSpace(n); n != "" && !seen[n] {
+	var out []string
+	seen := make(map[string]bool, len(sandboxEnvAlways))
+	for _, n := range append(append([]string{}, sandboxEnvAlways...), strings.Split(extra, ",")...) {
+		if n = strings.TrimSpace(n); n != "" && !seen[n] && !isHostControlSecretEnv(n) {
 			seen[n] = true
 			out = append(out, n)
 		}
@@ -278,16 +309,23 @@ func (p SandboxPolicy) Refuses() bool {
 // because a message the operator cannot act on becomes three more attempts at
 // the same thing.
 func (p SandboxPolicy) RefusalError() error {
+	reason := p.Unavailable
+	if p.Mode == SandboxOff {
+		reason = "the effective " + EnvSandbox + " mode is off"
+	} else if reason == "" && p.Bwrap == "" {
+		reason = "bubblewrap (bwrap) was not found on PATH"
+	}
 	if len(p.PrivateDirs) > 0 && !p.Active() {
-		return fmt.Errorf("Skill store is private: ordinary commands require an active OS sandbox; enable bubblewrap before running Skill or shell commands")
+		return &sandboxUnavailableError{
+			mode: p.Mode, reason: reason, requiredProtection: "private_host_storage",
+			recovery: "Ask the platform administrator to enable a working OS sandbox; after repairing runtime dependencies or namespace permissions, restart the host service to refresh its capability probe. " +
+				"Private host and Skill storage cannot be exposed by disabling confinement. Do not retry this command unchanged or route it through another shell or subagent.",
+		}
 	}
-	why := p.Unavailable
-	if why == "" && p.Bwrap == "" {
-		why = "bubblewrap (bwrap) was not found on PATH"
+	return &sandboxUnavailableError{
+		mode: p.Mode, reason: reason, requiredProtection: "enforced_sandbox",
+		recovery: fmt.Sprintf("Install working bubblewrap with the required namespaces and restart the host service to refresh its capability probe, or have the administrator explicitly set %s=%s to run unconfined with a warning where private host storage does not require isolation.", EnvSandbox, SandboxDegrade),
 	}
-	return fmt.Errorf("refusing to run a command: %s=%s and the sandbox is unavailable (%s). "+
-		"Install bubblewrap, or set %s=%s to run unconfined with a warning",
-		EnvSandbox, SandboxEnforce, why, EnvSandbox, SandboxDegrade)
 }
 
 // sandboxEnv builds the environment for a sandboxed command, drawn from the
@@ -307,7 +345,9 @@ func (p SandboxPolicy) RefusalError() error {
 func sandboxEnv(pass []string, overrides map[string]string) []string {
 	keep := make(map[string]bool, len(pass))
 	for _, n := range pass {
-		keep[n] = true
+		if !isHostControlSecretEnv(n) {
+			keep[n] = true
+		}
 	}
 	var out []string
 	for _, kv := range os.Environ() {
@@ -316,7 +356,7 @@ func sandboxEnv(pass []string, overrides map[string]string) []string {
 			continue
 		}
 		name := kv[:i]
-		if !keep[name] {
+		if !keep[name] || isHostControlSecretEnv(name) {
 			continue
 		}
 		if _, shadowed := overrides[name]; shadowed {
@@ -326,7 +366,9 @@ func sandboxEnv(pass []string, overrides map[string]string) []string {
 	}
 	names := make([]string, 0, len(overrides))
 	for n := range overrides {
-		names = append(names, n)
+		if !isHostControlSecretEnv(n) {
+			names = append(names, n)
+		}
 	}
 	// Sorted so the same policy produces the same environment every time; an
 	// argv or env that reorders itself between identical calls is a testing
@@ -399,10 +441,8 @@ func (p SandboxPolicy) bwrapArgv(workdir, home, tmpdir string, exists func(strin
 	for _, dir := range deny {
 		a = append(a, "--ro-bind", dir, dir)
 	}
-	for _, dir := range p.PrivateDirs {
-		if exists(dir) {
-			a = append(a, "--tmpfs", dir, "--remount-ro", dir)
-		}
+	for _, dir := range privateMaskRoots(p.PrivateDirs, exists) {
+		a = append(a, "--tmpfs", dir, "--remount-ro", dir)
 	}
 	a = append(a, "--chdir", workdir)
 	// --clearenv then --setenv, rather than trusting the inherited environment:
@@ -415,6 +455,44 @@ func (p SandboxPolicy) bwrapArgv(workdir, home, tmpdir string, exists func(strin
 		}
 	}
 	return append(append(a, "--"), argv...)
+}
+
+// Masking a directory hides all of its descendants, including nested mounts.
+// Keep only the outermost existing roots: after an empty parent tmpfs becomes
+// read-only, bubblewrap cannot create a second mask's child mountpoint in it.
+func privateMaskRoots(dirs []string, exists func(string) bool) []string {
+	seen := make(map[string]bool, len(dirs))
+	var candidates []string
+	for _, dir := range dirs {
+		if dir == "" {
+			continue
+		}
+		dir = path.Clean(dir)
+		if !seen[dir] && exists(dir) {
+			seen[dir] = true
+			candidates = append(candidates, dir)
+		}
+	}
+	sort.Slice(candidates, func(i, j int) bool {
+		if len(candidates[i]) != len(candidates[j]) {
+			return len(candidates[i]) < len(candidates[j])
+		}
+		return candidates[i] < candidates[j]
+	})
+	var roots []string
+	for _, dir := range candidates {
+		covered := false
+		for _, root := range roots {
+			if underPath(dir, root) {
+				covered = true
+				break
+			}
+		}
+		if !covered {
+			roots = append(roots, dir)
+		}
+	}
+	return roots
 }
 
 // writableSet is the deduplicated, existence-checked, specificity-ordered list

@@ -1,6 +1,6 @@
 # Agent 的 Skill 与 MCP 组合
 
-> 当前边界核对：2026-09-29。下述绑定/锁描述普通 Studio 会话；工作流尚未复用完整装配，见 [工作流限制](workflow.md) 与 [项目现状](project-status.md)。
+> 当前边界核对：2026-09-29。下述绑定/锁描述普通 Studio 会话；当前 Agent 内部工作流的能力快照与执行边界见 [内部工作流](agent-internal-workflows.md) 与 [项目现状](project-status.md)。
 
 创建 Agent 统一提交 skills 与 mcp_servers 数组，可同时选择普通 Skill、带工具的 Skill 和外部 MCP 服务。
 服务端根据带工具 Skill 的已验证声明生成 skill_binding；客户端不能提交原始绑定、单独工具授权或主机路径。

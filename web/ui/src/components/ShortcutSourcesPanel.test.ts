@@ -5,7 +5,7 @@ import type { ComposerReferencePart } from "@/agent/composerParts";
 import ShortcutSourcesPanel from "./ShortcutSourcesPanel.vue";
 import messages from "@/i18n/messages/shortcutEditor";
 vi.mock("vue", async original => ({ ...await original<typeof import("vue")>(), useSSRContext: () => ({ modules: new Set() }) }));
-vi.mock("vue-i18n", () => ({ useI18n: () => ({ t: (key: string) => {
+vi.mock("vue-i18n", async original => ({ ...await original<typeof import("vue-i18n")>(), useI18n: () => ({ t: (key: string) => {
   if (key === "nestedShortcuts.fromInformation") return "从信息库添加";
   const value = key.replace(/^shortcutEditor\./, "").split(".").reduce<unknown>((obj, name) => obj && typeof obj === "object" ? (obj as Record<string, unknown>)[name] : undefined, messages.messages["zh-CN"]);
   return typeof value === "string" ? value : key;

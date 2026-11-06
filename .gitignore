@@ -35,3 +35,6 @@ deploy.env
 
 # Build intermediates (e.g. pkg13 knowledge-provider assembly workspace).
 /build/
+
+# Repository-root dependencies installed by local browser tooling.
+/node_modules/

@@ -1,6 +1,7 @@
 import type { EditorState, Transaction } from "prosemirror-state";
 import { composerSlashQuery, type ComposerSlashQuery } from "./composerSlash";
-import { skillComposerPart } from "./composerParts";
+import { skillComposerPart, mcpComposerPart } from "./composerParts";
+import type { MCPReference } from "./mcpInvocation";
 import { inlineComposerSchema } from "./inlineComposerModel";
 
 export function inlineComposerSlashQuery(state: EditorState): ComposerSlashQuery | null {
@@ -13,10 +14,11 @@ export function inlineComposerSlashQuery(state: EditorState): ComposerSlashQuery
 }
 
 /** A reference is a real token boundary; no extra user-written space is needed. */
-export function completeInlineComposerSlash(state: EditorState, value: string, skillName?: string): Transaction | null {
+export function completeInlineComposerSlash(state: EditorState, value: string, skillName?: string, mcp?: MCPReference): Transaction | null {
   const query = inlineComposerSlashQuery(state);
   if (!query) return null;
-  return skillName
-    ? state.tr.replaceWith(query.from, query.to, inlineComposerSchema.nodes.reference.create({ part: skillComposerPart(skillName) }))
+  const part = mcp ? mcpComposerPart(mcp.server, mcp.name) : skillName ? skillComposerPart(skillName) : null;
+  return part
+    ? state.tr.replaceWith(query.from, query.to, inlineComposerSchema.nodes.reference.create({ part }))
     : state.tr.insertText(value, query.from, query.to);
 }

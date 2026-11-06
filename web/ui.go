@@ -43,6 +43,14 @@ func uiRoot() (fs.FS, bool) {
 // bundle does not contain. There is no router in the app yet, but the fallback
 // costs nothing and stops a stray URL from returning a bare 404.
 func (s *Server) handleUI(w http.ResponseWriter, r *http.Request) {
+	// Retired platform routes must not fall through to the SPA or dev proxy.
+	// Agent chat embedding and Agent-private workflow routes remain separate.
+	for _, prefix := range []string{"/manage/workflows", "/embed/workflows", "/api/manage/workflows", "/api/workflows", "/api/workflow-embed"} {
+		if r.URL.Path == prefix || strings.HasPrefix(r.URL.Path, prefix+"/") {
+			http.NotFound(w, r)
+			return
+		}
+	}
 	// "/" is the home address: the client route table maps it to the manage
 	// surface (我的 Agents), same view as /manage. Any ?token= query rides on
 	// the URL untouched — the app reads it wherever it lands.

@@ -1,3 +1,4 @@
+import { getLocale } from "@/i18n";
 import type { BackgroundTask, BackgroundTaskRun } from "@/api/taskCenterApi";
 
 export type TaskCenterView = "tasks" | "queue" | "history";
@@ -43,19 +44,18 @@ export function matchesTaskQuery(item: BackgroundTask | BackgroundTaskRun, query
   if (!needle) return true;
   return [item.title, "description" in item ? item.description : item.summary, "error" in item ? item.error : "", item.agent_id].some(value => value?.toLocaleLowerCase().includes(needle));
 }
-export function taskCenterDate(value: string | number | null | undefined, locale = "zh-CN"): string {
+export function taskCenterDate(value: string | number | null | undefined, locale: string = getLocale()): string {
   if (!value || typeof value === "string" && value.startsWith("0001-")) return "—";
   const date = new Date(value);
   if (!Number.isFinite(date.getTime())) return "—";
   return new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" }).format(date);
 }
-export function runResultIdentity(run: Pick<BackgroundTaskRun, "session_id" | "workflow_id" | "agent_id" | "result_url">): { type: "session" | "workflow"; id: string; agentId: string; workflowId?: string } | null {
-  if (run.session_id) return run.workflow_id ? { type: "workflow", id: run.session_id, workflowId: run.workflow_id, agentId: run.agent_id } : { type: "session", id: run.session_id, agentId: run.agent_id };
+export function runResultIdentity(run: Pick<BackgroundTaskRun, "session_id" | "workflow_id" | "agent_id" | "result_url">): { type: "session"; id: string; agentId: string } | null {
+  if (run.workflow_id) return null;
+  if (run.session_id) return { type: "session", id: run.session_id, agentId: run.agent_id };
   // A safe fallback for old records that have only the host-authored link.
   const url = run.result_url || "";
   try {
-    const workflow = /^\/manage\/workflows\/([^/?#]+)\?run=([^&#]+)$/.exec(url);
-    if (workflow) return { type: "workflow", id: decodeURIComponent(workflow[2]), workflowId: decodeURIComponent(workflow[1]), agentId: run.agent_id };
     const session = /^\/manage\/agents\/([^/?#]+)\/chat\?(?:task_session|c)=([^&#]+)$/.exec(url);
     if (session && decodeURIComponent(session[1]) === run.agent_id) return { type: "session", id: decodeURIComponent(session[2]), agentId: run.agent_id };
   } catch { return null; }

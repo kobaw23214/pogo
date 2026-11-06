@@ -5,6 +5,8 @@ import { computed, inject, provide, ref, type InjectionKey, type Ref, type Writa
  * content is retained here; this provider only lives as long as its page. */
 export interface CardDisclosureState {
   version: Ref<number>;
+  /** Read-only scope for automatic defaults, never a transcript identifier inferred from text. */
+  scopeId?(): string | undefined;
   available(): boolean;
   choice(key: string | undefined): boolean | undefined;
   set(key: string | undefined, open: boolean): void;
@@ -23,6 +25,7 @@ export function createCardDisclosureState(scope: () => string | undefined): Card
   };
   return {
     version,
+    scopeId: scope,
     available: () => !!scope(),
     choice,
     set(key, open) {

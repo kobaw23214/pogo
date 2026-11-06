@@ -265,6 +265,7 @@ func TestHTMLPreviewCannotAuthorizeMainAPIOrWrites(t *testing.T) {
 }
 
 func TestHTMLPreviewBrowserOriginUsesListenerAndIgnoresForwarded(t *testing.T) {
+	t.Setenv("POGO_HTML_PREVIEW_BROWSER_ORIGIN", "")
 	request := httptest.NewRequest(http.MethodPost, "http://public.example/api/sessions/test/html-previews", nil)
 	request.Header.Set("X-Forwarded-Host", "attacker.example")
 	request.Header.Set("X-Forwarded-Proto", "https")
@@ -278,6 +279,36 @@ func TestHTMLPreviewBrowserOriginUsesListenerAndIgnoresForwarded(t *testing.T) {
 		if _, err := htmlPreviewRequestOrigin(request); err == nil {
 			t.Fatalf("unsafe CSP authority accepted: %q", host)
 		}
+	}
+}
+
+func TestHTMLPreviewBrowserOriginPrefersConfiguredBrowserNetwork(t *testing.T) {
+	t.Setenv("POGO_HTML_PREVIEW_BROWSER_ORIGIN", "http://pogo:7777")
+	request := httptest.NewRequest(http.MethodPost, "http://localhost:19770/api/sessions/test/html-previews", nil)
+	request.Header.Set("X-Forwarded-Host", "attacker.example")
+	request.Header.Set("X-Forwarded-Proto", "https")
+	request = request.WithContext(context.WithValue(request.Context(), http.LocalAddrContextKey, &net.TCPAddr{IP: net.ParseIP("172.29.0.3"), Port: 7777}))
+	origin, err := htmlPreviewBrowserOrigin(request)
+	if err != nil || origin != "http://pogo:7777" {
+		t.Fatalf("browser URL must use its reachable service network: %s %v", origin, err)
+	}
+}
+
+func TestHTMLPreviewConfiguredBrowserOriginFailsClosed(t *testing.T) {
+	for _, value := range []string{"http://pogo:7777", "https://pogo.example", "http://[::1]:7777"} {
+		if got, err := htmlPreviewConfiguredBrowserOrigin(value); err != nil || got != value {
+			t.Fatalf("valid browser origin rejected: %q %v", value, err)
+		}
+	}
+	for _, value := range []string{"pogo:7777", "//pogo:7777", "ftp://pogo", "http://user:secret@pogo", "http://pogo/", "http://pogo/path", "http://pogo?", "http://pogo?token=secret", "http://pogo#", "http://pogo#secret", "http://pogo:0", "http://pogo:65536", "http://pogo:", "http://pogo\r\nInjected: secret", "http://*.example.test", "http://pogo';default-src *"} {
+		t.Run(value, func(t *testing.T) {
+			t.Setenv("POGO_HTML_PREVIEW_BROWSER_ORIGIN", value)
+			request := httptest.NewRequest(http.MethodPost, "http://public.example/api/sessions/test/html-previews", nil)
+			got, err := htmlPreviewBrowserOrigin(request)
+			if got != "" || err == nil || strings.Contains(err.Error(), "secret") {
+				t.Fatalf("invalid configured origin must fail closed without leaking its value: %q %v", got, err)
+			}
+		})
 	}
 }
 

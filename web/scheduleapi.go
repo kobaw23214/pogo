@@ -2,7 +2,7 @@ package web
 
 // Scheduled-job API: owner-bound Agent tasks and legacy -schedule jobs.
 // Agent tasks always use the in-process bound Studio runtime. Legacy global
-// and Workflow jobs retain their operator-only compatibility routes.
+// jobs retain their operator-only compatibility routes.
 //
 // The schedule package owns the state (jobs.json, runs, logs) and the rules;
 // this file only adapts it to HTTP, the same split prefsapi.go keeps. The
@@ -87,6 +87,9 @@ func (s *Server) scheduleJobViews(jobs []schedule.Job) []scheduleJobView {
 	now := time.Now()
 	out := make([]scheduleJobView, 0, len(jobs))
 	for _, j := range jobs {
+		if j.WorkflowID != "" {
+			continue
+		}
 		out = append(out, scheduleJobView{
 			// nextFire rather than schedule.NextRun: when this process owns
 			// the clock, an every-job that has not run yet has a first fire
@@ -100,14 +103,8 @@ func (s *Server) scheduleJobViews(jobs []schedule.Job) []scheduleJobView {
 		j := &out[i]
 		j.Scope = "legacy"
 		j.ExecutionMode = "legacy"
-		if j.WorkflowID != "" {
-			j.ExecutionMode = "workflow"
-		}
 		j.EffectiveTimezone, j.EffectiveTimezoneLabel = schedule.EffectiveTimezone(j.Timezone)
 		j.Owner = nil // the owner is an authorization fact, not a client-controlled field
-		if j.WorkflowID != "" && j.SessionID != "" {
-			j.ResultURL = "/manage/workflows/" + j.WorkflowID + "?run=" + j.SessionID
-		}
 		if j.AgentID != "" {
 			j.Scope = "agent"
 			j.ExecutionMode = "agent"
@@ -492,7 +489,7 @@ func (s *Server) handleScheduleRuns(w http.ResponseWriter, r *http.Request) {
 		tail = []string{}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"runs":     scheduleRunViews(runs, job.AgentID, job.WorkflowID),
+		"runs":     scheduleRunViews(runs, job.AgentID),
 		"log_tail": tail,
 		"log_path": store.OutLogPath(id),
 	})

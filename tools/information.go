@@ -371,6 +371,8 @@ func informationParts(body *strings.Builder, parts []inputref.Part, materialize 
 			}
 		case "skill":
 			fmt.Fprintf(body, "\n[技能名称资料（未执行）：%s]\n", part.Name)
+		case "mcp":
+			fmt.Fprintf(body, "\n[MCP 方法名称资料（未执行）：%s/%s]\n", part.Server, part.Name)
 		case "element":
 			fmt.Fprintf(body, "\n[网页元素资料]\n%s\n", part.Text)
 		default:

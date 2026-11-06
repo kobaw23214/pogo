@@ -114,13 +114,15 @@ func (s starterEntry) MarshalJSON() ([]byte, error) {
 
 type studioAgent struct {
 	studioInput
-	SkillBinding      json.RawMessage `json:"skill_binding,omitempty"`
-	ID                string          `json:"id"`
-	Revision          int             `json:"revision"`
-	CreatedAt         string          `json:"created_at"`
-	UpdatedAt         string          `json:"updated_at"`
-	ConversationCount int             `json:"conversation_count"`
-	Deleted           bool            `json:"deleted,omitempty"`
+	SkillBinding json.RawMessage `json:"skill_binding,omitempty"`
+	ID           string          `json:"id"`
+	Revision     int             `json:"revision"`
+	CreatedAt    string          `json:"created_at"`
+	UpdatedAt    string          `json:"updated_at"`
+	// ConversationCount is the legacy wire name for the number of bound Sessions.
+	ConversationCount int  `json:"conversation_count"`
+	UserMessageCount  int  `json:"user_message_count"`
+	Deleted           bool `json:"deleted,omitempty"`
 }
 
 type studioBinding struct {
@@ -139,6 +141,7 @@ type studioBinding struct {
 	ModelPolicy *studioModelPolicy `json:"model_policy,omitempty"`
 	SkillPolicy *studioSkillPolicy `json:"skill_policy,omitempty"`
 	ToolPolicy  *studioToolPolicy  `json:"tool_policy,omitempty"`
+	MCPPolicy   *studioMCPPolicy   `json:"mcp_policy,omitempty"`
 	// Host-generated alongside the conversation binding, never client supplied.
 	SkillLock json.RawMessage `json:"skill_lock,omitempty"`
 	MCPExport bool            `json:"mcp_export,omitempty"`
@@ -959,12 +962,37 @@ func (s *Server) studioRoutes() {
 	s.mux.HandleFunc("POST /api/apps/{aid}/sessions/{sid}/model-config/sync", s.handleStudioModelSync)
 	s.mux.HandleFunc("POST /api/apps/{aid}/sessions/{sid}/skill-config/sync", s.handleStudioSkillSync)
 	s.mux.HandleFunc("POST /api/apps/{aid}/sessions/{sid}/tools-config/sync", s.handleStudioToolSync)
+	s.mux.HandleFunc("POST /api/apps/{aid}/sessions/{sid}/mcp-config/sync", s.handleStudioMCPSync)
 	s.mux.HandleFunc("POST /api/apps/{aid}/sessions/{sid}/cancel", s.handleStudioCancel)
 }
 
 func (s *Server) handleStudioList(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
-	writeJSON(w, http.StatusOK, map[string]any{"agents": s.mgr.studio.list(s.adminRequest(r)), "can_manage": s.adminRequest(r)})
+	admin := s.adminRequest(r)
+	agents := s.mgr.studio.list(admin)
+	infos, err := s.mgr.List()
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err)
+		return
+	}
+	agentIndex := make(map[string]int, len(agents))
+	for i := range agents {
+		agents[i].ConversationCount = 0
+		agents[i].UserMessageCount = 0
+		agentIndex[agents[i].ID] = i
+	}
+	for _, info := range infos {
+		binding, ok := s.mgr.studio.binding(info.ID)
+		if !ok {
+			continue
+		}
+		// Match the visible Session list, not background or foreign bindings.
+		if i, ok := agentIndex[binding.Agent.ID]; ok && s.ownsSession(r, info.ID) {
+			agents[i].ConversationCount++
+			agents[i].UserMessageCount += info.Messages
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"agents": agents, "can_manage": admin})
 }
 
 func (s *Server) handleStudioCreate(w http.ResponseWriter, r *http.Request) {
@@ -1007,6 +1035,7 @@ func (s *Server) handleStudioUpdate(w http.ResponseWriter, r *http.Request) {
 	s.mgr.syncStudioModels(a.ID)
 	s.mgr.syncStudioSkills(a.ID)
 	s.mgr.syncStudioTools(a.ID)
+	s.mgr.syncStudioMCPs(a.ID)
 	writeJSON(w, 200, a)
 }
 
@@ -1131,10 +1160,16 @@ func (s *Server) handleStudioConversation(w http.ResponseWriter, r *http.Request
 		return
 	}
 	var input struct {
-		Workspace string `json:"workspace"`
+		Workspace    string `json:"workspace"`
+		ApprovalMode string `json:"approval_mode"`
 	}
 	if err := decodeBody(r, &input); err != nil && !errors.Is(err, io.EOF) {
 		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	mode, validMode := ParseMode(input.ApprovalMode)
+	if input.ApprovalMode != "" && !validMode {
+		writeErr(w, http.StatusBadRequest, errors.New(`approval_mode must be "strict", "standard" or "auto"`))
 		return
 	}
 	var owner *identity.Scope
@@ -1145,6 +1180,9 @@ func (s *Server) handleStudioConversation(w http.ResponseWriter, r *http.Request
 	if err != nil {
 		writeErr(w, 400, err)
 		return
+	}
+	if input.ApprovalMode != "" {
+		sess.SetPolicy(mode, 0)
 	}
 	writeJSON(w, 201, map[string]any{"id": sess.ID, "agent_id": a.ID, "revision": a.Revision, "model": a.Model})
 }

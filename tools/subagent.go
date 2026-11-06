@@ -117,6 +117,9 @@ type Subagent struct {
 	// Trusted parent document restrictions travel to every retained/background
 	// child. This adds restrictions; a model argument can never select a path.
 	CommandProtectionManifest string
+	// FileAccess is a live parent capability, never a model argument. Children
+	// receive its current grant through their private approval channel.
+	FileAccess *FileAccess
 	// Store enables retained child contexts scoped to this host-owned parent.
 	// Nil preserves the one-shot contract for callers without a session store.
 	Store *SubagentStore
@@ -826,6 +829,10 @@ func (s *Subagent) spawn(ctx context.Context, exe string, spec childSpec,
 	)
 	cmd.Env = informationChildEnv(cmd.Env, s.InformationRoot, s.InformationScope)
 	cmd.Env = nativeSelectionChildEnv(cmd.Env, s.Enabled)
+	cmd.Env = hostPrivateChildEnv(cmd.Env)
+	// Strip unrelated process grants even when this parent has no gate. Only
+	// wireGate may install this child's authenticated, live capability.
+	cmd.Env = fileAccessChildEnv(cmd.Env, "", false)
 	if s.CommandProtectionManifest != "" {
 		env := cmd.Env[:0]
 		for _, entry := range cmd.Env {

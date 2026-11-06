@@ -18,22 +18,12 @@ import (
 	"github.com/yosukeno/pogo/schedule"
 	"github.com/yosukeno/pogo/sentinel"
 	"github.com/yosukeno/pogo/taskqueue"
-	"github.com/yosukeno/pogo/workflow"
 )
 
 // Do not start a model or a second dispatcher: API tests control admission
 // transitions directly, using the same durable store as the real runtime.
 func taskCenterTestQueue(t *testing.T, m *Manager) *taskqueue.Store {
 	t.Helper()
-	// NewServer starts a callback reader of this same runtime. Drain it before
-	// replacing the fixture's ledger, just as we drain its admission dispatcher.
-	// API tests below drive durable transitions directly, without callbacks.
-	m.mu.Lock()
-	stopCallbacks := m.workflowCallbackStop
-	m.mu.Unlock()
-	if stopCallbacks != nil {
-		stopCallbacks()
-	}
 	if m.taskRuns != nil {
 		m.taskRuns.stop()
 		<-m.taskRuns.done
@@ -128,7 +118,6 @@ func TestTaskCenterOwnerAgentAndLegacyScopes(t *testing.T) {
 	taskCenterAddSchedule(t, h.psrv, "alice-b", "agent-b", "", &alice)
 	b := taskCenterAddSchedule(t, h.psrv, "bob-a", "agent-a", "", &bob)
 	taskCenterAddSchedule(t, h.psrv, "legacy", "", "", nil)
-	taskCenterAddSchedule(t, h.psrv, "workflow", "", "workflow-a", nil)
 	ar, br := taskCenterEnqueue(t, db, a, "a"), taskCenterEnqueue(t, db, b, "b")
 	for _, owner := range []*identity.Scope{&alice, &bob} {
 		watchDB, err := h.mgr.sentinels.database(true)
@@ -165,7 +154,7 @@ func TestTaskCenterOwnerAgentAndLegacyScopes(t *testing.T) {
 			t.Fatalf("cross-scope control %s: %d %s", path, code, raw)
 		}
 	}
-	// Admin access keeps legacy/workflow definitions visible, without gaining
+	// Admin access keeps legacy definitions visible, without gaining
 	// another account's owner-bound Agent tasks.
 	h.psrv.auth.mu.Lock()
 	u := h.psrv.auth.users["alice"]
@@ -174,7 +163,7 @@ func TestTaskCenterOwnerAgentAndLegacyScopes(t *testing.T) {
 	h.psrv.auth.mu.Unlock()
 	code, out, raw = taskCenterRequest(t, front, aliceToken, "GET", "/api/tasks", "")
 	tasks = taskCenterIDs(t, out, "tasks")
-	if code != 200 || len(tasks) != 5 || tasks["schedule:legacy"]["executor"] != "legacy" || tasks["schedule:workflow"]["executor"] != "workflow" || tasks["schedule:bob-a"] != nil {
+	if code != 200 || len(tasks) != 4 || tasks["schedule:legacy"]["executor"] != "legacy" || tasks["schedule:bob-a"] != nil {
 		t.Fatalf("admin definition boundary failed: %d %s", code, raw)
 	}
 }
@@ -324,42 +313,6 @@ func TestTaskCenterListErrorsStayVisible(t *testing.T) {
 	}
 }
 
-func TestTaskCenterWorkflowHumanStatusUsesCurrentNativeState(t *testing.T) {
-	scheduleEnv(t)
-	m := sweepManager(t, 0)
-	s, err := NewServer(m, ServerOptions{Token: "test-token"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	db := taskCenterTestQueue(t, m)
-	j := taskCenterAddSchedule(t, s, "workflow-probe", "", "workflow-a", nil)
-	run := taskCenterEnqueue(t, db, j, "human")
-	run, err = db.Claim(run.ID, 2)
-	if err != nil {
-		t.Fatal(err)
-	}
-	run, err = db.Finish(run.ID, run.Revision, taskqueue.Outcome{Status: taskqueue.Completed, SessionID: "native-run", EndReason: "waiting_human"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	rec := workflow.RunRecord{ID: run.SessionID, WorkflowID: j.WorkflowID, Status: workflow.RunWorking, Nodes: map[string]workflow.NodeState{"review": {Status: workflow.NodeWaitingHuman}}}
-	if err := writeWFRecord(m.wfruns.recordPath(run.SessionID), rec); err != nil {
-		t.Fatal(err)
-	}
-	v := s.taskCenterRunView(run)
-	if !v.WaitingHuman || v.Status != taskqueue.Running || v.CanRetry || v.CanCancel {
-		t.Fatalf("human suspension missing or unsupported controls exposed: %+v", v)
-	}
-	rec.Status, rec.EndedAt, rec.Nodes = workflow.RunCompleted, time.Now().UTC().Format(time.RFC3339Nano), map[string]workflow.NodeState{"review": {Status: workflow.NodeSuccess}}
-	if err := writeWFRecord(m.wfruns.recordPath(run.SessionID), rec); err != nil {
-		t.Fatal(err)
-	}
-	v = s.taskCenterRunView(run)
-	if v.WaitingHuman || v.Status != taskqueue.Completed || v.EndReason == "waiting_human" {
-		t.Fatalf("static end reason kept approval pending forever: %+v", v)
-	}
-}
-
 func TestTaskCenterCompletedOneShotIsNotAnUnfinishedPause(t *testing.T) {
 	m := sweepManager(t, 0)
 	s, err := NewServer(m, ServerOptions{Token: "test-token"})
@@ -452,12 +405,10 @@ func TestTaskCenterCancelledScheduleClearsOnlyCancellationErrorAttention(t *test
 		t.Fatal(err)
 	}
 	front := taskCenterTestFront(t, s)
-	for _, kind := range []string{"ordinary", "unavailable", "auto-paused", "expired", "human"} {
+	for _, kind := range []string{"ordinary", "unavailable", "auto-paused", "expired"} {
 		aid, wid := a.ID, ""
 		if kind == "unavailable" {
 			aid = "missing-agent"
-		} else if kind == "human" {
-			aid, wid = "", "human-workflow"
 		}
 		j := taskCenterAddSchedule(t, s, "cancel-"+kind, aid, wid, nil)
 		if err := s.scheduleStore().Update(j.ID, func(saved *schedule.Job) {
@@ -471,24 +422,7 @@ func TestTaskCenterCancelledScheduleClearsOnlyCancellationErrorAttention(t *test
 		}); err != nil {
 			t.Fatal(err)
 		}
-		if kind == "human" {
-			old := taskCenterEnqueue(t, db, j, "human-waiting")
-			old, err = db.Claim(old.ID, 2)
-			if err != nil {
-				t.Fatal(err)
-			}
-			old, err = db.Finish(old.ID, old.Revision, taskqueue.Outcome{Status: taskqueue.Completed, SessionID: "still-waiting-human", EndReason: "waiting_human"})
-			if err != nil {
-				t.Fatal(err)
-			}
-			rec := workflow.RunRecord{ID: old.SessionID, WorkflowID: wid, Status: workflow.RunWorking, Nodes: map[string]workflow.NodeState{"review": {Status: workflow.NodeWaitingHuman}}}
-			if err := writeWFRecord(h.mgr.wfruns.recordPath(old.SessionID), rec); err != nil {
-				t.Fatal(err)
-			}
-			// Ensure the cancelled admission is newer than the distinct human
-			// wait, even on millisecond-resolution admission clocks.
-			time.Sleep(2 * time.Millisecond)
-		}
+
 		run := taskCenterEnqueue(t, db, j, "user-cancel")
 		run, err = db.Claim(run.ID, 2)
 		if err != nil {
@@ -509,7 +443,7 @@ func TestTaskCenterCancelledScheduleClearsOnlyCancellationErrorAttention(t *test
 	if got := tasks["schedule:cancel-ordinary"]; got["attention"] != false || got["state"] != "scheduled" {
 		t.Fatalf("ordinary user cancellation raised an error: %v", got)
 	}
-	for _, kind := range []string{"unavailable", "auto-paused", "human"} {
+	for _, kind := range []string{"unavailable", "auto-paused"} {
 		if got := tasks["schedule:cancel-"+kind]; got["attention"] != true {
 			t.Fatalf("cancellation hid %s attention: %v", kind, got)
 		}

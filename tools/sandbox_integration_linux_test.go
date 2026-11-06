@@ -185,6 +185,62 @@ func TestSandboxLeavesNoFilesInTheWorkingDirectory(t *testing.T) {
 	}
 }
 
+func TestSandboxPrivateParentMasksNestedStores(t *testing.T) {
+	p := requireSandbox(t)
+	dir := t.TempDir()
+	private := filepath.Join(dir, "control")
+	admin, registry := filepath.Join(private, "admin"), filepath.Join(private, "registry")
+	for _, root := range []string{admin, registry} {
+		if err := os.MkdirAll(root, 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(root, "secret"), []byte("synthetic-private-canary"), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	public := filepath.Join(dir, "control-public")
+	if err := os.WriteFile(public, []byte("public-ok"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	socket := filepath.Join(admin, "control.sock")
+	listener, err := net.Listen("unix", socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	conn, err := net.DialTimeout("unix", socket, time.Second)
+	if err != nil {
+		t.Fatalf("private socket positive control failed: %v", err)
+	}
+	conn.Close()
+	p.PrivateDirs = append(p.PrivateDirs, admin, private, registry, private+"/.")
+	probe := `set -eu
+test "$(cat "$2")" = public-ok
+test ! -e "$1/admin/secret"
+test ! -e "$1/registry/secret"
+test ! -S "$1/admin/control.sock"
+test -z "$(ls -A "$1")"
+if ( : > "$1/new-file" ) 2>/dev/null; then exit 9; fi
+printf 'nested-private-stores-hidden\n'
+`
+	argv := p.bwrapArgv(dir, dir, os.TempDir(), pathExists, nil, []string{"/bin/sh", "-c", probe, "private-mask-probe", private, public})
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
+	cmd.Dir = dir
+	cmd.Env = sandboxEnv(p.EnvPass, map[string]string{"HOME": dir, "TMPDIR": os.TempDir()})
+	out, err := cmd.CombinedOutput()
+	if err != nil || strings.TrimSpace(string(out)) != "nested-private-stores-hidden" {
+		t.Fatalf("nested private masks broke command setup or isolation: %v\n%s", err, out)
+	}
+	if contents, err := os.ReadFile(filepath.Join(admin, "secret")); err != nil || string(contents) != "synthetic-private-canary" {
+		t.Fatalf("host private data changed: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(private, "new-file")); !os.IsNotExist(err) {
+		t.Fatalf("sandbox wrote through the private mask: %v", err)
+	}
+}
+
 // The deny paths are the half of the boundary that protects the processes
 // *outside* the sandbox: the agent's own checkpoint commits, and the web
 // terminal's interactive shell, both of which consume files the workspace can

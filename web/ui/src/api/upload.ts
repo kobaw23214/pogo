@@ -1,3 +1,5 @@
+import { hostAPIError } from "./hostErrorCopy";
+import { gt, getLocale } from "@/i18n";
 export interface UploadOptions {
   onProgress?: (loaded: number, total: number) => void;
   /** Transfer completion is not server-side installation completion. */
@@ -27,7 +29,9 @@ export function uploadFile<T>(
       result();
     };
     xhr.open("POST", path);
-    new Headers(opts.headers).forEach((value, key) => xhr.setRequestHeader(key, value));
+    const headers = new Headers(opts.headers);
+    if (!headers.has("Accept-Language")) headers.set("Accept-Language", getLocale());
+    headers.forEach((value, key) => xhr.setRequestHeader(key, value));
     if (opts.raw) xhr.setRequestHeader("Content-Type", opts.contentType ?? "application/zip");
     xhr.upload.onprogress = (event) => {
       if (event.lengthComputable) opts.onProgress?.(event.loaded, event.total);
@@ -39,15 +43,15 @@ export function uploadFile<T>(
       try { data = JSON.parse(text); } catch { /* HTTP errors may be plain text. */ }
       if (xhr.status < 200 || xhr.status >= 300) {
         const error = typeof data === "object" && data !== null && "error" in data ? String(data.error) : text;
-        finish(() => reject(Object.assign(new Error(error || `HTTP ${xhr.status}`), { status: xhr.status })));
+        finish(() => reject(Object.assign(hostAPIError(error || `HTTP ${xhr.status}`), { status: xhr.status })));
       } else if (typeof data !== "object" || data === null || Array.isArray(data)) {
-        finish(() => reject(Object.assign(new Error("服务器返回了无效的安装结果，请刷新列表确认状态。"), { status: xhr.status, uncertain: true })));
+        finish(() => reject(Object.assign(new Error(gt("uiCoverage.connection.uploadInvalidResult")), { status: xhr.status, uncertain: true })));
       } else {
         finish(() => resolve(data as T));
       }
     };
-    xhr.onerror = () => finish(() => reject(new Error("上传连接中断，请检查连接。")));
-    xhr.ontimeout = () => finish(() => reject(new Error("上传连接超时，请检查连接。")));
+    xhr.onerror = () => finish(() => reject(new Error(gt("uiCoverage.connection.uploadDisconnected"))));
+    xhr.ontimeout = () => finish(() => reject(new Error(gt("uiCoverage.connection.uploadTimedOut"))));
     xhr.onabort = () => finish(() => reject(new DOMException("aborted", "AbortError")));
     opts.signal?.addEventListener("abort", abort, { once: true });
     try {

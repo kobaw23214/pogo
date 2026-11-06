@@ -10,7 +10,8 @@ const { t } = useI18n();
 const menu = ref<HTMLElement>();
 const groups = computed(() => [
   { id: "commands", label: "", items: props.items.filter(item => item.kind === "command") },
-  { id: "skills", label: t("agentView.commands.skillsGroup"), items: props.items.filter(item => item.kind !== "command") },
+  { id: "skills", label: t("agentView.commands.skillsGroup"), items: props.items.filter(item => item.kind === "skill" || item.kind === "skill-entry") },
+  { id: "mcp", label: t("agentView.commands.mcpGroup"), items: props.items.filter(item => item.kind === "mcp" || item.kind === "mcp-entry") },
 ].filter(group => group.items.length));
 
 watch(() => [props.selectedId, props.items], async () => {
@@ -27,6 +28,7 @@ watch(() => [props.selectedId, props.items], async () => {
         <button v-for="item in group.items" :id="`${id}-${item.id}`" :key="item.id" type="button" class="suggestion-row" :class="{ selected: selectedId === item.id, command: item.kind === 'command' }" role="option" :aria-selected="selectedId === item.id" :aria-labelledby="`${id}-${item.id}-label`" :aria-describedby="item.description ? `${id}-${item.id}-description` : undefined" tabindex="-1" @mouseenter="emit('highlight', item.id)" @click="emit('pick', item.id)">
           <span class="suggestion-icon" :class="{ command: item.kind === 'command' }" aria-hidden="true">
             <CommandTokenIcon v-if="item.kind === 'command'" kind="command" :context-percent="contextPercent" />
+            <svg v-else-if="item.kind === 'mcp' || item.kind === 'mcp-entry'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m9 9 6 6m-9 0 3 3a4.24 4.24 0 0 0 6-6l-1-1m4-2-3-3a4.24 4.24 0 0 0-6 6l1 1M5 19l-2 2m16-16 2-2" /></svg>
             <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5v8l-9 5-9-5V8l9-5Zm-9 5 9 5 9-5m-9 5v8M7.5 5.5l9 5" /></svg>
           </span>
           <span class="suggestion-copy">

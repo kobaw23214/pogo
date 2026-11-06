@@ -1,3 +1,5 @@
+import { hostAPIError } from "./hostErrorCopy";
+import { gt, getLocale } from "@/i18n";
 import { authHeaders, isDelegatedEmbed } from "./client";
 import type { BrowserBookmark } from "@/agent/browserBookmarks";
 
@@ -26,17 +28,17 @@ export interface AccountBookmarksAPI {
 async function request(method: string, body?: AccountBookmarksWrite, signal?: AbortSignal, agentId?: string): Promise<AccountBookmarksSnapshot> {
   // This account API is not part of the delegated embed protocol. Never send
   // an embed visitor's browser-local data to the host's ordinary account API.
-  if (isDelegatedEmbed) throw new Error("当前接入模式未开放账号收藏同步。");
+  if (isDelegatedEmbed) throw new Error(gt("uiCoverage.connection.bookmarksNotAvailable"));
   const response = await fetch("/api/browser/bookmarks" + (agentId ? `?agent_id=${encodeURIComponent(agentId)}` : ""), {
     method, credentials: "same-origin", cache: "no-store", signal,
-    headers: { ...authHeaders(), ...(body ? { "Content-Type": "application/json" } : {}) },
+    headers: { "Accept-Language": getLocale(), ...authHeaders(), ...(body ? { "Content-Type": "application/json" } : {}) },
     body: body ? JSON.stringify(body) : undefined,
   });
   const raw = await response.text();
   let result: unknown;
   try { result = JSON.parse(raw); } catch { result = undefined; }
   if (!response.ok) {
-    throw Object.assign(new Error((result as { error?: string } | undefined)?.error || raw || `HTTP ${response.status}`), { status: response.status });
+    throw Object.assign(hostAPIError((result as { error?: string } | undefined)?.error || raw || `HTTP ${response.status}`), { status: response.status });
   }
   return result as AccountBookmarksSnapshot;
 }
@@ -47,7 +49,7 @@ export const accountBookmarksAPI: AccountBookmarksAPI = {
 };
 
 export function agentBookmarksAPI(agentId: string): AccountBookmarksAPI {
-  if (!agentId.trim()) throw new Error("Agent 收藏需要明确的 Agent。");
+  if (!agentId.trim()) throw new Error(gt("uiCoverage.connection.bookmarksAgentRequired"));
   return {
     read: signal => request("GET", undefined, signal, agentId),
     write: (input, signal) => request("PUT", input, signal, agentId),

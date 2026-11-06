@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { getLocale, setLocale } from "@/i18n";
 import { effectScope, nextTick, reactive, type Ref } from "vue";
 import type { BuiltinToolEntry, SkillContent, SkillInfo, ToolCatalogEntry } from "@/api/types";
 const host = vi.hoisted(() => ({ skills: vi.fn(), tools: vi.fn(), content: vi.fn(), authored: vi.fn(), cleanup: [] as (() => void)[] }));
 vi.mock("vue", async original => ({ ...await original<typeof import("vue")>(), onBeforeUnmount: (fn: () => void) => host.cleanup.push(fn), useSSRContext: () => ({ modules: new Set() }) }));
-vi.mock("vue-i18n", () => ({ useI18n: () => ({ t: (key: string) => key, te: () => true }) }));
+vi.mock("vue-i18n", async original => ({ ...await original<typeof import("vue-i18n")>(), useI18n: () => ({ t: (key: string) => key, te: () => true }) }));
 vi.mock("@/api/client", () => ({ api: { skills: host.skills, tools: host.tools, skillContent: host.content, authoredSkills: host.authored }, skillSampleURL: () => "/fixture" }));
 vi.mock("./McpMonitorPanel.vue", () => ({ default: {} })); vi.mock("./MarkdownView.vue", () => ({ default: {} })); vi.mock("./tools/ToolRow.vue", () => ({ default: {} })); vi.mock("./SkillExecutionNotice.vue", () => ({ default: {} }));
 import SkillsPanel from "./SkillsPanel.vue";
@@ -13,10 +14,24 @@ interface Controller { builtinTools: Ref<BuiltinToolEntry[]>; filteredBuiltinToo
 const scopes: ReturnType<typeof effectScope>[] = [];
 const pending = <T>() => { let resolve!: (value: T) => void; const promise = new Promise<T>(done => { resolve = done; }); return { promise, resolve }; };
 const flush = async () => { for (let i = 0; i < 8; i++) await Promise.resolve(); await nextTick(); };
-function mount(extra: Record<string, unknown> = {}) { const props = reactive({ sessionId: "session-a", agentId: "agent-a", active: true, readOnly: true, embedded: false, toolRevision: 0, toolsPending: false, ...extra }), scope = effectScope(); scopes.push(scope); const c = scope.run(() => (SkillsPanel as unknown as { setup(props: unknown, context: unknown): Controller }).setup(props, { emit: vi.fn(), expose() {} }))!; return { c, props }; }
+function mount(extra: Record<string, unknown> = {}) { const props = reactive({ sessionId: "session-a", agentId: "agent-a", active: true, readOnly: true, embedded: false, toolRevision: 0, capabilityRevision: 0, toolsPending: false, ...extra }), scope = effectScope(); scopes.push(scope); const c = scope.run(() => (SkillsPanel as unknown as { setup(props: unknown, context: unknown): Controller }).setup(props, { emit: vi.fn(), expose() {} }))!; return { c, props }; }
 beforeEach(() => { host.skills.mockReset().mockResolvedValue({ skills: [skill()] }); host.tools.mockReset().mockResolvedValue({ tools: [], mcp: [] }); host.content.mockReset().mockResolvedValue(content()); host.authored.mockReset().mockResolvedValue({ skills: [] }); });
 afterEach(() => { for (const cleanup of host.cleanup.splice(0)) cleanup(); for (const scope of scopes.splice(0)) scope.stop(); });
 describe("Skills introduction and MCP history lifetime", () => {
+  it("reorders skill names on a language switch without refetching capabilities", async () => {
+    const previous = getLocale();
+    try {
+      setLocale("zh-CN");
+      host.skills.mockResolvedValueOnce({ skills: [skill("東京"), skill("大阪"), skill("京都")] });
+      const { c } = mount(); await flush();
+      expect(c.filteredSkills.value.map(value => value.name)).toEqual(["大阪", "東京", "京都"]);
+      setLocale("ja"); await nextTick();
+      expect(c.filteredSkills.value.map(value => value.name)).toEqual(["京都", "大阪", "東京"]);
+      expect(host.skills).toHaveBeenCalledTimes(1);
+      expect(host.tools).toHaveBeenCalledTimes(1);
+    } finally { setLocale(previous); }
+  });
+
   it("loads the Agent session catalog but never substitutes a global catalog without a session", async () => { const { c } = mount({ sessionId: "" }); await flush(); await c.load(); await c.openSkill(skill()); expect(host.skills).not.toHaveBeenCalled(); expect(host.content).not.toHaveBeenCalled(); expect(c.detail.value).toBeNull(); });
   it("does not fetch while hidden, then loads the exact visible session", async () => { const { props } = mount({ active: false }); await flush(); expect(host.skills).not.toHaveBeenCalled(); props.active = true; await flush(); expect(host.skills).toHaveBeenCalledWith("session-a"); expect(host.tools).toHaveBeenCalledWith("session-a"); });
   it("drops late catalogs when the Agent changes", async () => { const result = pending<{ skills: SkillInfo[] }>(); host.skills.mockReturnValueOnce(result.promise); const { c, props } = mount(); host.skills.mockResolvedValueOnce({ skills: [skill("browser-use")] }); props.agentId = "agent-b"; props.sessionId = "session-b"; await flush(); result.resolve({ skills: [skill("old-private")] }); await flush(); expect(c.skills.value?.map(row => row.name)).toEqual(["office"]); expect(host.skills).toHaveBeenLastCalledWith("session-b"); });
@@ -24,6 +39,41 @@ describe("Skills introduction and MCP history lifetime", () => {
   it("retains cached skill descriptions within the same scope and resets the viewer on reload", async () => { const { c } = mount(); await flush(); await c.openSkill(skill()); c.back(); await c.openSkill(skill()); expect(host.content).toHaveBeenCalledTimes(1); c.reload(); await flush(); expect(c.selected.value).toBeNull(); expect(c.detailLoading.value).toBe(false); await c.openSkill(skill()); expect(host.content).toHaveBeenCalledTimes(2); });
   it("retains the calls tab across scope updates while clearing catalog and detail data", async () => { const { c, props } = mount(); await flush(); c.view.value = "calls"; props.active = false; await flush(); expect(c.view.value).toBe("calls"); expect(c.skills.value).toBeNull(); expect(c.detail.value).toBeNull(); });
   it("does not display late content on unmount", async () => { const result = pending<SkillContent>(); host.content.mockReturnValueOnce(result.promise); const { c } = mount(); await flush(); const request = c.openSkill(skill()); for (const cleanup of host.cleanup.splice(0)) cleanup(); result.resolve(content("office", "late")); await request; expect(c.detail.value).toBeNull(); });
+});
+
+describe("committed Skill and MCP changes", () => {
+  it("removes revoked Skill details and cached content without changing the user's lens or filter", async () => {
+    const { c, props } = mount(); await flush(); await c.openSkill(skill()); c.view.value = "tool"; c.filter.value = "office";
+    host.skills.mockResolvedValueOnce({ skills: [] }); props.capabilityRevision++; await flush();
+    expect(c.skills.value).toEqual([]); expect(c.selected.value).toBeNull(); expect(c.detail.value).toBeNull();
+    expect(c.view.value).toBe("tool"); expect(c.filter.value).toBe("office");
+    host.skills.mockResolvedValueOnce({ skills: [skill()] }); host.content.mockResolvedValueOnce(content("office", "new authorized version"));
+    props.capabilityRevision++; await flush(); await c.openSkill(skill());
+    expect(host.content).toHaveBeenCalledTimes(2); expect(c.detail.value?.content).toBe("new authorized version");
+  });
+
+  it("drops an in-flight revoked Skill read after a committed capability change", async () => {
+    const doc = pending<SkillContent>(), { c, props } = mount(); await flush(); host.content.mockReturnValueOnce(doc.promise);
+    const reading = c.openSkill(skill()); host.skills.mockResolvedValueOnce({ skills: [] }); props.capabilityRevision++; await flush();
+    doc.resolve(content("office", "late revoked content")); await reading;
+    expect(c.selected.value).toBeNull(); expect(c.detail.value).toBeNull(); expect(c.detailLoading.value).toBe(false);
+  });
+
+  it("reloads both scoped catalogs and retains only an authorized selection on MCP-only changes", async () => {
+    const { c, props } = mount(); await flush(); await c.openSkill(skill());
+    host.content.mockResolvedValueOnce(content("office", "fresh content")); props.capabilityRevision++; await flush();
+    expect(host.skills).toHaveBeenCalledTimes(2); expect(host.tools).toHaveBeenCalledTimes(2);
+    expect(host.skills).toHaveBeenLastCalledWith("session-a"); expect(host.tools).toHaveBeenLastCalledWith("session-a");
+    expect(c.selected.value?.name).toBe("office"); expect(c.detail.value?.content).toBe("fresh content");
+  });
+
+  it("cannot restore a previous conversation's delayed refreshed catalog", async () => {
+    const { c, props } = mount(); await flush();
+    const old = pending<{ skills: SkillInfo[] }>(); host.skills.mockReturnValueOnce(old.promise); props.capabilityRevision++; await flush();
+    host.skills.mockResolvedValueOnce({ skills: [skill("new-session")] }); props.sessionId = "session-b"; await flush();
+    old.resolve({ skills: [skill("old-session")] }); await flush();
+    expect(c.skills.value?.map(item => item.name)).toEqual(["new-session"]); expect(c.selected.value).toBeNull();
+  });
 });
 
 

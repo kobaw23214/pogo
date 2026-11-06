@@ -85,7 +85,7 @@ var nativeTools = func() map[string]tools.Tool {
 		&tools.Read{}, &tools.Ls{}, &tools.Find{}, &tools.Grep{}, &tools.ToolResultRead{},
 		&tools.Write{}, &tools.Edit{}, &tools.Bash{},
 		&tools.ShellTasks{}, &tools.ShellOutput{}, &tools.ShellStop{},
-		&tools.Information{},
+		&tools.Information{}, &tools.WebService{},
 		&tools.ShortcutQuery{}, &tools.ShortcutManage{}, &tools.ShortcutDelete{}, &tools.ShortcutMerge{},
 		&tools.ShortcutSearch{}, &tools.ShortcutRead{}, &tools.ShortcutCreate{}, &tools.ShortcutList{},
 		&tools.ShortcutFolderCreate{}, &tools.ShortcutUpdate{}, &tools.ShortcutFolderRename{}, &tools.ShortcutMove{},
@@ -96,8 +96,7 @@ var nativeTools = func() map[string]tools.Tool {
 		&tools.Todo{}, &tools.SubagentTasks{},
 		&tools.Subagent{Store: &tools.SubagentStore{}},
 	}
-	list = append(list, tools.NewAgentWorkflowTools(inertWorkflowBackend{})...)
-	list = append(list, tools.NewWorkflowTools(inertWorkflowBackend{})...)
+	list = append(list, tools.NewAgentWorkflowTools(inertAgentWorkflowBackend{})...)
 	byName := make(map[string]tools.Tool, len(list))
 	for _, t := range list {
 		byName[t.Name()] = t
@@ -105,15 +104,11 @@ var nativeTools = func() map[string]tools.Tool {
 	return byName
 }()
 
-// inertWorkflowBackend lets the workflow constructors build their tools so that
+// inertAgentWorkflowBackend lets the internal workflow constructor build its tools so that
 // their names and schedules can be read. Nothing here executes a tool.
-type inertWorkflowBackend struct{}
+type inertAgentWorkflowBackend struct{}
 
-func (inertWorkflowBackend) AgentWorkflowCall(context.Context, string, json.RawMessage) (json.RawMessage, error) {
-	return nil, errors.New("analyze: workflow tools are not executable here")
-}
-
-func (inertWorkflowBackend) WorkflowCall(context.Context, string, json.RawMessage) (json.RawMessage, error) {
+func (inertAgentWorkflowBackend) AgentWorkflowCall(context.Context, string, json.RawMessage) (json.RawMessage, error) {
 	return nil, errors.New("analyze: workflow tools are not executable here")
 }
 

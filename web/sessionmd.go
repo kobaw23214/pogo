@@ -307,8 +307,13 @@ func renderResultBlock(b *strings.Builder, blk llm.Block, toolNames map[string]s
 		name = "(unknown)"
 	}
 	status := "成功"
-	if blk.IsError {
+	if projectedToolResultError(name, blk.IsError, blk.Details) {
 		status = "出错"
+		if !blk.IsError {
+			// The body can still contain its original stored-status footer. Make
+			// this read-time correction explicit without rewriting that evidence.
+			status += "（按浏览器执行回执判定）"
+		}
 	}
 	dur := ""
 	if blk.DurationMS > 0 {

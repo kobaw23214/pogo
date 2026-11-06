@@ -1,16 +1,20 @@
 <script setup lang="ts">
+import { useI18n } from "vue-i18n";
+const { t: tr } = useI18n();
 import { onBeforeUnmount, ref, watch } from "vue";
 import {
   ArrowRight,
   ChatDotRound,
   Delete,
+  Document,
   Edit,
   Link,
   MoreFilled,
 } from "@element-plus/icons-vue";
 import AgentAvatar from "@/components/AgentAvatar.vue";
 import type { PlatformAgent } from "@/agent/platformTypes";
-import { categoryLabel, formatAgentTime } from "@/agent/studioPresentation";
+import { formatAgentTime } from "@/agent/studioPresentation";
+import { navigateStudio } from "@/api/platform";
 
 /**
  * One Agent as a card (grid) or row (list). The primary action is always the
@@ -66,6 +70,11 @@ function choose(action: "edit" | "publish" | "remove") {
   else if (action === "publish") emit("publish", props.agent);
   else emit("remove", props.agent);
 }
+
+function manageMemory() {
+  menuOpen.value = false;
+  void navigateStudio(`/manage/memory?agent=${encodeURIComponent(props.agent.id)}`);
+}
 </script>
 
 <template>
@@ -76,16 +85,15 @@ function choose(action: "edit" | "publish" | "remove") {
         <button
           type="button"
           class="card-name"
-          :title="agent.status === 'draft' ? `继续配置 ${agent.name}` : `进入与 ${agent.name} 的对话`"
+          :title="agent.status === 'draft' ? tr('studioManagement.text001', { value0: agent.name }) : tr('studioManagement.text002', { value0: agent.name })"
           @click="primary"
         >
           {{ agent.name }}
         </button>
         <div class="chip-line">
-          <span class="st-chip" :class="agent.status">{{ agent.status === "ready" ? "已发布" : "草稿" }}</span>
+          <span class="st-chip" :class="agent.status">{{ agent.status === "ready" ? tr('studioManagement.text003') : tr('studioManagement.text004') }}</span>
           <span class="md-chip">{{ modelLabel }}</span>
           <span v-if="capabilitySummary" class="cap-chip" :title="capabilitySummary">{{ capabilitySummary }}</span>
-          <span class="cat-chip">{{ categoryLabel(agent.category) }}</span>
         </div>
       </div>
       <div class="card-menu">
@@ -94,35 +102,33 @@ function choose(action: "edit" | "publish" | "remove") {
           class="iconbtn"
           aria-haspopup="menu"
           :aria-expanded="menuOpen"
-          :aria-label="`${agent.name} 更多操作`"
+          :aria-label="tr('studioManagement.text005', { value0: agent.name })"
           @click.stop="toggleMenu"
         >
           <el-icon aria-hidden="true"><MoreFilled /></el-icon>
         </button>
         <div v-if="menuOpen" class="menu" role="menu" @click.stop @keydown.esc.stop="menuOpen = false">
+          <button type="button" role="menuitem" class="menu-item" @click="manageMemory">
+            <el-icon aria-hidden="true"><Document /></el-icon>{{ tr('memoryPanel.manageAction') }}</button>
           <button v-if="canManage" type="button" role="menuitem" class="menu-item" @click="choose('edit')">
-            <el-icon aria-hidden="true"><Edit /></el-icon>编辑
-          </button>
+            <el-icon aria-hidden="true"><Edit /></el-icon>{{ tr('studioManagement.text006') }} </button>
           <button v-if="agent.status === 'ready'" type="button" role="menuitem" class="menu-item" @click="choose('publish')">
-            <el-icon aria-hidden="true"><Link /></el-icon>发布与嵌入
-          </button>
+            <el-icon aria-hidden="true"><Link /></el-icon>{{ tr('studioManagement.text007') }} </button>
           <button v-if="canManage" type="button" role="menuitem" class="menu-item danger" @click="choose('remove')">
-            <el-icon aria-hidden="true"><Delete /></el-icon>删除
-          </button>
+            <el-icon aria-hidden="true"><Delete /></el-icon>{{ tr('studioManagement.text008') }} </button>
         </div>
       </div>
     </div>
 
-    <p class="card-desc" :class="{ muted: !agent.description }">{{ agent.description || "暂无简介" }}</p>
+    <p class="card-desc" :class="{ muted: !agent.description }">{{ agent.description || tr('studioManagement.text009') }}</p>
 
     <div class="card-foot">
       <span class="card-stat">
         <el-icon class="stat-ico" aria-hidden="true"><ChatDotRound /></el-icon>
-        {{ agent.conversation_count }} 次对话
-        <template v-if="formatAgentTime(agent.updated_at)"> · 更新于 {{ formatAgentTime(agent.updated_at) }}</template>
+        {{ tr('studioSentences.sessionConversationStats', { sessions: agent.conversation_count, conversations: agent.user_message_count ?? 0 }) }} <template v-if="formatAgentTime(agent.updated_at)"> {{ tr('studioSentences.updatedAt', { time: formatAgentTime(agent.updated_at) }) }}</template>
       </span>
       <button type="button" class="enter" :class="{ solid: agent.status === 'ready' }" @click="primary">
-        {{ agent.status === "draft" ? "继续配置" : "进入对话" }}
+        {{ agent.status === "draft" ? tr('studioManagement.text012') : tr('studioManagement.text013') }}
         <el-icon aria-hidden="true"><ArrowRight /></el-icon>
       </button>
     </div>
@@ -191,7 +197,6 @@ function choose(action: "edit" | "publish" | "remove") {
   gap: 6px;
 }
 .md-chip,
-.cat-chip,
 .cap-chip,
 .st-chip {
   font-size: 11.5px;
@@ -204,10 +209,6 @@ function choose(action: "edit" | "publish" | "remove") {
 }
 .md-chip {
   background: var(--el-fill-color-light);
-  color: var(--el-text-color-secondary);
-}
-.cat-chip {
-  background: var(--el-fill-color-lighter);
   color: var(--el-text-color-secondary);
 }
 .cap-chip {

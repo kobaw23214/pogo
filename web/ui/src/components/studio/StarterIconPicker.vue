@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useI18n } from "vue-i18n";
+const { t: tr } = useI18n();
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue';
 import { Icon } from '@iconify/vue';
 import AgentAvatar, { AVATAR_ICONS } from '@/components/AgentAvatar.vue';
@@ -21,17 +23,17 @@ const options = computed(() => {
 });
 const id = `starter-icons-${useId()}`;
 const labels: Record<string, string> = {
-  search: '搜索', filter: '筛选', eye: '查看', target: '目标', scan: '扫描', fingerprint: '识别',
-  compare: '比较', graph: '图表', trend: '趋势', clock: '时间', list: '列表', table: '表格',
-  tag: '标签', flag: '标记', code: '代码', terminal: '终端', bug: '排查', shield: '安全',
-  lock: '锁定', key: '钥匙', mask: '隐私', file: '文件', folder: '文件夹', archive: '归档',
-  box: '收纳', book: '阅读', layers: '图层', database: '数据', 'hard-drive': '存储', cpu: '计算',
-  robot: '助手', network: '连接', share: '分享', link: '链接', globe: '网页', cloud: '云端',
-  mail: '邮件', message: '对话', bell: '提醒', user: '个人', users: '团队', puzzle: '拼图',
-  wand: '生成', spark: '灵感', bolt: '快捷', fire: '热门', warn: '注意', refresh: '刷新',
-  history: '历史', download: '下载',
+  get search() { return tr('studioManagement.text309'); }, get filter() { return tr('studioManagement.text310'); }, get eye() { return tr('studioManagement.text311'); }, get target() { return tr('studioManagement.text312'); }, get scan() { return tr('studioManagement.text313'); }, get fingerprint() { return tr('studioManagement.text314'); },
+  get compare() { return tr('studioManagement.text315'); }, get graph() { return tr('studioManagement.text316'); }, get trend() { return tr('studioManagement.text317'); }, get clock() { return tr('studioManagement.text318'); }, get list() { return tr('studioManagement.text319'); }, get table() { return tr('studioManagement.text320'); },
+  get tag() { return tr('studioManagement.text156'); }, get flag() { return tr('studioManagement.text321'); }, get code() { return tr('studioManagement.text322'); }, get terminal() { return tr('studioManagement.text323'); }, get bug() { return tr('studioManagement.text324'); }, get shield() { return tr('studioManagement.text325'); },
+  get lock() { return tr('studioManagement.text326'); }, get key() { return tr('studioManagement.text327'); }, get mask() { return tr('studioManagement.text328'); }, get file() { return tr('studioManagement.text329'); }, get folder() { return tr('studioManagement.text330'); }, get archive() { return tr('studioManagement.text331'); },
+  get box() { return tr('studioManagement.text332'); }, get book() { return tr('studioManagement.text333'); }, get layers() { return tr('studioManagement.text334'); }, get database() { return tr('studioManagement.text335'); }, get 'hard-drive'() { return tr('studioManagement.text336'); }, get cpu() { return tr('studioManagement.text337'); },
+  get robot() { return tr('studioManagement.text338'); }, get network() { return tr('studioManagement.text339'); }, get share() { return tr('studioManagement.text340'); }, get link() { return tr('studioManagement.text341'); }, get globe() { return tr('studioManagement.text342'); }, get cloud() { return tr('studioManagement.text343'); },
+  get mail() { return tr('studioManagement.text344'); }, get message() { return tr('studioManagement.text345'); }, get bell() { return tr('studioManagement.text346'); }, get user() { return tr('studioManagement.text347'); }, get users() { return tr('studioManagement.text348'); }, get puzzle() { return tr('studioManagement.text349'); },
+  get wand() { return tr('studioManagement.text350'); }, get spark() { return tr('studioManagement.text351'); }, get bolt() { return tr('studioManagement.text352'); }, get fire() { return tr('studioManagement.text353'); }, get warn() { return tr('studioManagement.text354'); }, get refresh() { return tr('studioManagement.text355'); },
+  get history() { return tr('studioManagement.text356'); }, get download() { return tr('studioManagement.text357'); },
 };
-function iconLabel(name: string) { return uiIconName(name) || labels[name] || ({pen: '写作', compass: '探索', chart: '图表'} as Record<string,string>)[name] || (name ? '已保存图标' : '无图标'); }
+function iconLabel(name: string) { return uiIconName(name) || labels[name] || ({pen: tr('studioManagement.text358'), compass: tr('studioManagement.text359'), chart: tr('studioManagement.text316')} as Record<string,string>)[name] || (name ? tr('studioManagement.text360') : tr('studioManagement.text361')); }
 const selectedLabel = computed(() => iconLabel(props.modelValue));
 watch(options, () => { active.value = Math.min(active.value, options.value.length - 1); });
 function focusActive() {
@@ -80,11 +82,11 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', outside));
           <span>{{ selectedLabel }}</span><span aria-hidden="true" class="chevron">⌄</span>
         </button>
       </template>
-      <div :id="id" class="starter-icon-popup" role="dialog" :aria-label="`${label}选择`" @keydown="onKey">
-        <div class="starter-icon-grid" role="group" aria-label="图标选择">
+      <div :id="id" class="starter-icon-popup" role="dialog" :aria-label="tr('studioManagement.text362', { value0: label })" @keydown="onKey">
+        <div class="starter-icon-grid" role="group" :aria-label="tr('studioManagement.text363')">
           <button v-for="(name, i) in options" :key="name" type="button" class="starter-icon-tile"
             :class="{ selected: name === modelValue }" :data-icon-index="i" :tabindex="i === active ? 0 : -1"
-            :aria-label="name ? `选择图标 ${iconLabel(name)}` : '不使用图标'" :aria-pressed="name === modelValue"
+            :aria-label="name ? tr('studioManagement.text364', { value0: iconLabel(name) }) : tr('studioManagement.text365')" :aria-pressed="name === modelValue"
             @focus="active = i" @click="choose(name)">
             <AgentAvatar v-if="module === 'agents' && name" :icon="name" color="#5965e8" :size="24" />
             <Icon v-else-if="name && starterIconFor(name)" aria-hidden="true" :icon="starterIconFor(name)!" />

@@ -1,4 +1,4 @@
-import { alpha, mix, readable } from "./color";
+import { alpha, luminance, mix, parse, readable } from "./color";
 
 /**
  * A skin, as authored.
@@ -66,6 +66,43 @@ export interface ThemeSeed {
 /** The built token set: CSS custom property name → value. */
 export type Tokens = Record<string, string>;
 
+/** Execution rows use small text on both the canvas and subtle result/hover
+ * fills. Correct only their local foregrounds: published palette tokens stay
+ * unchanged for Todo, the composer and all other existing UI.
+ *
+ * An authored ink is not necessarily a reachable AA endpoint. Try the two
+ * actual luminance extremes, in bounded 1/255 steps, and keep the candidate
+ * with the least RGB displacement from the original colour. */
+function activityForeground(color: string, backgrounds: readonly string[]): string {
+  const backgroundLuminances = backgrounds.map(luminance);
+  const contrast = (candidate: string) => {
+    const foreground = luminance(candidate);
+    return Math.min(...backgroundLuminances.map(background =>
+      (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05)));
+  };
+  if (contrast(color) >= 4.5) return color;
+  const original = parse(color);
+  const distance = (candidate: string) => {
+    const rgb = parse(candidate);
+    return (rgb.r - original.r) ** 2 + (rgb.g - original.g) ** 2 + (rgb.b - original.b) ** 2;
+  };
+  const endpoints = ["#000000", "#ffffff"];
+  let best: string | undefined;
+  for (const endpoint of endpoints) {
+    if (contrast(endpoint) < 4.5) continue;
+    for (let step = 1; step <= 255; step++) {
+      const candidate = mix(color, endpoint, step / 255);
+      if (contrast(candidate) < 4.5) continue;
+      if (!best || distance(candidate) < distance(best)) best = candidate;
+      break;
+    }
+  }
+  // All supported skins have a qualifying endpoint. For an arbitrary future
+  // palette whose backgrounds straddle the AA limit, return the strongest
+  // available extreme rather than loop indefinitely or emit an invalid token.
+  return best ?? endpoints.reduce((a, b) => contrast(a) >= contrast(b) ? a : b);
+}
+
 /**
  * buildTokens turns a seed into every variable the app and Element Plus read.
  *
@@ -101,6 +138,9 @@ export function buildTokens(seed: ThemeSeed): Tokens {
   const warning = ramp(seed.warning);
   const danger = ramp(seed.danger);
   const info = ramp(muted);
+  const activitySurfaces = [canvas, fill(0.04), fill(0.06)];
+  const activity = (color: string) => activityForeground(color, activitySurfaces);
+  const link = mix(dark ? "#91c4f2" : "#205e96", ink, 0.1);
 
   const solid = seed.solid ?? (dark ? seed.accent : mix(ink, canvas, 0.06));
   const onSolid = readable(solid);
@@ -174,7 +214,16 @@ export function buildTokens(seed: ThemeSeed): Tokens {
 
     // Reading links keep a recognizable blue across skins. Mixing towards the
     // skin's ink keeps them legible on both the canvas and subtle hover fills.
-    "--pg-link-color": mix(dark ? "#91c4f2" : "#205e96", ink, 0.1),
+    "--pg-link-color": link,
+
+    // Local to the new execution layers. Semantic tokens also meet the text
+    // threshold so the same colour can label a state as well as draw its icon.
+    "--pg-activity-text": activity(mix(ink, canvas, 0.15)),
+    "--pg-activity-muted": activity(muted),
+    "--pg-activity-live": activity(seed.accent),
+    "--pg-activity-error": activity(seed.danger),
+    "--pg-activity-warning": activity(seed.warning),
+    "--pg-activity-link": activity(link),
 
     // The citation chip: a quiet fill with the accent on top. Dark skins can
     // reuse the ramp's d2 step; light ones cannot — several published accents

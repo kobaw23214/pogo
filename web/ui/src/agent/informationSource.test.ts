@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { setLocale } from "@/i18n";
+import { beforeEach, describe, expect, it } from "vitest";
 import type { CiteSource } from "@/api/types";
 import { sourceTypeName } from "./cite";
 import { citeIconInner } from "./citeIcons";
@@ -32,3 +33,6 @@ describe("information source identity", () => {
     expect(sourcePreview(source({ information: undefined, content: JSON.stringify({ content: "unstamped" }) }), "").text).toBe("原始资料备用摘录");
   });
 });
+
+// These fixtures assert Chinese labels/order; the interface now follows an explicit locale.
+beforeEach(() => setLocale("zh-CN"));

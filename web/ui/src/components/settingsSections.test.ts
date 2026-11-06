@@ -12,7 +12,7 @@ import {
   type SettingsSheet,
 } from "./settingsSections";
 
-const SECTIONS: SettingsSection[] = ["models", "mcp", "account", "general"];
+const SECTIONS: SettingsSection[] = ["models", "mcp", "account", "general", "memory"];
 
 describe("sectionOfSheet", () => {
   it("maps every sheet to the Studio module that owns it", () => {
@@ -26,6 +26,8 @@ describe("sectionOfSheet", () => {
       sandbox: "general",
       attach: "general",
       icons: "general",
+      websites: "general",
+      memory: "memory",
     };
     for (const sheet of SETTINGS_SHEETS) expect(sectionOfSheet(sheet)).toBe(expected[sheet]);
   });
@@ -63,7 +65,8 @@ describe("navShowsSheet", () => {
       ["models", ["service"]],
       ["mcp", ["mcp", "mcpServe", "mcpMonitor"]],
       ["account", ["account"]],
-      ["general", ["storage", "sandbox", "attach", "icons"]],
+      ["general", ["storage", "sandbox", "attach", "icons", "websites"]],
+      ["memory", ["memory"]],
     ];
     for (const [section, own] of cases) {
       const ownSet = new Set(own);

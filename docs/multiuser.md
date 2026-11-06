@@ -36,7 +36,7 @@ Users share the server runtime. Studio definitions select capabilities and pin a
   starters, panels, scheduler and log endpoints answer only to the admin
   grant: the default admin account, or accounts flagged `"admin": true` in
   users.json.
-  Ordinary accounts can use the published Agent/workflow surfaces and their own
+  Ordinary accounts can use the published Agent surfaces, Agent-private workflows and their own
   session space, but cannot use administrator-only configuration routes.
   Conversation surfaces (models, skills listing, tools, attachments policy)
   stay open to every authenticated user.
@@ -127,8 +127,9 @@ been automated in this batch.
   do not expire; rotate them through the account configuration and restart.
   There is no current business-signed short-lived JWT channel.
 - Ordinary scheduled prompt jobs run as CLI child processes whose transcripts
-  land unowned. Workflow schedules instead use the in-process workflow runner;
-  their records and visibility follow the workflow implementation.
+  land unowned. Agent-bound schedules use the Web Agent runtime with their
+  existing owner and Agent bindings. Retired platform-workflow schedules are
+  excluded rather than converted into ordinary prompt jobs.
 - The old delegated embed bridge is not a supported integration contract.
   External systems must use the current local-account/token API or explicitly
   design and implement a new identity integration.

@@ -167,7 +167,7 @@ func TestBrowserDevToolsDataSurvivesSuccessFailureAndSpill(t *testing.T) {
 			link := &capabilityBrowserLink{backend: BrowserBackendNative, stubLink: stubLink{replies: []BrowserReply{{OK: ok, Error: "diagnostic failed", Data: data}}}}
 			browser := &Browser{Link: link, SpillDir: t.TempDir()}
 			result, err := browser.Execute(context.Background(), json.RawMessage(`{"action":"devtools","method":"network.read","params":{"id":"request-7"}}`))
-			if err != nil || result.Details.(map[string]any)["ok"] != ok {
+			if (err != nil) != !ok || result.Details.(map[string]any)["ok"] != ok {
 				t.Fatalf("diagnostic result failed: %v / %+v", err, result)
 			}
 			text := result.Text

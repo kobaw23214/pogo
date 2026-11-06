@@ -1,3 +1,4 @@
+import { gt as tr } from "@/i18n";
 
 export function formatSkillBytes(bytes?: number): string {
   if (bytes === undefined || !Number.isFinite(bytes) || bytes < 0) return "—";
@@ -8,15 +9,15 @@ export function formatSkillBytes(bytes?: number): string {
 }
 
 export function skillFileError(file: Pick<File, "name" | "size">, limit: number): string {
-  if (!file.name.toLowerCase().endsWith(".zip")) return "请选择 .zip 格式的 Skill 包。";
-  if (!file.size) return "ZIP 文件为空，请重新选择。";
+  if (!file.name.toLowerCase().endsWith(".zip")) return tr('studioManagement.text510');
+  if (!file.size) return tr('studioManagement.text511');
   // limit <= 0 是服务器声明的大小不限：不再做客户端预检。
-  if (limit > 0 && file.size > limit) return `Skill 包超过 ${formatSkillBytes(limit)} 的上传上限。`;
+  if (limit > 0 && file.size > limit) return tr('studioManagement.text512', { value0: formatSkillBytes(limit) });
   return "";
 }
 
 export function skillError(error: unknown): string {
   const text = error instanceof Error ? error.message : String(error);
-  if (text.includes("version already installed")) return "这个 Skill 版本已安装，但内容不同。请使用新的版本号。";
-  return text || "操作未完成，请重试。";
+  if (text.includes("version already installed")) return tr('studioManagement.text513');
+  return text || tr('studioManagement.text514');
 }

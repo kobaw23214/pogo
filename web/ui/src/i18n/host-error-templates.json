@@ -1,0 +1,2862 @@
+[
+  {
+    "source": "%s ID 不能为空",
+    "key": "e28c2fcd3d60b"
+  },
+  {
+    "source": "%s ID 过长",
+    "key": "ec343706585a0"
+  },
+  {
+    "source": "%s 发布期间发生变化，请检查后重试",
+    "key": "e5ef0a6604862"
+  },
+  {
+    "source": "%s 将关联启用 %s；请刷新 Agent 配置页面并确认该 Skill 的关联工具后保存",
+    "key": "e7796c16290fa"
+  },
+  {
+    "source": "%s 已变化，请重试",
+    "key": "e177baa4b4cf4"
+  },
+  {
+    "source": "%s 已变化，请重试准备",
+    "key": "ee77293869aa3"
+  },
+  {
+    "source": "%s 必须是普通文件，不能使用符号链接",
+    "key": "e4724b27e2173"
+  },
+  {
+    "source": "%s 的关联工具需通过对应 Skill 启用或停用，不能单独修改",
+    "key": "ea3d09726824c"
+  },
+  {
+    "source": "%s 过大（%d MB），超出预览上限",
+    "key": "e4b7d9c5d7895"
+  },
+  {
+    "source": "%s 过大，超出预览上限",
+    "key": "ef0b01285b19c"
+  },
+  {
+    "source": "%s 选择最多 %d 项",
+    "key": "e6991bc689520"
+  },
+  {
+    "source": "%s内容过长",
+    "key": "e2848d19715d3"
+  },
+  {
+    "source": "%s存在未声明字段%s",
+    "key": "e288980abab7d"
+  },
+  {
+    "source": "%s数据不能继续读取字段",
+    "key": "e2fa50d516ca0"
+  },
+  {
+    "source": "%s缺少字段%s",
+    "key": "e8b469e6e3340"
+  },
+  {
+    "source": "%s需要%s类型",
+    "key": "ea07c2e7ac602"
+  },
+  {
+    "source": "%w: 参数名必须唯一且为有效标识符",
+    "key": "eaccb0e6abd08"
+  },
+  {
+    "source": "%w: 同一运行请求不能更换业务审批人",
+    "key": "e3dbd0281bd80"
+  },
+  {
+    "source": "%w: 审批节点 %s 没有可用的非自批审批人，请调整审批配置或业务审批分配",
+    "key": "ee753c6e8256a"
+  },
+  {
+    "source": "%w: 工作流与定时执行归属不一致",
+    "key": "e198d22ca07a6"
+  },
+  {
+    "source": "%w: 工作流重试链存在循环",
+    "key": "ebbfaa0a34ff6"
+  },
+  {
+    "source": "%w: 布局包含不属于当前流程的节点",
+    "key": "ebe4408063f60"
+  },
+  {
+    "source": "%w: 当前会话不可用的 MCP 方法 %q/%q，请检查 Agent 的 MCP 选择或刷新方法列表",
+    "key": "e8471aae87d92"
+  },
+  {
+    "source": "%w: 无效输入参数 %s",
+    "key": "e88756e5c348d"
+  },
+  {
+    "source": "%w: 最多支持32个输入参数",
+    "key": "ece8c36951908"
+  },
+  {
+    "source": "%w: 流程仍有运行或等待确认，请先结束运行后再删除",
+    "key": "e7da5e8fb2cff"
+  },
+  {
+    "source": "%w: 流程已删除，只能查看历史",
+    "key": "e84266729eeaf"
+  },
+  {
+    "source": "%w: 流程草稿已变化，请重新载入后保存布局",
+    "key": "e5d136fa88752"
+  },
+  {
+    "source": "%w: 画布布局已变化，请重新载入后保存",
+    "key": "ec5414937c9c5"
+  },
+  {
+    "source": "%w: 结构化模板展开结果超过1MiB，请精简引用数据",
+    "key": "e741914216534"
+  },
+  {
+    "source": "%w: 请选择 MCP 方法，格式为 /mcp:服务名/方法名",
+    "key": "ea50088a041aa"
+  },
+  {
+    "source": "%w: 输入参数过大",
+    "key": "eac1b6fea3a74"
+  },
+  {
+    "source": "%w: 附件 %s 不存在或越出工作区",
+    "key": "e14f7baeea54b"
+  },
+  {
+    "source": "%w: 附件 %s 不存在（可能已被移动或删除），请重新上传",
+    "key": "e982ac8804156"
+  },
+  {
+    "source": "%w: 附件 %s 不是普通文件",
+    "key": "ec06d81739206"
+  },
+  {
+    "source": "%w: 附件 %s: %v",
+    "key": "ebf36b234067b"
+  },
+  {
+    "source": "Agent 不存在或不可访问",
+    "key": "ead98c5297d33"
+  },
+  {
+    "source": "Agent 不存在或尚未就绪",
+    "key": "eaa9099402c7f"
+  },
+  {
+    "source": "Agent 任务不可绕过当前 Agent 模型或使用未支持的独立金额预算",
+    "key": "e9bb40bef1013"
+  },
+  {
+    "source": "Agent 尚未就绪：%s",
+    "key": "e9cd6f979b367"
+  },
+  {
+    "source": "Agent 工作区必须来自当前 Agent 的可信会话",
+    "key": "e55ece741cac9"
+  },
+  {
+    "source": "Agent 已删除或暂停，本次未启动",
+    "key": "e34b645ca5cbe"
+  },
+  {
+    "source": "Agent 已更新，请重新进入对话",
+    "key": "e11655443557e"
+  },
+  {
+    "source": "Agent 已被更新，请刷新后重试",
+    "key": "e324586623568"
+  },
+  {
+    "source": "Agent 或后台任务工具已不可用",
+    "key": "eae737e0d6f8a"
+  },
+  {
+    "source": "Agent 或哨兵工具已不可用",
+    "key": "e25ddd09a86fc"
+  },
+  {
+    "source": "Agent 数量已达到当前上限",
+    "key": "e57a1be5d1001"
+  },
+  {
+    "source": "Agent 模型、指令或能力配置已变化，请重新校验并发起新运行",
+    "key": "e2b53a18ba4b8"
+  },
+  {
+    "source": "Agent 的哨兵工具权限已撤销",
+    "key": "e110f1d823bec"
+  },
+  {
+    "source": "Agent 计划暂不支持独立金额预算，请使用轮次上限",
+    "key": "ed876c2eec923"
+  },
+  {
+    "source": "Agent 配置已变化，请重试同步 MCP",
+    "key": "e632c5d5224d9"
+  },
+  {
+    "source": "Agent 配置已变化，请重试同步 Skill",
+    "key": "e925911853acc"
+  },
+  {
+    "source": "Agent 配置已变化，请重试同步工具",
+    "key": "e45cae41abc7e"
+  },
+  {
+    "source": "Agent能力配置已变化，未继续处理下一项",
+    "key": "ec9383006c399"
+  },
+  {
+    "source": "Agent迭代产物需要安全且不使用保留目录的相对路径",
+    "key": "eba992cb5584a"
+  },
+  {
+    "source": "Agent迭代体需要task，不能配置代码策略",
+    "key": "ee148bc9f4727"
+  },
+  {
+    "source": "Agent配置已改变，请重新试跑",
+    "key": "e583d06e0eb71"
+  },
+  {
+    "source": "CONTAINER_MEMORY_BUDGET: 提高 POGO_MEMORY_LIMIT 后重启",
+    "key": "e10d2cbd27d86"
+  },
+  {
+    "source": "JSON嵌套或元素数量超出限制",
+    "key": "ec55edbfb846b"
+  },
+  {
+    "source": "JSON数据需要1–%d字节",
+    "key": "e05f4190828f2"
+  },
+  {
+    "source": "MCP 服务器 %s 已停用，请先启用后再选择",
+    "key": "e3f2262ec33d7"
+  },
+  {
+    "source": "MCP 配置尚未同步：%w",
+    "key": "e85f942bc80ab"
+  },
+  {
+    "source": "SDK 文件已变化，请重试准备",
+    "key": "ef019bdefba0a"
+  },
+  {
+    "source": "SDK 目录不可为符号链接或普通文件",
+    "key": "e491b4dba9f9a"
+  },
+  {
+    "source": "SDK 目录已变化，请重试",
+    "key": "eec51f6b1e3b1"
+  },
+  {
+    "source": "SDK 需要独立的工作区子目录",
+    "key": "ec49c72d2529f"
+  },
+  {
+    "source": "SKILL.md 已改变，请重新加载",
+    "key": "eb0f8a8c7d9d4"
+  },
+  {
+    "source": "SKILL.md 必须为 UTF-8 文本",
+    "key": "e084a5a6b2b85"
+  },
+  {
+    "source": "SKILL.md 必须是普通文件",
+    "key": "e47f1f29b79fd"
+  },
+  {
+    "source": "SKILL.md 必须是有效 UTF-8 文本，不能包含二进制控制字符",
+    "key": "e42439205aa8b"
+  },
+  {
+    "source": "SKILL.md 最多 256 KiB",
+    "key": "e928ef22d67dc"
+  },
+  {
+    "source": "SKILL.md 超过 256 KiB",
+    "key": "e82dffbf84c3f"
+  },
+  {
+    "source": "SKILL.md 需要包含完整 YAML frontmatter（name 和 description）",
+    "key": "e64813d459ec5"
+  },
+  {
+    "source": "Skill %s 只能选择一个版本",
+    "key": "ef6e6f9db80d3"
+  },
+  {
+    "source": "Skill ZIP 必须在根目录包含 SKILL.md，或只包含一个同名 Skill 文件夹；请重新打包为标准 Skill ZIP",
+    "key": "ea1734b289d4b"
+  },
+  {
+    "source": "Skill 不存在",
+    "key": "ebe2e8887ef2d"
+  },
+  {
+    "source": "Skill 创建能力已停用，请在 Agent 配置中启用 skill-creator",
+    "key": "eaf80868f85e0"
+  },
+  {
+    "source": "Skill 名称重复：%s，请只选择一个版本",
+    "key": "e2f741c588180"
+  },
+  {
+    "source": "Skill 声明需要 %d MiB 内存，当前容器为分析预留的预算为 %d MiB；请提高 POGO_MEMORY_LIMIT 后重启",
+    "key": "ec1cd5ff90d84"
+  },
+  {
+    "source": "Skill 存储不可用",
+    "key": "ef832e57630b9"
+  },
+  {
+    "source": "Skill 存储暂不可用；原内容保持不变，请稍后重试",
+    "key": "ea2ed771aa487"
+  },
+  {
+    "source": "Skill 导出失败",
+    "key": "e89c5a5fd2a54"
+  },
+  {
+    "source": "Skill 工具运行环境尚未启用",
+    "key": "e281b7167a9d2"
+  },
+  {
+    "source": "Skill 工具运行环境尚未启用，请先配置服务的运行目录",
+    "key": "eb80f1903ce04"
+  },
+  {
+    "source": "Skill 已停用或不可用：%s",
+    "key": "e1839fb15cb61"
+  },
+  {
+    "source": "Skill 已被其他窗口或 Agent 修改，请重新加载后再保存；当前编辑内容仍可保留",
+    "key": "eca67febed342"
+  },
+  {
+    "source": "Skill 搜索参数无效",
+    "key": "e0ff276373a20"
+  },
+  {
+    "source": "Skill 文档不存在或不可读取",
+    "key": "e977131f45e76"
+  },
+  {
+    "source": "Skill 文档保存失败，请检查写入权限后重试",
+    "key": "ea3357ad5c630"
+  },
+  {
+    "source": "Skill 文档超过读取上限",
+    "key": "e1e58d90af398"
+  },
+  {
+    "source": "Skill 文档路径无效，只能读取当前 Skill 包内的相对路径",
+    "key": "e91705b17bc01"
+  },
+  {
+    "source": "Skill 版本标识无效",
+    "key": "e081fb349e65a"
+  },
+  {
+    "source": "Skill 目录不能是符号链接",
+    "key": "e7b775344d907"
+  },
+  {
+    "source": "Skill 目录已改变，请重新加载",
+    "key": "ea8b6c461a93f"
+  },
+  {
+    "source": "Skill 绑定暂不可用，请检查运行环境后重试",
+    "key": "edf1bead74a51"
+  },
+  {
+    "source": "Skill 配置尚未同步：%w",
+    "key": "ee6e2ae83bffe"
+  },
+  {
+    "source": "Skill 附件 %s 必须是最多 32 MiB 的普通文件",
+    "key": "e57c97275ff1d"
+  },
+  {
+    "source": "Skill 附件 %s: %w",
+    "key": "e27db423cbd4d"
+  },
+  {
+    "source": "Skill主文档不存在、不可读或超过256KiB",
+    "key": "eac57e284dd5b"
+  },
+  {
+    "source": "Skill仍有调用正在结束，请稍后重试",
+    "key": "eae4d1536824f"
+  },
+  {
+    "source": "Skill版本不存在，请刷新列表",
+    "key": "e20fd3d50ebe5"
+  },
+  {
+    "source": "Spill 清理失败，会话记录尚未删除，可重试: %w",
+    "key": "e79d72b14ab32"
+  },
+  {
+    "source": "UNSUPPORTED_ISOLATION_PROFILE: 仅支持同容器进程沙箱",
+    "key": "ec6b3e9e40865"
+  },
+  {
+    "source": "active_only 必须为 true 或 false",
+    "key": "e98ddd7af72fa"
+  },
+  {
+    "source": "agent_id 无效",
+    "key": "e52cbc16120b4"
+  },
+  {
+    "source": "document.xml 解析失败（文件可能已损坏）",
+    "key": "e0539d347ff9b"
+  },
+  {
+    "source": "frontmatter 字段 %s 必须是文本",
+    "key": "ec41ae86c28a9"
+  },
+  {
+    "source": "frontmatter 字段 %s 的引号未闭合",
+    "key": "e36de2574a360"
+  },
+  {
+    "source": "frontmatter 字段重复：%s",
+    "key": "ec18baa80382c"
+  },
+  {
+    "source": "frontmatter 格式无效，请使用顶层键值格式",
+    "key": "e8191a5fe1408"
+  },
+  {
+    "source": "frontmatter 缺少 name",
+    "key": "e6d4b51137061"
+  },
+  {
+    "source": "frontmatter 缺少结束分隔符 ---",
+    "key": "ee22953dafd52"
+  },
+  {
+    "source": "include_deleted仅用于读取流程列表",
+    "key": "e54aa569eddcf"
+  },
+  {
+    "source": "item_index仅用于读取0–99号迭代项的真实产物",
+    "key": "ec4806ab36309"
+  },
+  {
+    "source": "limit 必须为 1 到 65536",
+    "key": "ea6bd3205f307"
+  },
+  {
+    "source": "loop.state需要object输入",
+    "key": "efbcea9ce709f"
+  },
+  {
+    "source": "markdown 不能为空",
+    "key": "ed51a7531f371"
+  },
+  {
+    "source": "markdown 超过 256 KiB 限制",
+    "key": "e3af4aea6b80d"
+  },
+  {
+    "source": "offset 必须为非负整数",
+    "key": "ef9cba1b06d7d"
+  },
+  {
+    "source": "pogo_watch.py 是平台协议辅助库，内容已改变；请保留业务入口并重新准备可信 SDK，不要自行改写辅助库",
+    "key": "e90f03d419e7c"
+  },
+  {
+    "source": "prefs.json 无法读取（%v），未保存更改",
+    "key": "ecc77a02b0bee"
+  },
+  {
+    "source": "request_id 已用于不同操作或内容，请使用新的 request_id",
+    "key": "e1251289f4f35"
+  },
+  {
+    "source": "required必须引用唯一的已声明字段",
+    "key": "e44b233c4972b"
+  },
+  {
+    "source": "revision 必须是正整数，且请求不能含多余内容",
+    "key": "ec8040f6382df"
+  },
+  {
+    "source": "run 已结束，无法继续",
+    "key": "ed87ddd71b68d"
+  },
+  {
+    "source": "run 正在执行中，请稍后",
+    "key": "e75be04aa54ea"
+  },
+  {
+    "source": "tool_approval_mode仅用于创建，且仅支持standard、strict或auto；修改请使用set_metadata",
+    "key": "ef1d155f7f358"
+  },
+  {
+    "source": "tool_approval_mode仅能在set_metadata中设置standard、strict或auto",
+    "key": "ebdec5c02fb96"
+  },
+  {
+    "source": "watch_decide 仅可用于当前哨兵唤醒的事件批次",
+    "key": "e7e38bab18479"
+  },
+  {
+    "source": "workbook.xml 解析失败",
+    "key": "e419c808d13ad"
+  },
+  {
+    "source": "一个 ZIP 只能包含一个 Skill；其他说明请放入 references/*.md",
+    "key": "ef51e5c3a6149"
+  },
+  {
+    "source": "一个或多个私有条目不存在；未删除任何条目",
+    "key": "ec1582d23438c"
+  },
+  {
+    "source": "一个或多个私有条目不存在；未移动任何条目",
+    "key": "e35fd2bb309c2"
+  },
+  {
+    "source": "一次最多选择16份材料",
+    "key": "e627a812cf3fb"
+  },
+  {
+    "source": "上游节点不存在: %s",
+    "key": "eaa490b555cfd"
+  },
+  {
+    "source": "上游节点尚未成功完成: %s",
+    "key": "e2a28556ba452"
+  },
+  {
+    "source": "不允许该回调目标地址",
+    "key": "e3685038f562d"
+  },
+  {
+    "source": "不支持的扩展名 %q（可选范围：%s）",
+    "key": "e365b5d538ead"
+  },
+  {
+    "source": "不支持的附件类型 %q（当前允许：%s）",
+    "key": "e0b5e98455b2d"
+  },
+  {
+    "source": "不是有效的 docx（无法作为 zip 打开）",
+    "key": "e762b55dedb1f"
+  },
+  {
+    "source": "不是有效的 xlsx（无法作为 zip 打开）",
+    "key": "edde9d3d8039b"
+  },
+  {
+    "source": "不是有界循环",
+    "key": "ef96ae05fc24c"
+  },
+  {
+    "source": "不是迭代或循环节点",
+    "key": "e80f22656197b"
+  },
+  {
+    "source": "不是集合迭代",
+    "key": "ed2e447a41d04"
+  },
+  {
+    "source": "不能修改 Skill 的 name；更名请重新导入，以免破坏已有 Agent 绑定",
+    "key": "eaf45bdbec4a3"
+  },
+  {
+    "source": "不能同时移动祖先目录及其内部条目，请只选择祖先目录",
+    "key": "e16a547254a38"
+  },
+  {
+    "source": "不能在文档编辑中修改 browser-task 或 disable-model-invocation 能力标记；请重新导入 Skill",
+    "key": "e015e5cd3c4fb"
+  },
+  {
+    "source": "不能把目录移动到自身或其后代目录",
+    "key": "eaffb3a0f18b1"
+  },
+  {
+    "source": "业务入口已变化，请重试准备",
+    "key": "e969e7d81b3c1"
+  },
+  {
+    "source": "业务审批人尚未映射到有效的普通平台账号",
+    "key": "ea231b91773d8"
+  },
+  {
+    "source": "业务审批人标识无效",
+    "key": "ece26ad540609"
+  },
+  {
+    "source": "业务审批人账号不可用",
+    "key": "ef30f137abf02"
+  },
+  {
+    "source": "业务审批分配节点过多",
+    "key": "ed403b7b07e40"
+  },
+  {
+    "source": "业务标识无效",
+    "key": "ef560648ad835"
+  },
+  {
+    "source": "主体或空间角色无效",
+    "key": "e34c13812c2cd"
+  },
+  {
+    "source": "产物不是可预览文本",
+    "key": "e18fd7f47b6ab"
+  },
+  {
+    "source": "产物身份无效",
+    "key": "ee9ac7c22883b"
+  },
+  {
+    "source": "仅失败或取消的运行可以重新发起",
+    "key": "eec8189d44b20"
+  },
+  {
+    "source": "仅支持保存当前 Skill 的 SKILL.md",
+    "key": "eee8b006d2e25"
+  },
+  {
+    "source": "仅支持启用或停用",
+    "key": "e741f770f98f2"
+  },
+  {
+    "source": "代码失败策略仅支持stop或fallback",
+    "key": "eab494fad9268"
+  },
+  {
+    "source": "代码必须非空且不超过%d字节",
+    "key": "e288aa4c7d161"
+  },
+  {
+    "source": "代码执行的冻结版本绑定已失效",
+    "key": "ebe18bb333c8e"
+  },
+  {
+    "source": "代码执行的真实运行记录不可用",
+    "key": "e7e16ac8d2f91"
+  },
+  {
+    "source": "代码执行身份快照无效",
+    "key": "ec20a14cd6bd0"
+  },
+  {
+    "source": "代码最多重试2次，重试间隔需要0–5000毫秒",
+    "key": "e211823d26e77"
+  },
+  {
+    "source": "代码节点需要code配置",
+    "key": "e09c1974eeda0"
+  },
+  {
+    "source": "代码语言仅支持python或javascript",
+    "key": "e83e7ad5616e2"
+  },
+  {
+    "source": "代码超时必须为1–60秒，省略时默认10秒",
+    "key": "e92bb03b1c30f"
+  },
+  {
+    "source": "代码输入%s需要且只能填写source或value",
+    "key": "e1fdae986dbdb"
+  },
+  {
+    "source": "代码输入名称或类型无效: %s",
+    "key": "e595e7af3a710"
+  },
+  {
+    "source": "代码输入常量合计超过256KiB",
+    "key": "e31e618219548"
+  },
+  {
+    "source": "代码输入必须与声明字段完全一致",
+    "key": "e3e23a23892e7"
+  },
+  {
+    "source": "代码输入必须为JSON对象",
+    "key": "e677438f4d16c"
+  },
+  {
+    "source": "代码输入最多64项，输出需要1–64项",
+    "key": "ee7b947936eaa"
+  },
+  {
+    "source": "代码输出必须与声明字段完全一致",
+    "key": "e9304c98bb457"
+  },
+  {
+    "source": "代码返回值必须为JSON对象",
+    "key": "e48da8b9d2b22"
+  },
+  {
+    "source": "代码迭代体只处理结构化输入输出，不能声明Agent任务或文件产物",
+    "key": "e96e5cab0919b"
+  },
+  {
+    "source": "代码迭代局部变量作用域不匹配",
+    "key": "ed7387df58e85"
+  },
+  {
+    "source": "任务到期时间无效，请先编辑修正",
+    "key": "e83d967375a67"
+  },
+  {
+    "source": "任务定义已变化，不能恢复未经确认的内容",
+    "key": "ee294c910ad66"
+  },
+  {
+    "source": "任务工作区不属于该账号",
+    "key": "e079211d3508e"
+  },
+  {
+    "source": "任务工作区或父目录含符号链接，无法安全使用",
+    "key": "ee2d99b8ec88e"
+  },
+  {
+    "source": "任务已过期，请先编辑到期时间再执行",
+    "key": "e6737b165c805"
+  },
+  {
+    "source": "任务执行已取消或超时: %w",
+    "key": "ea071e3c383ea"
+  },
+  {
+    "source": "任务日志保存失败: %w",
+    "key": "eabd985d1c42c"
+  },
+  {
+    "source": "任务没有获得执行记录",
+    "key": "e261044804739"
+  },
+  {
+    "source": "任务绑定不可更换；Workflow 计划请从工作流编辑",
+    "key": "e13899591b3bb"
+  },
+  {
+    "source": "任务账号已不可用",
+    "key": "e2de30aed73db"
+  },
+  {
+    "source": "任务账号已删除或不可用",
+    "key": "ef5394704542b"
+  },
+  {
+    "source": "任务账号或 Agent 绑定无效",
+    "key": "e35f73d152bff"
+  },
+  {
+    "source": "任务账号无效",
+    "key": "e01e42f3f2361"
+  },
+  {
+    "source": "任务账号目录无效",
+    "key": "e3cb0d937ed50"
+  },
+  {
+    "source": "任务运行时及账号校验尚未就绪",
+    "key": "ed1d431d87a6f"
+  },
+  {
+    "source": "任务附件无法读取: %w",
+    "key": "e871eaa96bae2"
+  },
+  {
+    "source": "任务附件未持久保存，请重新编辑任务",
+    "key": "e28472a0feafe"
+  },
+  {
+    "source": "保存收件状态失败: %w",
+    "key": "e30503d8c8214"
+  },
+  {
+    "source": "信息库不可用",
+    "key": "e3f375695e69d"
+  },
+  {
+    "source": "信息库不属于当前会话",
+    "key": "ef42a8ef989a2"
+  },
+  {
+    "source": "信息库请求格式无效",
+    "key": "e1acc2177153c"
+  },
+  {
+    "source": "候选定义不能指定归属身份",
+    "key": "e5e9f7f4dbb02"
+  },
+  {
+    "source": "停止原因过长",
+    "key": "ecdf69d5d26df"
+  },
+  {
+    "source": "允许的模型列表不能为空；留空此字段以使用单一默认模型",
+    "key": "eabc2ac9f2aa1"
+  },
+  {
+    "source": "允许的模型最多 16 个",
+    "key": "eb7f6f2a5f265"
+  },
+  {
+    "source": "入口名称或发布版本无效",
+    "key": "e2baa84150722"
+  },
+  {
+    "source": "入口必须绑定现有已发布版本",
+    "key": "e32ddff820011"
+  },
+  {
+    "source": "入口绑定的发布版本不可读",
+    "key": "e75c8286cb777"
+  },
+  {
+    "source": "其他语言脚本需提供可执行文件或解释器启动脚本",
+    "key": "ed04f702bed75"
+  },
+  {
+    "source": "内置图标配置包含无效名称",
+    "key": "ecc11818a0b2c"
+  },
+  {
+    "source": "内置图标配置需要数组",
+    "key": "eefea9f8542ec"
+  },
+  {
+    "source": "内部工作流宿主尚未就绪",
+    "key": "e826809e8de51"
+  },
+  {
+    "source": "内部流程已封存的 Agent 配置发生变化，请重新校验",
+    "key": "e2538a55d2d53"
+  },
+  {
+    "source": "内部流程执行会话仅允许处理工具审批，请在工作流面板控制运行",
+    "key": "e53b2d999be19"
+  },
+  {
+    "source": "内部流程执行会话由流程控制，请在工作流面板处理确认与工具审批",
+    "key": "e425232fbfb59"
+  },
+  {
+    "source": "内部流程执行存储不可用",
+    "key": "e3a81f6763e72"
+  },
+  {
+    "source": "写入路径无效",
+    "key": "e13be53372e78"
+  },
+  {
+    "source": "冻结的输入材料不可用",
+    "key": "eb568b0fcf9b3"
+  },
+  {
+    "source": "冻结的输入材料已变化，未继续执行",
+    "key": "e522150a17654"
+  },
+  {
+    "source": "冻结输入材料不可用",
+    "key": "e8a6209f89b2b"
+  },
+  {
+    "source": "冻结输入资料不可用",
+    "key": "ed91c982cbcfe"
+  },
+  {
+    "source": "分类过长",
+    "key": "ea8b608c888b1"
+  },
+  {
+    "source": "前序产物快照不可用",
+    "key": "e69617e823d52"
+  },
+  {
+    "source": "前序节点产物快照不可用",
+    "key": "eef8e78f0add6"
+  },
+  {
+    "source": "前序节点产物校验失败",
+    "key": "e365cd978f65a"
+  },
+  {
+    "source": "前序迭代产物快照不可用或校验失败",
+    "key": "ea22a5cc38862"
+  },
+  {
+    "source": "前序迭代产物身份无效",
+    "key": "e5d25d9d6644b"
+  },
+  {
+    "source": "包含不支持的权限",
+    "key": "e586a9360f9b7"
+  },
+  {
+    "source": "包含未声明的输入字段",
+    "key": "e790b8856fbf7"
+  },
+  {
+    "source": "单文件上限须在 %d–%d MB 之间（0 = 默认 %d MB）",
+    "key": "e168120e91d5c"
+  },
+  {
+    "source": "单节点试跑仅接受 node_inputs，不运行前序节点或读取资料文件",
+    "key": "e86a80ddaa37d"
+  },
+  {
+    "source": "单节点试跑需要选择已保存的代码节点",
+    "key": "e215e71d3f17d"
+  },
+  {
+    "source": "历史产物校验失败",
+    "key": "e184b47f19ddd"
+  },
+  {
+    "source": "历史资源已改变，不能无提示重试",
+    "key": "e5a2c4e246c83"
+  },
+  {
+    "source": "历史资源快照无效",
+    "key": "e01e5cdb5480c"
+  },
+  {
+    "source": "历史输入材料已改变，不能无提示重试",
+    "key": "eb8cc5d335ffc"
+  },
+  {
+    "source": "历史预览不能直接编辑",
+    "key": "e5d81e55fb83c"
+  },
+  {
+    "source": "压缩包内缺少 %s（文件可能已损坏）",
+    "key": "efd599baf5b88"
+  },
+  {
+    "source": "参数 %s 最多支持%d个选项",
+    "key": "ed9e5d6bbf440"
+  },
+  {
+    "source": "参数 %s 的类型不能配置选项",
+    "key": "e3e20b7fc0ee8"
+  },
+  {
+    "source": "参数 %s 的类型必须为text、boolean、select、number、integer、object或array",
+    "key": "e5a0d38699773"
+  },
+  {
+    "source": "参数 %s 的选项值必须非空、唯一且不超过256字节",
+    "key": "eaf47d0be6168"
+  },
+  {
+    "source": "参数 %s 的默认值无效: %v",
+    "key": "ed77112115391"
+  },
+  {
+    "source": "参数 %s 的默认值无效或过长",
+    "key": "e3f6e8fa47f86"
+  },
+  {
+    "source": "发布入口已改变，请刷新后重试",
+    "key": "e23190d84ed2f"
+  },
+  {
+    "source": "发布入口已被其他操作修改，请刷新后重试",
+    "key": "e5a6635ea4a79"
+  },
+  {
+    "source": "发起人不能被授权审批自己的运行",
+    "key": "eec51d1f66f25"
+  },
+  {
+    "source": "只允许一个JSON值",
+    "key": "edf4aa3a660ec"
+  },
+  {
+    "source": "只支持有限JSON数值",
+    "key": "e34b1bb9ccb52"
+  },
+  {
+    "source": "只有fallback策略可以填写备用输出",
+    "key": "ed760a9cc2df0"
+  },
+  {
+    "source": "只有对象类型能声明properties/required",
+    "key": "ec54a488020d1"
+  },
+  {
+    "source": "只有数组类型能声明items",
+    "key": "ec8b112e5ec2a"
+  },
+  {
+    "source": "只有空间管理员可以管理跨系统发布入口",
+    "key": "e611a22aa9ce2"
+  },
+  {
+    "source": "只能为声明业务分配的审批节点提供审批人",
+    "key": "e7195c8fc2cd4"
+  },
+  {
+    "source": "只能修改私有快捷方式",
+    "key": "e20683ad55491"
+  },
+  {
+    "source": "只能引用保证已完成的前序步骤: %s",
+    "key": "ea31df339f9ae"
+  },
+  {
+    "source": "只能指定一个 Agent",
+    "key": "ea957ef2f5647"
+  },
+  {
+    "source": "只能提交一个 JSON 对象",
+    "key": "e83e22f651296"
+  },
+  {
+    "source": "只读选区预览最多支持 32 MiB 的 Office 文件，原文件仍保留在信息库中",
+    "key": "e62229e2660a6"
+  },
+  {
+    "source": "合并计划不存在或已过期，请重新预览",
+    "key": "e846376d73792"
+  },
+  {
+    "source": "同一个 Skill 选择了多个版本，请只保留一个版本",
+    "key": "e946e971bdb6c"
+  },
+  {
+    "source": "同一唤醒编号的内容不一致",
+    "key": "eb7e678b500b2"
+  },
+  {
+    "source": "同目录已有同名文件夹",
+    "key": "e88c21372f21a"
+  },
+  {
+    "source": "名称、简介或指令超过长度限制",
+    "key": "e788f2516c708"
+  },
+  {
+    "source": "名称需要 1–60 个字符",
+    "key": "e05be7abd7052"
+  },
+  {
+    "source": "后台 Bash 结果的送达回执尚未保存，请稍后重试：%w",
+    "key": "ea504b2bc932b"
+  },
+  {
+    "source": "后台任务会话绑定已失效",
+    "key": "e18036af27853"
+  },
+  {
+    "source": "后台任务已到截止时间；恢复不会延长原截止时间",
+    "key": "e1908059349ae"
+  },
+  {
+    "source": "后台任务账号不可用或运行时尚未就绪",
+    "key": "e525efb36bbcf"
+  },
+  {
+    "source": "后台任务运行时已停止",
+    "key": "e2227872a7526"
+  },
+  {
+    "source": "后台命令记录清理失败，会话记录尚未删除，可重试: %w",
+    "key": "e4c5ad4d3d7d3"
+  },
+  {
+    "source": "后台执行凭证不可用",
+    "key": "e9644cccb033d"
+  },
+  {
+    "source": "后台执行结果写入失败，请核查运行记录",
+    "key": "e960d51d56b82"
+  },
+  {
+    "source": "后台执行队列尚未就绪",
+    "key": "eb2b4dba2bbc1"
+  },
+  {
+    "source": "启动码无效、已使用或过期，请重新打开",
+    "key": "e334bb37bfcdd"
+  },
+  {
+    "source": "命令只能通过对应入口执行",
+    "key": "edcb258962515"
+  },
+  {
+    "source": "哨兵事件存储已达到 256 MiB 预算，未推进采集游标",
+    "key": "ee2a7e3873bba"
+  },
+  {
+    "source": "哨兵会话是后台运行记录，请在主会话发送消息；审批仍可在此处理",
+    "key": "e2ac71ce6c0d6"
+  },
+  {
+    "source": "哨兵会话绑定已失效",
+    "key": "ec366f257a369"
+  },
+  {
+    "source": "哨兵准备阶段已中断: %v",
+    "key": "e534c3d58089a"
+  },
+  {
+    "source": "哨兵准备阶段已中断: %w",
+    "key": "eb4d086fb81cd"
+  },
+  {
+    "source": "哨兵工作区不可位于服务私有状态目录内",
+    "key": "ee621535cfaf3"
+  },
+  {
+    "source": "哨兵工作区不可包含服务私有状态，请使用独立的 Agent 工作目录",
+    "key": "ef02de629d91f"
+  },
+  {
+    "source": "哨兵工作区已改变，请重新检查",
+    "key": "e7fe777da50a3"
+  },
+  {
+    "source": "哨兵工作区必须是原绑定目录",
+    "key": "ec47cae5e76d5"
+  },
+  {
+    "source": "哨兵工作区路径已变化或包含符号链接",
+    "key": "ede9e6589ee7d"
+  },
+  {
+    "source": "哨兵已暂停或采集版本已退役，未接纳新的运行",
+    "key": "eac23ce8233ce"
+  },
+  {
+    "source": "哨兵已有其他监管进程，未启动重复监听: %w",
+    "key": "eb742b550ee96"
+  },
+  {
+    "source": "哨兵所属 Agent 已暂停或删除",
+    "key": "ecc87bcdf8f30"
+  },
+  {
+    "source": "哨兵状态回执不完整",
+    "key": "e115ea949b0ad"
+  },
+  {
+    "source": "哨兵状态归属不一致",
+    "key": "ee856f4e4330a"
+  },
+  {
+    "source": "哨兵的每日执行准入预算已用尽，暂不能开始新的重试",
+    "key": "ea989b2ff91a5"
+  },
+  {
+    "source": "哨兵监管器已停止",
+    "key": "e2b8d4a4117ac"
+  },
+  {
+    "source": "哨兵脚本不是已保存的普通文件，或超过大小限制",
+    "key": "ebe4738d7eb15"
+  },
+  {
+    "source": "哨兵脚本包出现未登记文件，请重新注册版本",
+    "key": "e171da2552f1f"
+  },
+  {
+    "source": "哨兵脚本包包含符号链接，请重新注册版本",
+    "key": "e1f59221a9128"
+  },
+  {
+    "source": "哨兵脚本包目录过多",
+    "key": "e901b7d9870ef"
+  },
+  {
+    "source": "哨兵脚本包缺少已登记文件，请重新注册版本",
+    "key": "e4cd894ff3761"
+  },
+  {
+    "source": "哨兵脚本已被修改，请重新注册版本",
+    "key": "e96755a12f641"
+  },
+  {
+    "source": "哨兵脚本摘要无效",
+    "key": "e68ed469a6789"
+  },
+  {
+    "source": "哨兵脚本检查不可用",
+    "key": "e756d1c8fd7ed"
+  },
+  {
+    "source": "哨兵脚本检查回执无效",
+    "key": "e86a11ea46efb"
+  },
+  {
+    "source": "哨兵脚本检查未返回协议帧",
+    "key": "e6558788f381f"
+  },
+  {
+    "source": "哨兵脚本正在变化或超过大小限制",
+    "key": "e5741f6e99f95"
+  },
+  {
+    "source": "哨兵脚本正在变化，请重新注册版本",
+    "key": "e148b205c3f38"
+  },
+  {
+    "source": "哨兵脚本版本清单损坏",
+    "key": "e9b6e8a380a82"
+  },
+  {
+    "source": "哨兵脚本路径或摘要无效",
+    "key": "e1c739c818e9f"
+  },
+  {
+    "source": "哨兵账号不可用或运行时尚未就绪",
+    "key": "eb55edd188709"
+  },
+  {
+    "source": "哨兵账号已不可用或运行时尚未就绪",
+    "key": "e58adcde303bd"
+  },
+  {
+    "source": "哨兵账号绑定不一致",
+    "key": "ea1ed2ffbaafc"
+  },
+  {
+    "source": "哨兵账号绑定无效",
+    "key": "eb229b9ba6d71"
+  },
+  {
+    "source": "哨兵输入保存失败，未启动模型",
+    "key": "ef79103af8087"
+  },
+  {
+    "source": "哨兵运行时不可用",
+    "key": "e23d3a88d517f"
+  },
+  {
+    "source": "哨兵运行时已停止",
+    "key": "e52411b1d857b"
+  },
+  {
+    "source": "哨兵运行时需要受支持的进程锁和 Linux 脚本沙箱",
+    "key": "e7a64afc3515f"
+  },
+  {
+    "source": "唤醒输入已保存但执行结果未知；需显式检查重试",
+    "key": "e205c0710393a"
+  },
+  {
+    "source": "回调使用 HTTPS；本机开发可使用 loopback HTTP",
+    "key": "ea06ae3b11b4a"
+  },
+  {
+    "source": "回调地址无效",
+    "key": "e1c80080d555f"
+  },
+  {
+    "source": "回调地址须为完整 HTTPS 地址，不包含凭据、查询参数或片段",
+    "key": "e09aa5ce11376"
+  },
+  {
+    "source": "回调端口无效",
+    "key": "e74785d848709"
+  },
+  {
+    "source": "回调记录暂时不可用",
+    "key": "e2ef84ba9c17b"
+  },
+  {
+    "source": "图标保存失败；原版本已保留",
+    "key": "ea5b77f15a939"
+  },
+  {
+    "source": "图标创建时间无效",
+    "key": "eecead44f4282"
+  },
+  {
+    "source": "图标名称、路径、标识或模块不符合要求；仅支持安全的 16×16 线条路径",
+    "key": "e1f07f81cbe8d"
+  },
+  {
+    "source": "图标存储不可用",
+    "key": "e8c8cf9918ca5"
+  },
+  {
+    "source": "图标库已在其他窗口更新，请核对后重新保存",
+    "key": "e9cdd8a86df50"
+  },
+  {
+    "source": "图标库格式无效；原文件已保留",
+    "key": "ed6aa4713017f"
+  },
+  {
+    "source": "图标库超过存储上限",
+    "key": "e716aaa348d62"
+  },
+  {
+    "source": "图标库需要有效版本和数组，最多保存 256 个图标",
+    "key": "e6f5ddda27c35"
+  },
+  {
+    "source": "图标描述含不支持的字符",
+    "key": "ee2c75b7bbc75"
+  },
+  {
+    "source": "图标版本超出支持范围",
+    "key": "e2ab34d758936"
+  },
+  {
+    "source": "外部身份重复或格式无效",
+    "key": "e8ff316325247"
+  },
+  {
+    "source": "字段 %s 的内容超过长度限制",
+    "key": "e7f0fc437b037"
+  },
+  {
+    "source": "字段 %s 的取值不在选项内",
+    "key": "ea28ef78c56d4"
+  },
+  {
+    "source": "定时任务会话是后台运行记录，请在普通会话发送消息；结果、审批与取消仍可在后台任务中处理",
+    "key": "eb47ad802997b"
+  },
+  {
+    "source": "审批分配不可用",
+    "key": "e26323a0ab078"
+  },
+  {
+    "source": "审批分配尚未就绪，未发起运行",
+    "key": "e76e4b619233c"
+  },
+  {
+    "source": "审批分配引用的发布版本不可读",
+    "key": "e96efef25afe6"
+  },
+  {
+    "source": "审批授权尚未就绪",
+    "key": "e2afc966d308a"
+  },
+  {
+    "source": "审批身份无效",
+    "key": "e706391ba30be"
+  },
+  {
+    "source": "对象字段名无效: %s",
+    "key": "e0d835fa9eefb"
+  },
+  {
+    "source": "对象字段过多",
+    "key": "eec107c2f8836"
+  },
+  {
+    "source": "局部index需要integer或number输入",
+    "key": "e44c83190730f"
+  },
+  {
+    "source": "局部变量不属于当前迭代体",
+    "key": "e8e639135e4d0"
+  },
+  {
+    "source": "局部数据作用域或下标无效",
+    "key": "e3fd81f7e26e6"
+  },
+  {
+    "source": "嵌入会话已过期或入口授权已改变，请重新打开",
+    "key": "e67e7650d60b2"
+  },
+  {
+    "source": "嵌入会话无效，请从业务系统重新打开",
+    "key": "eac9d4550539c"
+  },
+  {
+    "source": "嵌入来源端口无效",
+    "key": "ea63568828e17"
+  },
+  {
+    "source": "嵌入来源须为完整的网站 origin，不支持通配符或路径",
+    "key": "ec4008c6786f2"
+  },
+  {
+    "source": "嵌入来源须使用 HTTPS；本机开发可使用 HTTP",
+    "key": "eb9af59e94e90"
+  },
+  {
+    "source": "嵌入连接过多，请稍后重试",
+    "key": "e3bfd7118fc48"
+  },
+  {
+    "source": "工作流尚未发布，请先发布后再运行",
+    "key": "ec8f3a8150b20"
+  },
+  {
+    "source": "工作流已被更新，请刷新后重试",
+    "key": "e711e2e887e3e"
+  },
+  {
+    "source": "工作流数量已达到当前上限",
+    "key": "e14ee28416a7e"
+  },
+  {
+    "source": "工作流文件不属于当前用户目录",
+    "key": "eadeda1074760"
+  },
+  {
+    "source": "工作流权限存储暂时不可用",
+    "key": "e0d3e1f589ec7"
+  },
+  {
+    "source": "工作流状态保存失败，已停止后续调度；请修复存储后恢复",
+    "key": "e104c01238906"
+  },
+  {
+    "source": "工作流绑定资源总计超过16MiB",
+    "key": "edbb27e10b375"
+  },
+  {
+    "source": "工作流运行管理尚未就绪",
+    "key": "ea6f465d9acf1"
+  },
+  {
+    "source": "工作簿中没有可读取的工作表",
+    "key": "eba9eefe7078c"
+  },
+  {
+    "source": "工作簿中没有工作表",
+    "key": "ef42200c9fbe7"
+  },
+  {
+    "source": "工具配置尚未同步：%w",
+    "key": "e4ec2ce4b7846"
+  },
+  {
+    "source": "已保存图标的画法与创建时间不可更改，请另存新图标",
+    "key": "e5da1fa57fe39"
+  },
+  {
+    "source": "已保存资料回执格式无效；原文件已保留",
+    "key": "e754a85fe3472"
+  },
+  {
+    "source": "已保存资料格式无效；原文件已保留",
+    "key": "e586d6341bc9d"
+  },
+  {
+    "source": "已保存资料目录格式无效；原文件已保留",
+    "key": "e20627f2cc5e2"
+  },
+  {
+    "source": "已保存资料超过读取上限或无法读取；原文件已保留",
+    "key": "e04daf78932aa"
+  },
+  {
+    "source": "已存在同名 Agent：",
+    "key": "ee2f71db12def"
+  },
+  {
+    "source": "已有开场提示的内容或图标不符合要求，请检查后重试",
+    "key": "e95660fcb842e"
+  },
+  {
+    "source": "布尔参数 %s 的选项值必须为yes和no",
+    "key": "e0fe2896b894a"
+  },
+  {
+    "source": "开场卡片图标无效：",
+    "key": "e73e52ca034a6"
+  },
+  {
+    "source": "开场问题最多 200 个字符（标题 60、标签 40）",
+    "key": "eeccbc4ee658d"
+  },
+  {
+    "source": "引导消息保存失败，已停止执行",
+    "key": "ec1022377444f"
+  },
+  {
+    "source": "引用已失效，请先读取当前 Agent 的资料",
+    "key": "e006dbbaeda28"
+  },
+  {
+    "source": "引用的 Agent 不存在或已删除：%s",
+    "key": "e854a6e3f5895"
+  },
+  {
+    "source": "引用的输入参数未声明: %s",
+    "key": "e97c719b14020"
+  },
+  {
+    "source": "当前 Agent 会话已改变或不可用",
+    "key": "e3df706beaa7b"
+  },
+  {
+    "source": "当前 Agent 内部工作流授权或会话绑定已失效",
+    "key": "ea5c09259611c"
+  },
+  {
+    "source": "当前 Agent 已有同名 Skill，请读取后更新，或使用其他名称",
+    "key": "eaa6824f9f1d3"
+  },
+  {
+    "source": "当前 Agent 的 Skill 存储不可用",
+    "key": "e0362e69b257a"
+  },
+  {
+    "source": "当前会话没有可用的记忆目录",
+    "key": "e2de13baa0cdd"
+  },
+  {
+    "source": "当前批次已有不同的处理决定",
+    "key": "e26f1881059da"
+  },
+  {
+    "source": "当前账号、Agent或内部工作流执行权限已撤销",
+    "key": "ea608ca92aadb"
+  },
+  {
+    "source": "待处理消息记录已达到容量上限",
+    "key": "e38118269150b"
+  },
+  {
+    "source": "待处理消息记录无效，原文件已保留",
+    "key": "efac7a64b29b9"
+  },
+  {
+    "source": "待处理消息记录无法读取",
+    "key": "ed86727ac5778"
+  },
+  {
+    "source": "待处理消息过多，请先处理或撤回已有消息",
+    "key": "e94d4ff5a4e6e"
+  },
+  {
+    "source": "循环初始状态超过64KiB",
+    "key": "eab19984333ae"
+  },
+  {
+    "source": "循环必须明确填写1–100次的执行上限",
+    "key": "e0e108499acb6"
+  },
+  {
+    "source": "循环状态需要JSON对象",
+    "key": "e9b69ec623ede"
+  },
+  {
+    "source": "循环退出条件: %w",
+    "key": "ee91eb87e9957"
+  },
+  {
+    "source": "循环退出条件只能引用loop.state或loop.index",
+    "key": "e1ee755e2a8b7"
+  },
+  {
+    "source": "循环配置缺失",
+    "key": "e3f5f561f38f6"
+  },
+  {
+    "source": "必填字段未填写：%s",
+    "key": "e9708717e1760"
+  },
+  {
+    "source": "快捷卡片引用只接受当前来源标识",
+    "key": "eae9794c6468e"
+  },
+  {
+    "source": "快捷方式含暂不支持的引用类型 %s，请改为文本、Skill或已保存文件",
+    "key": "e0f5073a0d904"
+  },
+  {
+    "source": "快捷方式嵌套超过16层",
+    "key": "efd9729f0b3d2"
+  },
+  {
+    "source": "快捷方式引用的Skill %s 未由所属Agent授权",
+    "key": "ead287995d009"
+  },
+  {
+    "source": "快捷方式整理保存失败；原版本已保留",
+    "key": "e5189ac2d79ff"
+  },
+  {
+    "source": "快捷方式整理超过存储上限；原版本已保留",
+    "key": "e5387854f0329"
+  },
+  {
+    "source": "快捷方式文件不是当前用户和Agent授权的已保存附件，请重新保存附件",
+    "key": "e2cabf4533c42"
+  },
+  {
+    "source": "快捷方式文本超过256KiB",
+    "key": "e5caf2204c043"
+  },
+  {
+    "source": "快捷方式版本或请求记录已达到存储上限",
+    "key": "edfd5b1575ea6"
+  },
+  {
+    "source": "快捷方式附件内容已改变",
+    "key": "e6648fea74b5a"
+  },
+  {
+    "source": "快捷方式附件超过4MiB",
+    "key": "e76e498878dfb"
+  },
+  {
+    "source": "快捷附件不可用，请重新添加文件并保存卡片",
+    "key": "e315d6db9d447"
+  },
+  {
+    "source": "快捷附件复制失败或内容已变化，请重新保存",
+    "key": "e53d28f7f37ea"
+  },
+  {
+    "source": "快捷附件已复制，但文档登记尚未完成，请重新读取附件列表后重试",
+    "key": "edfe4fa101c9e"
+  },
+  {
+    "source": "快捷附件已损坏，请重新保存卡片",
+    "key": "eba9237c702cb"
+  },
+  {
+    "source": "快捷附件超过 %d MB 上限",
+    "key": "eeb4bb4426633"
+  },
+  {
+    "source": "截止时间之前没有可执行的计划时刻；截止时刻本身不启动新执行",
+    "key": "e7a386d5502a9"
+  },
+  {
+    "source": "所属 Agent 或执行授权已撤销",
+    "key": "edca1d3a91dff"
+  },
+  {
+    "source": "所选 MCP 服务器不存在或已停用，请刷新能力列表后重试",
+    "key": "e15c0311852ce"
+  },
+  {
+    "source": "所选 Skill 已不可用，请刷新能力列表后重试",
+    "key": "ee4a54faa041f"
+  },
+  {
+    "source": "所选 Skill 重复提供能力 %s，请只保留一个提供该能力的 Skill",
+    "key": "ed50073f1d294"
+  },
+  {
+    "source": "所选内置工具不存在，请刷新能力列表后重试",
+    "key": "eb4582c0f6610"
+  },
+  {
+    "source": "所选工具不支持当前隔离执行环境",
+    "key": "e86e77e3744e7"
+  },
+  {
+    "source": "所选工具要求未获授权的网络访问",
+    "key": "e117ac9572f4f"
+  },
+  {
+    "source": "所选模型不存在或尚未配置，请检查模型设置",
+    "key": "e11a80ff2df11"
+  },
+  {
+    "source": "执行间隔超出可支持的范围",
+    "key": "ec2cfc8dd0f79"
+  },
+  {
+    "source": "按业务单隔离的入口必须提供有效的业务单标识",
+    "key": "ee7734c6dcbb4"
+  },
+  {
+    "source": "接入凭据无效",
+    "key": "e4238ae29fc8b"
+  },
+  {
+    "source": "控制命令不可作为定时任务",
+    "key": "e0ee33d8f0bde"
+  },
+  {
+    "source": "描述或指令超过长度限制",
+    "key": "edfad778744e7"
+  },
+  {
+    "source": "描述超过长度限制",
+    "key": "e89b2128ce28d"
+  },
+  {
+    "source": "数据不能继续读取字段: %s",
+    "key": "eee60a2432e02"
+  },
+  {
+    "source": "数据字段不存在: %s",
+    "key": "e60332de854d2"
+  },
+  {
+    "source": "数据必须随 Skill 打包；不支持外部数据资源槽",
+    "key": "eea4b3a42840e"
+  },
+  {
+    "source": "数据来源需要且只能填写source或value",
+    "key": "eefe75c82b84c"
+  },
+  {
+    "source": "数组下标不存在: %s",
+    "key": "ecf40eee63e65"
+  },
+  {
+    "source": "数组引用需要数字下标",
+    "key": "e470047ee4f37"
+  },
+  {
+    "source": "数组输出必须声明items类型",
+    "key": "ec64dc6a651f5"
+  },
+  {
+    "source": "文件为空、不是普通文件或超过当前附件大小上限",
+    "key": "e66f587dbba03"
+  },
+  {
+    "source": "文件内容超出只读选区预览的复杂度限制，暂时无法制作选区。原文件仍保留在信息库，可下载或整份引用；也可以上传范围更小的文档或工作表副本",
+    "key": "e66fad44c7217"
+  },
+  {
+    "source": "文件路径不合法",
+    "key": "e499276e76fc1"
+  },
+  {
+    "source": "文件路径无效",
+    "key": "e3586c167c26d"
+  },
+  {
+    "source": "文件过大",
+    "key": "e5bfcab76a601"
+  },
+  {
+    "source": "文件须为大小受限的普通文件",
+    "key": "e546787df6e30"
+  },
+  {
+    "source": "文档已被其他窗口修改，请重新加载后再保存；当前编辑内容仍可保留",
+    "key": "efabebbe40be6"
+  },
+  {
+    "source": "文档批处理未返回可执行副本，脚本未运行。",
+    "key": "e76ba43d8d712"
+  },
+  {
+    "source": "文档请求只能包含一个 JSON 对象",
+    "key": "efac860e804fc"
+  },
+  {
+    "source": "文档请求必须为 UTF-8 JSON",
+    "key": "e791709de51ac"
+  },
+  {
+    "source": "文档请求过大",
+    "key": "e703dafac673d"
+  },
+  {
+    "source": "新运行已受理，执行段读取失败",
+    "key": "ea1350c6a03f4"
+  },
+  {
+    "source": "无效JSON: %w",
+    "key": "e2b1e943f608d"
+  },
+  {
+    "source": "无效局部数据字段: %s",
+    "key": "e3e5c839262c9"
+  },
+  {
+    "source": "无效局部数据引用: %s",
+    "key": "e7bf376dc578f"
+  },
+  {
+    "source": "无效数据引用: %s",
+    "key": "e3aab96cc9faa"
+  },
+  {
+    "source": "无效的 Agent 状态",
+    "key": "e30f9c5f631da"
+  },
+  {
+    "source": "无效的 Skill ID",
+    "key": "e6853cfb8c32e"
+  },
+  {
+    "source": "无效的工作流定义：%w",
+    "key": "ee30b3e830840"
+  },
+  {
+    "source": "无效的引用排列方式",
+    "key": "e1d7cf9598980"
+  },
+  {
+    "source": "无效的待处理消息",
+    "key": "edb4aeed277b3"
+  },
+  {
+    "source": "无效的快捷卡片数据",
+    "key": "ee61623d8b9b7"
+  },
+  {
+    "source": "无效的快捷附件",
+    "key": "e25b8fada74d9"
+  },
+  {
+    "source": "无效的操作：%s",
+    "key": "ea9a14f6128ad"
+  },
+  {
+    "source": "无效的收藏范围参数",
+    "key": "e7de59480c22e"
+  },
+  {
+    "source": "无效的消息附件",
+    "key": "e2306b7dbfafe"
+  },
+  {
+    "source": "无效输入参数 %s",
+    "key": "ecb53ebfa4f4d"
+  },
+  {
+    "source": "无效输入参数%s",
+    "key": "e00cb7c7dcedf"
+  },
+  {
+    "source": "无法保存快捷附件",
+    "key": "e1320ea971ee9"
+  },
+  {
+    "source": "无法发布：%w",
+    "key": "eb944836962e9"
+  },
+  {
+    "source": "无法打开会话工作区",
+    "key": "efcdf55114d63"
+  },
+  {
+    "source": "无法打开快捷附件存储",
+    "key": "e36fb326ba7b7"
+  },
+  {
+    "source": "无法打开资料附件存储",
+    "key": "ec92aeb83cdd7"
+  },
+  {
+    "source": "无法核验已有Skill 绑定，请先修复配置",
+    "key": "e1fbc07430446"
+  },
+  {
+    "source": "无法登记会话附件",
+    "key": "ee685be970c13"
+  },
+  {
+    "source": "无法登记快捷附件",
+    "key": "e1115001caa4b"
+  },
+  {
+    "source": "无法读取 MCP 目录，请检查 MCP 配置",
+    "key": "e7aafcef67912"
+  },
+  {
+    "source": "无法读取 MCP 目录：%w",
+    "key": "e1dc0905187c6"
+  },
+  {
+    "source": "无法读取图标库；原文件已保留",
+    "key": "e0d1421fe679c"
+  },
+  {
+    "source": "无法读取图标生成请求",
+    "key": "edea86830e7c4"
+  },
+  {
+    "source": "无法读取已保存资料；原文件已保留",
+    "key": "e786961f3f67b"
+  },
+  {
+    "source": "无法读取快捷附件：",
+    "key": "ec16391eedd5b"
+  },
+  {
+    "source": "无法读取文档内容",
+    "key": "e3af8113f351f"
+  },
+  {
+    "source": "无法读取生成请求，请检查草稿内容与条数",
+    "key": "e6b3dfb02f353"
+  },
+  {
+    "source": "无法读取这份 Office 文件的保存内容，请确认文件未加密且格式完整",
+    "key": "e19802cd43db6"
+  },
+  {
+    "source": "旧版 .doc 为二进制格式，无法在线预览，请下载后查看",
+    "key": "e17467d10a49a"
+  },
+  {
+    "source": "旧版 .xls 为二进制格式，无法在线预览，请下载后查看",
+    "key": "ef671cc273699"
+  },
+  {
+    "source": "暂时无法确认工作流权限",
+    "key": "e7cf67e326646"
+  },
+  {
+    "source": "暂时无法确认工作流运行权限",
+    "key": "ec3c6e308ad8b"
+  },
+  {
+    "source": "更新不能把目标卡片自身的快照再次嵌入；请使用 shortcut_query 的 read 操作返回的 graph 展开后编辑，或另存为新卡片",
+    "key": "e81f4d6228bdd"
+  },
+  {
+    "source": "最多添加 8 个开场问题",
+    "key": "e9d2d570daba3"
+  },
+  {
+    "source": "最多选择 200 个 Skill",
+    "key": "e5e030e0869c7"
+  },
+  {
+    "source": "有界循环需要loop配置",
+    "key": "e67efea2139d3"
+  },
+  {
+    "source": "未允许该嵌入来源",
+    "key": "ea84b0c0833e7"
+  },
+  {
+    "source": "未声明的数据字段: %s",
+    "key": "e8ab9d37336b0"
+  },
+  {
+    "source": "未知内部工作流操作",
+    "key": "edfc4dda9437a"
+  },
+  {
+    "source": "未知哨兵操作",
+    "key": "e2eb6021b4ed6"
+  },
+  {
+    "source": "未知执行操作",
+    "key": "ef23764dc3ea6"
+  },
+  {
+    "source": "未知的 MCP 服务器：%s",
+    "key": "e0e4f155a286a"
+  },
+  {
+    "source": "未知的 Skill：%s",
+    "key": "ec9084f4f8be7"
+  },
+  {
+    "source": "未知的内置 Skill 工具关联：%s",
+    "key": "e887c62dc6963"
+  },
+  {
+    "source": "未知的内置工具：%s",
+    "key": "e808a474321ec"
+  },
+  {
+    "source": "未知的字段：%s",
+    "key": "eff384057cec5"
+  },
+  {
+    "source": "未知读取操作",
+    "key": "eaee476ee984c"
+  },
+  {
+    "source": "本地Skill 沙箱不支持当前平台",
+    "key": "e9ce027c734e2"
+  },
+  {
+    "source": "本次运行已停止，未继续执行代码尝试",
+    "key": "e9c7855d87d17"
+  },
+  {
+    "source": "权限项过多",
+    "key": "e13690d547ad3"
+  },
+  {
+    "source": "材料 %s: %w",
+    "key": "ed06452149cb0"
+  },
+  {
+    "source": "材料必须为当前工作目录内的相对路径",
+    "key": "ea77b1527313a"
+  },
+  {
+    "source": "材料总计不能超过16MiB",
+    "key": "e964283f33678"
+  },
+  {
+    "source": "条件监听仅可在受支持的 Linux 沙箱中恢复",
+    "key": "e6a1981b828d1"
+  },
+  {
+    "source": "条目必须是互不重复的私有 ID；预设来源只读",
+    "key": "e7eddd75ca48a"
+  },
+  {
+    "source": "模型 %s 不在此 Agent 允许的模型列表中",
+    "key": "e716b9d9bb861"
+  },
+  {
+    "source": "模型 ID 不能为空",
+    "key": "e6fc6d6884e7f"
+  },
+  {
+    "source": "模型未返回完整图标，请重试",
+    "key": "e2615f0240c53"
+  },
+  {
+    "source": "模型未返回完整开场提示，请重试",
+    "key": "efd2f3623cca0"
+  },
+  {
+    "source": "模型返回的图标内容过多，请重试",
+    "key": "e758ef57518d8"
+  },
+  {
+    "source": "模型返回的图标格式不正确或包含不安全路径，请重试",
+    "key": "ef399cc4b9806"
+  },
+  {
+    "source": "模型返回的开场提示格式或条数不正确，请重试；每条需包含标题、任务标签和问题",
+    "key": "e8228e273a6d4"
+  },
+  {
+    "source": "模板名称需要 1–60 个字符",
+    "key": "e18dfaf7a5429"
+  },
+  {
+    "source": "模板数量已达到当前上限",
+    "key": "ee5adb58c6f44"
+  },
+  {
+    "source": "模板简介或指令超过长度限制",
+    "key": "e45d064679c36"
+  },
+  {
+    "source": "此 Agent 使用独立对话入口",
+    "key": "e8bf56ed755d9"
+  },
+  {
+    "source": "此 Agent 暂不可用，请返回管理页",
+    "key": "e47f36a25f628"
+  },
+  {
+    "source": "此 Agent 暂不支持附件",
+    "key": "e0d842a3110bf"
+  },
+  {
+    "source": "此 Skill 仍被引用：%s。可强制删除：引用它的 Agent/会话会保留，但不再能使用此 Skill。",
+    "key": "edc241a199924"
+  },
+  {
+    "source": "此 Skill 文档只读",
+    "key": "e6aa419049ae9"
+  },
+  {
+    "source": "此 Skill 文档只读；仅支持编辑上传的普通 Skill 的 SKILL.md",
+    "key": "e43e4ce27d821"
+  },
+  {
+    "source": "此 Skill 版本仍被引用：%s。可强制删除：引用它的 Agent/会话会保留，但不再能使用此 Skill。",
+    "key": "e315d2a901be2"
+  },
+  {
+    "source": "此上传的确认已过期或已被处理，请重新上传",
+    "key": "e465684f8385f"
+  },
+  {
+    "source": "此名称已由已安装的 Skill 使用，请为新 Skill 选择其他名称",
+    "key": "ea12ffd8e5a35"
+  },
+  {
+    "source": "此名称已由运行时 Skill 使用",
+    "key": "e26649fa0b1e6"
+  },
+  {
+    "source": "此数据来源需要%s类型",
+    "key": "ee5cd237aa797"
+  },
+  {
+    "source": "此文件不是可预览的 UTF-8 文本文档",
+    "key": "e6b09336c38cc"
+  },
+  {
+    "source": "此格式无需服务端渲染（图片/PDF/文本由浏览器直接预览）",
+    "key": "e686cd8cb0c15"
+  },
+  {
+    "source": "此请求编号已用于其他内容，请保留当前内容并使用新的请求编号",
+    "key": "e296cde8a1b12"
+  },
+  {
+    "source": "每个节点每类最多绑定%d个资源",
+    "key": "ee8860b8eafec"
+  },
+  {
+    "source": "每节点Skill与快捷方式内联正文合计不能超过256KiB",
+    "key": "eff67eeaf6e3c"
+  },
+  {
+    "source": "汇聚结构化输出超过256KiB，请在分支中精简结果",
+    "key": "e108b0f77718d"
+  },
+  {
+    "source": "没有处理该节点审批的权限，发起人不得自批",
+    "key": "e981d1e479e82"
+  },
+  {
+    "source": "没有执行此工作流操作的权限",
+    "key": "edcd47bee7578"
+  },
+  {
+    "source": "没有管理空间权限的权限",
+    "key": "ed3f6255242a6"
+  },
+  {
+    "source": "没有访问此工作流的权限",
+    "key": "ea06f5535d907"
+  },
+  {
+    "source": "没有运行此工作流的权限",
+    "key": "ecdfdbc296a45"
+  },
+  {
+    "source": "没有需要显式重试的中断批次",
+    "key": "ec271a690ba0d"
+  },
+  {
+    "source": "流程使用的 inputs 字段必须在入口中声明为必填：",
+    "key": "ed4b3d8c346af"
+  },
+  {
+    "source": "流程工具审批仅对本次调用有效",
+    "key": "ed939097dea48"
+  },
+  {
+    "source": "流程已归档",
+    "key": "ea137090001c2"
+  },
+  {
+    "source": "流程输入定义必须为参数列表",
+    "key": "e3e241a5bbe33"
+  },
+  {
+    "source": "消息状态已改变，请刷新后重试",
+    "key": "ea71b499e21e7"
+  },
+  {
+    "source": "混排引用需要选择 Agent",
+    "key": "e537caa5a6272"
+  },
+  {
+    "source": "版本名称或描述超过长度限制",
+    "key": "e04f457685045"
+  },
+  {
+    "source": "生成条数需要在 1–8 条之间",
+    "key": "ee673dddbb833"
+  },
+  {
+    "source": "生成请求需要是单个 JSON 对象",
+    "key": "e08cbdab9012e"
+  },
+  {
+    "source": "目录 ID 已存在，请重新创建",
+    "key": "ea2c4b07bb27d"
+  },
+  {
+    "source": "目录名无法使用 %q",
+    "key": "e8102d82f0733"
+  },
+  {
+    "source": "目录名称需要为 1–120 个有效字符",
+    "key": "e7306fd71aba9"
+  },
+  {
+    "source": "目录层级过深（最多 %d 层）",
+    "key": "e4c23af1812b3"
+  },
+  {
+    "source": "目录非空；需要显式 recursive=true 才能删除后代",
+    "key": "ec9e240e5f263"
+  },
+  {
+    "source": "目标必须是当前 Agent 的私有目录；信息库和快捷卡片来源只读",
+    "key": "e26f59aedc92b"
+  },
+  {
+    "source": "目标目录已有同名文件夹；请先改名，不会覆盖或自动重命名",
+    "key": "eb50e1887537d"
+  },
+  {
+    "source": "确认凭据无效",
+    "key": "e6b4fa13deab1"
+  },
+  {
+    "source": "确认请求缺少有效标识或意见过长",
+    "key": "e0a942b5baefd"
+  },
+  {
+    "source": "私有快捷方式不存在",
+    "key": "e87375e9099de"
+  },
+  {
+    "source": "私有快捷方式目录结构无效",
+    "key": "e9174ebe08a04"
+  },
+  {
+    "source": "私有目录不存在",
+    "key": "ea6ce7dcbdd41"
+  },
+  {
+    "source": "空文件",
+    "key": "ed350d798f368"
+  },
+  {
+    "source": "第%d项输入超过64KiB",
+    "key": "e57429db9573f"
+  },
+  {
+    "source": "精确发布需要有效 expected_revision 和 expected_hash",
+    "key": "e0b601043219c"
+  },
+  {
+    "source": "系统内置或目录挂载的 Skill 不能从此处删除",
+    "key": "e673e1c2b2c8d"
+  },
+  {
+    "source": "结构化output来源需要代码或汇聚节点: %s",
+    "key": "e3601d8eb42bb"
+  },
+  {
+    "source": "编辑需要 request_id",
+    "key": "e405567cc8d0e"
+  },
+  {
+    "source": "缺少 YAML frontmatter（--- 围栏的 name/description 头）",
+    "key": "e38e9f90f7cc8"
+  },
+  {
+    "source": "缺少代码输入%s",
+    "key": "e66aa9a962ae1"
+  },
+  {
+    "source": "缺少代码输出%s",
+    "key": "e1f9a302e6c97"
+  },
+  {
+    "source": "缺少输入%s",
+    "key": "e7cf682e9e639"
+  },
+  {
+    "source": "缺少输入参数 %s",
+    "key": "e5e63de1421e2"
+  },
+  {
+    "source": "脚本不可用或包含符号链接",
+    "key": "ea796fa3a0d18"
+  },
+  {
+    "source": "脚本包不支持符号链接",
+    "key": "ec1d00f01639d"
+  },
+  {
+    "source": "脚本包包含保留文件名",
+    "key": "ec8c0539104ce"
+  },
+  {
+    "source": "脚本包只支持普通文件",
+    "key": "e91ae4701079f"
+  },
+  {
+    "source": "脚本包正在变化，请停止修改后重试",
+    "key": "e87d237c0f99b"
+  },
+  {
+    "source": "脚本包目录过多",
+    "key": "ee9a0f08f144a"
+  },
+  {
+    "source": "脚本和依赖总计最多 32 MiB、256 个文件",
+    "key": "e6e044dc25a54"
+  },
+  {
+    "source": "脚本必须位于当前工作区",
+    "key": "e510c84bfecd3"
+  },
+  {
+    "source": "脚本必须是普通文件",
+    "key": "e6d61723015dd"
+  },
+  {
+    "source": "脚本缺少已隔离执行并成功退出的可信回执，未提交文件。",
+    "key": "e7484f4ff9c9d"
+  },
+  {
+    "source": "节点 %s %w",
+    "key": "e5fab7385b206"
+  },
+  {
+    "source": "节点 %s 的Skill不在所属Agent授权集合内",
+    "key": "e28391bd2309c"
+  },
+  {
+    "source": "节点 %s 的候选 %w",
+    "key": "ef5c00297d6f8"
+  },
+  {
+    "source": "节点 %s 的快捷方式已撤销或不存在",
+    "key": "e2251d07de01f"
+  },
+  {
+    "source": "节点 %s 的轮次上限不能超过 100",
+    "key": "efbed108a269a"
+  },
+  {
+    "source": "节点 %s 绑定的Skill已撤销或不存在",
+    "key": "e533528f76def"
+  },
+  {
+    "source": "节点 %s 绑定的快捷方式已撤销或不存在",
+    "key": "e9c4d82196286"
+  },
+  {
+    "source": "节点Skill %s 的主文档已不可用，请重新试跑",
+    "key": "e3303cabaf0c9"
+  },
+  {
+    "source": "节点Skill %s 的主文档已变化，请重新试跑；不会将新版指南混入本次运行",
+    "key": "e683b1c1c2e61"
+  },
+  {
+    "source": "节点Skill %s 的授权已撤销",
+    "key": "edee76d1e4718"
+  },
+  {
+    "source": "节点Skill不在所属Agent授权集合内",
+    "key": "e44ac962026a9"
+  },
+  {
+    "source": "节点不在等待人工状态",
+    "key": "e2ff306b4fefc"
+  },
+  {
+    "source": "节点不存在",
+    "key": "e7b4519294b96"
+  },
+  {
+    "source": "节点冻结资源已改变或不可用",
+    "key": "e02b3e15ca1d0"
+  },
+  {
+    "source": "节点冻结资源结构无效",
+    "key": "ec9fb16681a68"
+  },
+  {
+    "source": "节点快捷方式 %s 已撤销或不存在",
+    "key": "ee83fa50b79f7"
+  },
+  {
+    "source": "节点资源文件超过128份",
+    "key": "eeeb08f4e795d"
+  },
+  {
+    "source": "草稿与所选能力信息过多，请减少选择后重试",
+    "key": "e316e08368619"
+  },
+  {
+    "source": "试跑节点包含尚未接入沙箱与逐工具审批的 Skill 声明工具，请重新校验",
+    "key": "e9d193a2b23f0"
+  },
+  {
+    "source": "试跑节点当前没有注册所选工具，请重新校验：",
+    "key": "e523bf63ffada"
+  },
+  {
+    "source": "试跑节点的 Agent 已改为继承包含命令执行的工具集，请重新校验",
+    "key": "e650c52693df4"
+  },
+  {
+    "source": "试跑节点的 Agent 已改为需要尚未接入工作流的命令审批链",
+    "key": "effcf82b42c1f"
+  },
+  {
+    "source": "试跑节点的 Agent 已改为需要尚未接入工作流的运行型 Skill",
+    "key": "e754db96b4c14"
+  },
+  {
+    "source": "试跑节点的外部工具已改变且尚未接入逐工具审批，请重新校验：",
+    "key": "ec883285181e1"
+  },
+  {
+    "source": "试跑请求与当前工作流不一致",
+    "key": "ef4ca7215a4fd"
+  },
+  {
+    "source": "该 Skill 由系统或目录配置管理，无法在此停用",
+    "key": "ea1bde78a19da"
+  },
+  {
+    "source": "该外部用户尚未授权或发布入口已停用",
+    "key": "ea091a16dfb6e"
+  },
+  {
+    "source": "请为业务审批节点提供有效的审批人名单",
+    "key": "eef578f6556b6"
+  },
+  {
+    "source": "请先勾选模型并选择默认模型",
+    "key": "e3a1da2516975"
+  },
+  {
+    "source": "请先启用并配置回调",
+    "key": "ef008fc4f7b71"
+  },
+  {
+    "source": "请先填写名称、简介或指令，再生成开场提示",
+    "key": "ed37bfca7a72b"
+  },
+  {
+    "source": "请先登录",
+    "key": "e48144f96c150"
+  },
+  {
+    "source": "请先配置回调",
+    "key": "ee01869ffb29b"
+  },
+  {
+    "source": "请填写 1–2000 字的图标描述，选择模型，并生成 1–4 个图标",
+    "key": "e092b830fc940"
+  },
+  {
+    "source": "请填写%s",
+    "key": "ec188c747ac36"
+  },
+  {
+    "source": "请将脚本和依赖放入独立子目录，例如 sentinels/my-watch/main.py",
+    "key": "e23ae279b84bc"
+  },
+  {
+    "source": "请归档图标而不是删除，保证历史引用仍可显示",
+    "key": "eb196eec9a6da"
+  },
+  {
+    "source": "请指定有效的 Agent 收藏范围",
+    "key": "ecbdee2c0e397"
+  },
+  {
+    "source": "请提供快捷卡片内容",
+    "key": "e49c6fb09c63b"
+  },
+  {
+    "source": "请提供执行记录的 revision",
+    "key": "e4cb00dd72bd6"
+  },
+  {
+    "source": "请提供执行记录的有效 revision",
+    "key": "e77d969ef4ccb"
+  },
+  {
+    "source": "请求只能包含一个 JSON 对象",
+    "key": "e8d456370a6a1"
+  },
+  {
+    "source": "请求需要 scope_id、revision、shortcuts，以及可选的 folders",
+    "key": "ea8b4ac9cfcbd"
+  },
+  {
+    "source": "请求需要且只能包含 revision、icons 和 hidden_builtin",
+    "key": "e4f9ee4ad389a"
+  },
+  {
+    "source": "请选择信息库中的 .docx 或 .xlsx 文件",
+    "key": "e6b19f32d8aef"
+  },
+  {
+    "source": "请选择当前 Agent，旧全局任务仅管理员可管理",
+    "key": "efccfccb9087a"
+  },
+  {
+    "source": "请选择明确的 IANA 时区",
+    "key": "e80a5f157d22f"
+  },
+  {
+    "source": "请选择有效主体与权限",
+    "key": "e750e5214a515"
+  },
+  {
+    "source": "请选择有效参与者与权限",
+    "key": "eefffc34c4088"
+  },
+  {
+    "source": "请选择模型",
+    "key": "e621e846d2bce"
+  },
+  {
+    "source": "请配置 1 到 20 个允许嵌入的网站",
+    "key": "e4cd3912ec3f9"
+  },
+  {
+    "source": "读取定时任务失败: %w",
+    "key": "e904588084fd8"
+  },
+  {
+    "source": "读取条件监听失败: %w",
+    "key": "eac208f651e56"
+  },
+  {
+    "source": "账号已不可用",
+    "key": "ea97b7eda8356"
+  },
+  {
+    "source": "资料保存失败；原版本已保留",
+    "key": "ec6428bade718"
+  },
+  {
+    "source": "资料保存范围不可用",
+    "key": "e896f87ff4292"
+  },
+  {
+    "source": "资料列表超过存储上限",
+    "key": "e07f57640ddf7"
+  },
+  {
+    "source": "资料列表需要为数组，最多保存 256 项",
+    "key": "ed261b8334e47"
+  },
+  {
+    "source": "资料存储不可用",
+    "key": "e7e23e426671b"
+  },
+  {
+    "source": "资料已在其他窗口更新，请核对后重新保存",
+    "key": "e9feeb8712d03"
+  },
+  {
+    "source": "资料版本超出支持范围",
+    "key": "e8610f5672c90"
+  },
+  {
+    "source": "资料的标识、标题、正文或图标无效；正文最多 64 KiB",
+    "key": "e59425bfc9312"
+  },
+  {
+    "source": "资料附件不可访问: %w",
+    "key": "ef014ec0e42ba"
+  },
+  {
+    "source": "资料附件不属于当前账号及 Agent，或已不可用",
+    "key": "e75d2fe11afd9"
+  },
+  {
+    "source": "资料附件存储不可用",
+    "key": "ed0597ea077ac"
+  },
+  {
+    "source": "资料附件必须属于当前账号及 Agent",
+    "key": "e0492e253da2e"
+  },
+  {
+    "source": "资源ID必须有效、唯一且不超过%d字节",
+    "key": "e5e48511494cd"
+  },
+  {
+    "source": "跨系统身份接入需要先启用本地账号",
+    "key": "e0059c4b7ecd6"
+  },
+  {
+    "source": "身份映射只能使用现有普通本地账号，不能使用运维管理员",
+    "key": "e7d8089197152"
+  },
+  {
+    "source": "输入内容总长度过大",
+    "key": "edb98d543ff03"
+  },
+  {
+    "source": "输入参数 %s 不在允许的选项中",
+    "key": "ebebc7b362867"
+  },
+  {
+    "source": "输入参数 %s 必须为yes或no",
+    "key": "e9f120221d8dd"
+  },
+  {
+    "source": "输入参数 %s 需要合法JSON: %v",
+    "key": "e112f97fc9f69"
+  },
+  {
+    "source": "输入参数%s需要字符串",
+    "key": "ef744821cb2a5"
+  },
+  {
+    "source": "输入字段 key 重复或格式无效",
+    "key": "e505de3b31ad8"
+  },
+  {
+    "source": "输入字段或身份映射数量无效",
+    "key": "e0f950c95f906"
+  },
+  {
+    "source": "输入字段过多",
+    "key": "ec62562bcebb4"
+  },
+  {
+    "source": "输入绑定类型%s与来源类型%s不匹配",
+    "key": "ebf68c0bb85b7"
+  },
+  {
+    "source": "输出字段名无效",
+    "key": "e9df587ee5747"
+  },
+  {
+    "source": "输出类型无效或结构过深",
+    "key": "ee9e2d7934982"
+  },
+  {
+    "source": "运维管理员保留空间管理员权限",
+    "key": "e42db19914105"
+  },
+  {
+    "source": "运行列表分页参数无效",
+    "key": "e7934f9b63fa3"
+  },
+  {
+    "source": "运行控制需要有效 request_id",
+    "key": "e662a55ef77c9"
+  },
+  {
+    "source": "运行时Skill已删除或执行环境不可用",
+    "key": "efe717fbb368e"
+  },
+  {
+    "source": "运行时Skill授权或绑定已不可用",
+    "key": "e9738abcaaae8"
+  },
+  {
+    "source": "运行标识无效",
+    "key": "e095faf3b0714"
+  },
+  {
+    "source": "运行记录范围无效",
+    "key": "e745d86a0f067"
+  },
+  {
+    "source": "运行请求必须是一个 JSON 对象",
+    "key": "e0e6b33862fc5"
+  },
+  {
+    "source": "运行请求标识过长",
+    "key": "e6de1561c02e1"
+  },
+  {
+    "source": "运行资源快照无效",
+    "key": "ecf8d13304eb9"
+  },
+  {
+    "source": "运行输入必须为JSON对象",
+    "key": "efc2f90bed522"
+  },
+  {
+    "source": "这次唤醒已有持久回执，不能自动重复执行",
+    "key": "e06655224e695"
+  },
+  {
+    "source": "迭代任务模板展开超过1MiB",
+    "key": "eaec661622b23"
+  },
+  {
+    "source": "迭代任务模板括号不完整",
+    "key": "e10fdba938468"
+  },
+  {
+    "source": "迭代体不能嵌套控制节点且ID/指令必须有效",
+    "key": "e56c1f7840e1f"
+  },
+  {
+    "source": "迭代体需要单个Agent或代码节点；循环体当前仅支持代码",
+    "key": "e8a8ddf09e151"
+  },
+  {
+    "source": "迭代容器不能包含任务或能力；请在body中配置",
+    "key": "e7c876201e5d7"
+  },
+  {
+    "source": "迭代局部变量作用域不匹配",
+    "key": "ec784bcd16623"
+  },
+  {
+    "source": "迭代并发需要1–10，项数上限需要1–100；省略分别为1和100",
+    "key": "ef01432eb73b9"
+  },
+  {
+    "source": "迭代来源必须为数组",
+    "key": "e4d199232dea1"
+  },
+  {
+    "source": "迭代节点不存在",
+    "key": "ec070a29087e3"
+  },
+  {
+    "source": "迭代记录或聚合结果超过限制，请减少项数或精简数据",
+    "key": "e70c83337681b"
+  },
+  {
+    "source": "迭代项数超过上限%d",
+    "key": "e49c5d36c4e4f"
+  },
+  {
+    "source": "迭代项索引无效",
+    "key": "eb03c7c53375f"
+  },
+  {
+    "source": "选择参数 %s 必须配置选项",
+    "key": "e9b50fb552e66"
+  },
+  {
+    "source": "逐项输入或执行下标超过限制",
+    "key": "efd0cab61654a"
+  },
+  {
+    "source": "逐项错误处理仅支持stop或continue",
+    "key": "e1658d1afd282"
+  },
+  {
+    "source": "部署未允许脚本网络访问",
+    "key": "e0b5b729b8e3a"
+  },
+  {
+    "source": "部署未授权脚本网络访问",
+    "key": "ecb8957cf49d0"
+  },
+  {
+    "source": "附件 %s 不存在或不是工作区内的普通文件",
+    "key": "e1825bc7b6d47"
+  },
+  {
+    "source": "附件 %s 不存在或无法读取",
+    "key": "e1106c51f02e0"
+  },
+  {
+    "source": "附件 %s 不存在（可能已被移动或删除），请重新上传",
+    "key": "efb22b1b0bd01"
+  },
+  {
+    "source": "附件 %s 含符号链接或不可访问",
+    "key": "efb2794967b7a"
+  },
+  {
+    "source": "附件 %s: %w",
+    "key": "ed91ce0e75f3d"
+  },
+  {
+    "source": "附件不是普通文件",
+    "key": "e66710fc74a54"
+  },
+  {
+    "source": "附件在保存计划时被修改，请重试",
+    "key": "e32f2ec9282e2"
+  },
+  {
+    "source": "附件已保存，但文档修改登记尚未完成，请重新读取附件列表后重试：%w",
+    "key": "ed5c59339ce6d"
+  },
+  {
+    "source": "附件必须为工作区内的普通文件",
+    "key": "e52a6eeab2870"
+  },
+  {
+    "source": "附件目录无效",
+    "key": "e640fd49b26b6"
+  },
+  {
+    "source": "附件超过 %d MB 上限",
+    "key": "e91efa88c1862"
+  },
+  {
+    "source": "集合迭代需要iteration配置",
+    "key": "ea0e3f375c9d3"
+  },
+  {
+    "source": "需要 1–512 个私有条目 ID",
+    "key": "e1032f372b8eb"
+  },
+  {
+    "source": "需要元数据修改或完整 graph，二者不能混用",
+    "key": "ea0f33af5232a"
+  },
+  {
+    "source": "需要先预览并提供宿主生成的 plan_id",
+    "key": "ed72fb4a6972f"
+  },
+  {
+    "source": "需要完整 content 和有效 expected_revision",
+    "key": "e6cd0d6cfa0b4"
+  },
+  {
+    "source": "需要有效 request_id 和 expected_revision",
+    "key": "e8fb9f4e8b151"
+  },
+  {
+    "source": "非法目录路径 %q",
+    "key": "e4f6712bbbf0d"
+  },
+  {
+    "source": "预览不接受 plan_id，版本不能为负数",
+    "key": "e43ae01dafe92"
+  },
+  {
+    "source": "预览仅接受一个时间设置对象",
+    "key": "ef66b76420245"
+  },
+  {
+    "source": "预设来源不是可写目录",
+    "key": "e307ad1a44d2b"
+  },
+  {
+    "source": "预设来源不能作为移动目标",
+    "key": "e04a7034f8dab"
+  },
+  {
+    "source": "预设来源只读",
+    "key": "e7e4ede93ecf4"
+  },
+  {
+    "source": "首页快捷卡片已在其他窗口更新，请重新打开后再编辑",
+    "key": "e6c53e41723f3"
+  },
+  {
+    "source": "首页快捷卡片已更新或删除，请刷新列表后重新选择",
+    "key": "e074cd3478a7b"
+  },
+  {
+    "source": "默认模型不存在或尚未配置，请检查模型设置",
+    "key": "ea1a1ab092b47"
+  },
+  {
+    "source": "默认模型必须包含在允许的模型列表中",
+    "key": "ebf9120d2160c"
+  },
+  {
+    "source": "默认模型必须是已经勾选的模型",
+    "key": "e389b06d0a1f9"
+  }
+]

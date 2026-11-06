@@ -3,7 +3,7 @@ import { createSSRApp, defineComponent, h } from "vue";
 import { renderToString } from "vue/server-renderer";
 import type { WorkspaceFileScope } from "@/agent/workspaceFileNavigation";
 
-vi.mock("vue-i18n", () => ({ useI18n: () => ({ t: (key: string) => key }) }));
+vi.mock("vue-i18n", async original => { const { ref } = await import("vue"); return { ...await original<typeof import("vue-i18n")>(), useI18n: () => ({ t: (key: string) => key, locale: ref("zh-CN") }) }; });
 vi.mock("./HTMLBrowserPane.vue", () => ({ default: defineComponent({ setup: () => () => h("div", { "data-html-browser": true }) }) }));
 import HTMLArtifact from "./HTMLArtifact.vue";
 

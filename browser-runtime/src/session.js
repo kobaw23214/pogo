@@ -68,6 +68,11 @@ function pageActionBinding(action, nested = false) {
   }
   return { tab_id: action.tab_id, context_ref: action.context_ref, control_epoch: action.control_epoch };
 }
+function pageActionPayload(action) {
+  const payload = { ...action };
+  delete payload.tab_id; delete payload.context_ref; delete payload.control_epoch;
+  return payload;
+}
 // A breakpoint can suspend an already-dispatched click/evaluation. These
 // commands inspect or resume it without replacing its unresolved promise.
 function debugRecovery(a) {
@@ -83,10 +88,7 @@ function urlFor(value, base) {
 export function validateAction(a, nested = false) {
   if (!a || typeof a !== 'object' || Array.isArray(a)) throw new Error('action must be an object');
   const binding = pageActionBinding(a, nested);
-  if (binding) {
-    a = { ...a };
-    delete a.tab_id; delete a.context_ref; delete a.control_epoch;
-  }
+  if (binding) a = pageActionPayload(a);
   const name = a.action;
   if (PAGE_JOB_ACTIONS.has(name)) {
     if (nested) throw new Error('multi-page operations must run separately, not inside a same-page batch');
@@ -1116,7 +1118,8 @@ export class BrowserSession {
         if ([...this.pages.values()].some(meta => this.devtools.isBlocked(meta))) throw new Error('debug operation outcome unknown; cancel the browser task before continuing; do not replay');
         if (this.rawAction) {
           if (!debugRecovery(args)) throw new Error('previous browser action is still pending; use devtools diagnostics/resume for a breakpoint, otherwise cancel before continuing');
-          const reply = await this.devtools.execute(args, epoch);
+          if (binding && this.pages.get(this.active) !== originalMeta) throw new Error('the pending browser action belongs to another page; inspect or resume it using that page\'s binding');
+          const reply = await this.devtools.execute(pageActionPayload(args), epoch);
           return { ...reply, backend: 'native', active_tab: this.active ?? '', version: this.version(),
             text: `${reply.text ?? ''}${this.rawAction ? '\nThe earlier page action is still pending; inspect its result after resuming. Do not repeat it.' : ''}` };
         }
@@ -1452,7 +1455,9 @@ export class BrowserSession {
       const meta = this.page();
       const documentVersion = meta.version;
       await meta.devtoolsReady;
-      const reply = await this.devtools.execute(a, epoch);
+      // Session.execute has validated and selected the bound Agent page. CDP
+      // receives protocol fields only; keep all other fields for its validator.
+      const reply = await this.devtools.execute(pageActionPayload(a), epoch);
       // Protocol calls can change DOM/layout or runtime state without a normal
       // input event. Fence element/coordinate observations; don't run a page
       // snapshot here, which would hang while Debugger has JavaScript paused.

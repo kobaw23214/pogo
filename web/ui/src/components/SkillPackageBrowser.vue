@@ -5,6 +5,7 @@ import { Icon } from "@iconify/vue";
 import { ArrowRight, Files, Fold, Refresh } from "@element-plus/icons-vue";
 import type { SkillDocumentContent, SkillDocumentUpdate, SkillPackageEntry, SkillPackageFiles } from "@/api/types";
 import SkillDocumentViewer from "./SkillDocumentViewer.vue";
+import { knownHostReason } from "@/agent/hostStatusCopy";
 import { fileIcon, folderIcon, folderOpenIcon } from "./fileIcons";
 import { skillFileBytes, useSkillPackageFiles } from "./skillPackageFiles";
 
@@ -55,7 +56,7 @@ defineExpose({ selectedPath, treeOpen, select, loadPreview, confirmLeave });
       <header class="tree-head"><span><el-icon><Files /></el-icon>{{ t('skillDocuments.packageFiles') }}</span><button type="button" class="tree-toggle" data-testid="skill-files-hide" :aria-label="t('skillDocuments.hideFiles')" @click="treeOpen = false"><el-icon><Fold /></el-icon></button></header>
       <div class="package-tree" role="tree" :aria-label="t('skillDocuments.packageFiles')">
         <template v-for="row in rows" :key="row.key">
-          <button v-if="row.entry" type="button" role="treeitem" :aria-level="row.depth + 1" :aria-selected="selectedPath === row.entry.path" :aria-expanded="row.entry.kind === 'directory' ? expanded.has(row.entry.path) && row.entry.expandable !== false : undefined" class="file-row" :class="{ selected: selectedPath === row.entry.path, guarded: !row.entry.previewable && row.entry.kind !== 'directory' }" :style="{ paddingLeft: `${10 + row.depth * 16}px` }" :data-skill-file="row.entry.path" :title="row.entry.reason ? `${row.entry.path}\n${row.entry.reason}` : row.entry.path" @click="select(row.entry)">
+          <button v-if="row.entry" type="button" role="treeitem" :aria-level="row.depth + 1" :aria-selected="selectedPath === row.entry.path" :aria-expanded="row.entry.kind === 'directory' ? expanded.has(row.entry.path) && row.entry.expandable !== false : undefined" class="file-row" :class="{ selected: selectedPath === row.entry.path, guarded: !row.entry.previewable && row.entry.kind !== 'directory' }" :style="{ paddingLeft: `${10 + row.depth * 16}px` }" :data-skill-file="row.entry.path" :title="row.entry.reason ? `${row.entry.path}\n${knownHostReason(row.entry.reason)}` : row.entry.path" @click="select(row.entry)">
             <el-icon class="tree-caret" :class="{ expanded: expanded.has(row.entry.path), invisible: row.entry.kind !== 'directory' || row.entry.expandable === false }"><ArrowRight /></el-icon>
             <Icon class="file-icon" :icon="rowIcon(row.entry)" /><span class="file-name">{{ row.entry.name }}</span><span v-if="row.entry.kind !== 'directory'" class="file-size">{{ skillFileBytes(row.entry.size_bytes) }}</span>
           </button>

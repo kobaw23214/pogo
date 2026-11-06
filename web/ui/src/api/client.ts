@@ -1,3 +1,6 @@
+import { getLocale, gt } from "@/i18n";
+import type { WebServiceOpenResponse, WebServiceLog, WebServiceRecord, WebServiceSpec, WebsiteQuota, WebsitePolicy, WebsiteSettingsResponse, WebsiteSettingsUpdate } from "./webServices";
+import { hostAPIError } from "./hostErrorCopy";
 import type {
   BackgroundTaskSessionIdentity,
   AttachmentMeta,
@@ -22,6 +25,8 @@ import type {
   MaxTurnsInfo,
   MemoryCatalog,
   MemoryNote,
+  ManagedMemoryCatalog,
+  ManagedMemoryNoteInput,
   PanelInfo,
   Prefs,
   PrefsInfo,
@@ -63,13 +68,12 @@ import type {
   WorkspaceDiff,
 } from "./types";
 import { delegatedRequest, isDelegatedEmbed } from "./delegated";
-import { workflowEmbedId } from "@/agent/workflowEmbedProtocol";
 import { OFFICE_STARTUP_TIMEOUT_MS, waitForOfficeStartup } from "@/agent/officeStartup";
 import type { McpCall, McpCallsPage, McpCallStats } from "@/components/mcpMonitor";
 import { requireMonitorAgentId } from "@/components/mcpMonitor";
 import type { SkillEvent, SkillEventsPage, SkillEventStats } from "@/components/skillMonitor";
 import type { ObservabilityStatus } from "@/components/observeStatus";
-import type { StudioModelConfigSync, StudioSkillConfigSync, StudioToolConfigSync, StudioSessionCapabilities } from "@/agent/studioSessionCapabilities";
+import type { StudioModelConfigSync, StudioSkillConfigSync, StudioToolConfigSync, StudioMcpConfigSync, StudioSessionCapabilities } from "@/agent/studioSessionCapabilities";
 import type { SentinelSessionList, SentinelSessionDetail } from "./sentinelSessions";
 import type { SkillLibraryCatalog } from "@/agent/platformTypes";
 import { uploadFile, type UploadOptions } from "./upload";
@@ -96,7 +100,7 @@ function readToken(): string {
   if (typeof location === "undefined") return "";
   // Embedded mode never reads a token from the URL or storage — the parent's
   // postMessage handshake is the only authority there.
-  if (isDelegatedEmbed || workflowEmbedId(location.pathname)) return "";
+  if (isDelegatedEmbed) return "";
   const fromUrl = new URLSearchParams(location.search).get("token");
   if (fromUrl) {
     sessionStorage.setItem(TOKEN_KEY, fromUrl);
@@ -108,7 +112,7 @@ function readToken(): string {
 export const token = readToken();
 
 export function authHeaders(): HeadersInit {
-  if (isDelegatedEmbed || (typeof location !== "undefined" && workflowEmbedId(location.pathname))) return {};
+  if (isDelegatedEmbed) return {};
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
@@ -122,7 +126,7 @@ export function setToken(value: string) {
   // Guarded like readToken so unit tests can import this module.
   if (typeof location === "undefined") return;
   // And a no-op in embedded mode: no credential is ever written there.
-  if (isDelegatedEmbed || workflowEmbedId(location.pathname)) return;
+  if (isDelegatedEmbed) return;
   sessionStorage.setItem(TOKEN_KEY, value);
   const url = new URL(location.href);
   url.searchParams.set("token", value);
@@ -139,15 +143,17 @@ function authoredSkillPath(agentId: string, id: string, resource: "content" | "f
   return `/api/apps/${encodeURIComponent(agentId)}/authored-skills/${encodeURIComponent(id)}/${resource}${query ? `?${query}` : ""}`;
 }
 
-async function request<T>(method: string, path: string, body?: unknown, signal?: AbortSignal, finishResponse: (res: Response) => Promise<T> = finish<T>, headers: Record<string, string> = {}): Promise<T> {
+async function request<T>(method: string, path: string, body?: unknown, signal?: AbortSignal, finishResponse: (res: Response) => Promise<T> = finish<T>, headers: Record<string, string> = {}, keepalive = false): Promise<T> {
   // /embed/ reroutes every request() call through the parent bridge; no call
   // below this line — and no legacy /api fetch — happens in that mode.
   if (isDelegatedEmbed) return delegatedRequest<T>(method, path, body);
   const res = await fetch(path, {
     method,
+    ...(keepalive ? { keepalive: true } : {}),
     signal,
     headers: {
       ...authHeaders(),
+      "Accept-Language": getLocale(),
       ...headers,
       ...(body === undefined ? {} : { "Content-Type": "application/json" }),
     },
@@ -215,7 +221,7 @@ async function finishOffice<T>(res: Response): Promise<T> {
     : typeof data?.message === "string" && data.message ? data.message
     : !data && text ? text : `HTTP ${res.status}`;
   const code = typeof nested?.code === "string" ? nested.code : typeof data?.code === "string" ? data.code : undefined;
-  throw Object.assign(new Error(message), { status: res.status, code });
+  throw Object.assign(hostAPIError(message), { status: res.status, code, details: data });
 }
 
 // finish is the shared tail of every request: 204 passes through, error bodies
@@ -224,7 +230,7 @@ async function finishOffice<T>(res: Response): Promise<T> {
 async function finish<T>(res: Response): Promise<T> {
   if (res.status === 204) return undefined as T;
   const text = await res.text();
-  let data: { error?: string; code?: string } | undefined;
+  let data: { error?: string | { message?: string; code?: string }; code?: string; message?: string } | undefined;
   if (text) {
     try {
       data = JSON.parse(text);
@@ -233,8 +239,9 @@ async function finish<T>(res: Response): Promise<T> {
     }
   }
   if (!res.ok) {
-    const message = data?.error ?? (text || `HTTP ${res.status}`);
-    throw Object.assign(new Error(message), { status: res.status, code: data?.code });
+    const nested = data?.error && typeof data.error === "object" ? data.error : undefined;
+    const message = typeof data?.error === "string" ? data.error : nested?.message || data?.message || (text || `HTTP ${res.status}`);
+    throw Object.assign(hostAPIError(message), { status: res.status, code: nested?.code || data?.code, details: data });
   }
   return data as T;
 }
@@ -242,6 +249,17 @@ async function finish<T>(res: Response): Promise<T> {
 const browserTargetQuery = (target?: NativeBrowserTarget) => target ? `?${new URLSearchParams(target as unknown as Record<string, string>)}` : "";
 
 export const api = {
+  websiteSettings: () => request<WebsiteSettingsResponse>("GET", "/api/web-services/settings"),
+  saveWebsiteSettings: (settings: WebsitePolicy) => request<WebsiteSettingsUpdate>("PUT", "/api/web-services/settings", settings),
+  webServices: (sid: string, signal?: AbortSignal) => request<{ services: WebServiceRecord[]; quota?: WebsiteQuota; default_lease_seconds?: number }>("GET", `/api/sessions/${encodeURIComponent(sid)}/web-services`, undefined, signal),
+  startWebService: (sid: string, spec: WebServiceSpec, operation_id: string, signal?: AbortSignal) => request<WebServiceRecord>("POST", `/api/sessions/${encodeURIComponent(sid)}/web-services`, { ...spec, operation_id }, signal),
+  webService: (sid: string, id: string, signal?: AbortSignal) => request<WebServiceRecord>("GET", `/api/sessions/${encodeURIComponent(sid)}/web-services/${encodeURIComponent(id)}`, undefined, signal),
+  deleteWebService: (sid: string, id: string, signal?: AbortSignal) => request<void>("DELETE", `/api/sessions/${encodeURIComponent(sid)}/web-services/${encodeURIComponent(id)}`, undefined, signal),
+  webServiceLogs: (sid: string, id: string, cursor = "", signal?: AbortSignal) => request<WebServiceLog>("GET", `/api/sessions/${encodeURIComponent(sid)}/web-services/${encodeURIComponent(id)}/logs?${new URLSearchParams({ cursor, limit_bytes: "65536" })}`, undefined, signal),
+  webServiceAction: (sid: string, id: string, action: "stop" | "restart" | "renew", operation_id: string, signal?: AbortSignal, lease_seconds?: number) => request<WebServiceRecord>("POST", `/api/sessions/${encodeURIComponent(sid)}/web-services/${encodeURIComponent(id)}/${action}`, { operation_id, ...(action === "renew" ? { lease_seconds } : {}) }, signal),
+  renameWebService: (sid: string, id: string, display_name: string, operation_id: string, signal?: AbortSignal) => request<WebServiceRecord>("POST", `/api/sessions/${encodeURIComponent(sid)}/web-services/${encodeURIComponent(id)}/rename`, { display_name, operation_id }, signal),
+  openWebService: (sid: string, id: string, operation_id: string) => request<WebServiceOpenResponse>("POST", `/api/sessions/${encodeURIComponent(sid)}/web-services/${encodeURIComponent(id)}/previews`, { operation_id }),
+  revokeWebService: (sid: string, id: string, grantId: string) => request<unknown>("DELETE", `/api/sessions/${encodeURIComponent(sid)}/web-services/${encodeURIComponent(id)}/previews/${encodeURIComponent(grantId)}`, undefined, undefined, finish<unknown>, {}, true),
   migrateBrowserURLs: (urls: string[]) =>
     request<{ mappings: { url: string; resolved_url?: string; error?: string }[] }>("POST", "/api/browser/migrate-urls", { urls }),
   browserState: (sid: string, signal?: AbortSignal, target?: NativeBrowserTarget) =>
@@ -281,6 +299,12 @@ export const api = {
     request<MemoryNote>("PUT", `/api/sessions/${encodeURIComponent(sessionId)}/memory`, input),
   deleteMemoryNote: (sessionId: string, path: string) =>
     request<{ deleted: boolean }>("DELETE", `/api/sessions/${encodeURIComponent(sessionId)}/memory?path=${encodeURIComponent(path)}`),
+
+  managedMemoryCatalog: () => request<ManagedMemoryCatalog>("GET", "/api/memory/catalog"),
+  saveManagedMemoryNote: (scopeId: string, input: ManagedMemoryNoteInput) =>
+    request<MemoryNote>("PUT", `/api/memory/notes?scope_id=${encodeURIComponent(scopeId)}`, input),
+  deleteManagedMemoryNote: (scopeId: string, path: string, expectedModified?: string) =>
+    request<{ deleted: boolean }>("DELETE", `/api/memory/notes?scope_id=${encodeURIComponent(scopeId)}&path=${encodeURIComponent(path)}${expectedModified !== undefined ? `&expected_modified=${encodeURIComponent(expectedModified)}` : ""}`),
 
   // The Studio workbench requests the pinned session selection; management
   // deliberately omits sessionId to inspect the whole installed library.
@@ -331,8 +355,8 @@ export const api = {
 
   // The manifest tool catalog: every declared tool, registered or not. Same
   // once-at-boot rule as skills — the set is fixed for the server's life.
-  tools: (sessionId?: string) => request<{ tools: ToolCatalogEntry[]; mcp: McpServerGroup[]; builtin?: BuiltinToolEntry[] }>(
-    "GET", `/api/tools${sessionId ? `?session_id=${encodeURIComponent(sessionId)}` : ""}`,
+  tools: (sessionId?: string, agentId?: string) => request<{ tools: ToolCatalogEntry[]; mcp: McpServerGroup[]; builtin?: BuiltinToolEntry[]; mcp_methods?: { server: string; name: string; wire_name: string; description: string }[] }>(
+    "GET", `/api/tools${sessionId ? `?session_id=${encodeURIComponent(sessionId)}` : agentId ? `?agent_id=${encodeURIComponent(agentId)}` : ""}`,
   ),
 
   studioSessionCapabilities: (agentId: string, sessionId: string) =>
@@ -343,6 +367,8 @@ export const api = {
     request<StudioToolConfigSync>("POST", `/api/apps/${encodeURIComponent(agentId)}/sessions/${encodeURIComponent(sessionId)}/tools-config/sync`, {}),
   syncStudioSkillConfig: (agentId: string, sessionId: string) =>
     request<StudioSkillConfigSync>("POST", `/api/apps/${encodeURIComponent(agentId)}/sessions/${encodeURIComponent(sessionId)}/skill-config/sync`, {}),
+  syncStudioMcpConfig: (agentId: string, sessionId: string) =>
+    request<StudioMcpConfigSync>("POST", `/api/apps/${encodeURIComponent(agentId)}/sessions/${encodeURIComponent(sessionId)}/mcp-config/sync`, {}),
 
   // Read-only registry used to migrate saved browser entrypoints.
   panels: () => request<{ panels: PanelInfo[]; auto_register: boolean }>("GET", "/api/panels"),
@@ -437,11 +463,11 @@ export const api = {
 
   // workspace is a directory relative to the server root; "" or omitted picks
   // the root itself.
-  createSession: (model?: string, workspace?: string) =>
+  createSession: (model?: string, workspace?: string, approvalMode?: PolicyMode) =>
     request<{ session_id: string; path: string; model: string; provider: string; workspace: string }>(
       "POST",
       "/api/sessions",
-      { model, workspace },
+      { model, workspace, ...(approvalMode ? { approval_mode: approvalMode } : {}) },
     ),
 
   session: (sid: string, signal?: AbortSignal) => request<{ session_id: string; snapshot: Snapshot; background_task?: BackgroundTaskSessionIdentity; agent_workflow?: { owner_id: string; agent_id: string; workflow_id: string; run_id: string; source_session_id?: string }; sentinel?: { watch_id: string; parent_session_id?: string; agent_id: string; title?: string } }>("GET", `/api/sessions/${encodeURIComponent(sid)}`, undefined, signal),
@@ -536,6 +562,7 @@ export const api = {
         const xhr = new XMLHttpRequest();
         xhr.open("POST", `/api/sessions/${sid}/attachments`);
         for (const [k, v] of Object.entries(authHeaders())) xhr.setRequestHeader(k, v);
+        xhr.setRequestHeader("Accept-Language", getLocale());
         xhr.upload.onprogress = (e) => {
           if (e.lengthComputable) onProgress(e.loaded);
         };
@@ -544,31 +571,31 @@ export const api = {
             resolve(JSON.parse(xhr.responseText) as AttachmentMeta);
             return;
           }
-          let message = `上传失败（${xhr.status}）`;
+          let message = gt("apiErrors.uploadFailed", { status: xhr.status });
           try {
             message = (JSON.parse(xhr.responseText) as { error?: string }).error ?? message;
           } catch {
             /* plain-text errors keep the default */
           }
-          reject(new Error(message));
+          reject(hostAPIError(message));
         };
-        xhr.onerror = () => reject(new Error("上传失败（网络错误）"));
+        xhr.onerror = () => reject(new Error(gt("apiErrors.uploadNetwork")));
         xhr.send(form);
       });
     }
     const res = await fetch(`/api/sessions/${sid}/attachments`, {
       method: "POST",
-      headers: authHeaders(),
+      headers: { ...authHeaders(), "Accept-Language": getLocale() },
       body: form,
     });
     if (!res.ok) {
-      let message = `上传失败（${res.status}）`;
+      let message = gt("apiErrors.uploadFailed", { status: res.status });
       try {
         message = (await res.json()).error ?? message;
       } catch {
         /* plain-text errors keep the default */
       }
-      throw new Error(message);
+      throw hostAPIError(message);
     }
     return res.json();
   },
@@ -797,6 +824,12 @@ export const api = {
   },
 
   savePrefs: (prefs: Prefs) => request<PrefsInfo>("PUT", "/api/prefs", prefs),
+  // A storage page may have been open before another tab changed memory or
+  // other preferences. Carry a fresh server snapshot, never the page's cache.
+  saveSpillRetentionDays: async (days: number): Promise<PrefsInfo> => {
+    const latest = await request<PrefsInfo>("GET", "/api/prefs");
+    return request<PrefsInfo>("PUT", "/api/prefs", { ...latest.prefs, spill_retention_days: days });
+  },
 
   // The live turn cap: 0 explicitly disables it. Server-side this both
   // persists to prefs.json and pushes the new cap into already-open

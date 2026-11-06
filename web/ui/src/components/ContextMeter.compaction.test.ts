@@ -5,7 +5,7 @@ import type { CompactionView, ContextMessage, Message, ToolResult } from "@/api/
 import ContextMeter from "./ContextMeter.vue";
 
 vi.mock("vue", async original => ({ ...await original<typeof import("vue")>(), useSSRContext: () => ({ modules: new Set() }) }));
-vi.mock("vue-i18n", () => ({ useI18n: () => ({ t: (key: string) => key, te: () => false }) }));
+vi.mock("vue-i18n", async original => { const { ref } = await import("vue"); return { ...await original<typeof import("vue-i18n")>(), useI18n: () => ({ t: (key: string) => key, te: () => false, locale: ref("zh-CN") }) }; });
 
 const visibleMessages: Message[] = [
   { id: "old-user", role: "user", content: [{ type: "text", text: "old question" }] },

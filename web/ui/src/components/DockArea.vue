@@ -1,19 +1,19 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, provide, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, provide, ref, useId, watch } from "vue";
 import { agentWorkflowCanvasSize, isAgentWorkflowWorkspace } from "@/agent/agentWorkflowWorkspace";
 import { agentWorkflowRunStatusKey, useAgentWorkflowRunStatus } from "@/agent/useAgentWorkflowRunStatus";
 import { useI18n } from "vue-i18n";
-import { List, ArrowLeft, ArrowRight, Close, Document, Plus } from "@element-plus/icons-vue";
+import { List, ArrowLeft, ArrowRight, Close, Plus } from "@element-plus/icons-vue";
 import { Icon } from "@iconify/vue";
 import FilesPanel from "./FilesPanel.vue";
 import FilePreview from "./FilePreview.vue";
 import SkillDocumentPreview from "./SkillDocumentPreview.vue";
 import HTMLBrowserPane from "./HTMLBrowserPane.vue";
+import WebServicePane from "./WebServicePane.vue";
 import ShellPanel from "./ShellPanel.vue";
 import ShortcutWorkspace from "./ShortcutWorkspace.vue";
 import type { InformationEntry } from "@/api/information";
 import SkillsPanel from "./SkillsPanel.vue";
-import MemoryPanel from "./MemoryPanel.vue";
 import CommandTokenIcon from "./CommandTokenIcon.vue";
 import type { ShortcutSnapshot } from "@/api/shortcuts";
 import SubagentSheet from "./SubagentSheet.vue";
@@ -32,7 +32,8 @@ import { officeApi, officeViewMounted, observeOfficeOpen, type OfficeSession } f
 import type { OfficeRevealRequest, OfficeViewContext } from "@/agent/officeImmersion";
 import { attachmentWorkspacePath, sameWorkspaceFile, workspaceFilePath } from "@/agent/officeFiles";
 
-const { t, locale } = useI18n();
+const { t } = useI18n();
+const previewToolbarId = `preview-toolbar-${useId()}`;
 
 // The dock is a sheet container docked on the right at full height, the
 // conversation on its left — the split workflow and shortcut sheets set.
@@ -76,6 +77,7 @@ const props = defineProps<{
   /** Studio shows the selected session library; installing Skills belongs to management. */
   studioBound?: boolean;
   toolRevision?: number;
+  capabilityRevision?: number;
   toolsPending?: boolean;
   agentId?: string;
   workflowSelection?: AgentWorkflowLocation & { sequence: number };
@@ -92,15 +94,14 @@ const workflowRunStatus = useAgentWorkflowRunStatus(() => ({ agentId: props.agen
 provide(agentWorkflowRunStatusKey, workflowRunStatus);
 const workflowRailState = computed(() => {
   const { active, waiting, running, queued, cancelling } = workflowRunStatus.counts.value;
-  const english = locale.value.startsWith("en");
   const parts: string[] = [];
-  if (waiting) parts.push(english ? `${waiting} awaiting your confirmation` : `${waiting} 项等待本人确认`);
-  if (running) parts.push(english ? `${running} running` : `${running} 项运行中`);
-  if (queued) parts.push(english ? `${queued} queued` : `${queued} 项排队中`);
-  if (cancelling) parts.push(english ? `${cancelling} cancelling` : `${cancelling} 项取消中`);
+  if (waiting) parts.push(t("uiCoverage.workflow.awaitingCount", { count: waiting }));
+  if (running) parts.push(t("uiCoverage.workflow.runningCount", { count: running }));
+  if (queued) parts.push(t("uiCoverage.workflow.queuedCount", { count: queued }));
+  if (cancelling) parts.push(t("uiCoverage.workflow.cancellingCount", { count: cancelling }));
   const stale = workflowRunStatus.stale.value;
-  const suffix = stale ? (english ? "Status unavailable; last known activity" : "状态暂不可用，显示上次已知进度")
-    : workflowRunStatus.connection.value === "loading" ? (english ? "Checking run status" : "正在获取运行状态") : "";
+  const suffix = stale ? t("uiCoverage.workflow.staleActivity")
+    : workflowRunStatus.connection.value === "loading" ? t("uiCoverage.workflow.checkingStatus") : "";
   return {
     kind: stale ? "stale" : waiting ? "waiting" : running ? "running" : cancelling ? "cancelling" : queued ? "queued" : "idle",
     label: [t("agentWorkflow.title"), ...parts, suffix].filter(Boolean).join(" · "),
@@ -143,6 +144,7 @@ const emit = defineEmits<{
   openCurrentHtmlBrowser: [request: { url: string; id: string; sessionId: string; path: string }];
   claimHtmlCapability: [tabID: string, capabilityID: string];
   openHtmlBrowser: [request: { url: string; id: string; sessionId: string }];
+  openWebsiteBrowser: [request: { url: string; title: string; sessionId: string; serviceId: string }];
 }>();
 
 const filePanel = ref<{ previewPath(): string | null; activeOfficePath(): string | null } | null>(null);
@@ -314,7 +316,7 @@ const canImmerse = computed(() => tab.value && ["browser", "panel", "preview", "
 const tabIcon = (tb: DockTab) =>
   tb.kind === "sentinel" || tb.kind === "task" ? sessionIcon : tb.kind === "shell"
     ? terminalIcon
-    : tb.kind === "browser" || tb.kind === "html"
+    : tb.kind === "browser" || tb.kind === "html" || tb.kind === "website"
       ? globeIcon
       : tb.kind === "panel"
         ? panelIcon
@@ -613,14 +615,6 @@ function startDrag(e: MouseEvent) {
           @intent="emit('intent', $event)"
           @close="emit('update:active', null)"
         />
-        <MemoryPanel
-          v-if="mountedSheets.has('memory') && sessionId"
-          :key="sessionId"
-          v-show="active === 'memory'"
-          :active="active === 'memory'"
-          :session-id="sessionId"
-          @close="emit('update:active', null)"
-        />
         <SkillsPanel
           v-if="mountedSheets.has('skills') && (!studioBound || sessionId)"
           :key="studioBound ? `${agentId || ''}:${sessionId || ''}` : 'workspace-skills'"
@@ -631,6 +625,7 @@ function startDrag(e: MouseEvent) {
           :read-only="studioBound"
           :tool-revision="toolRevision"
           :tools-pending="toolsPending"
+          :capability-revision="capabilityRevision"
           @close="emit('update:active', null)"
         />
         <!-- The hub: one tab strip for every occupant, so switching tabs does
@@ -699,6 +694,9 @@ function startDrag(e: MouseEvent) {
             <button v-if="stripOverflow" class="ghost head-btn strip-page" :disabled="!stripCanRight" :title="t('agentView.dock.scrollTabsRight')" :aria-label="t('agentView.dock.scrollTabsRight')" @click="pageStrip(1)">
               <el-icon><ArrowRight /></el-icon>
             </button>
+            <!-- Preview controls share the tab row, leaving the whole pane
+                 below it available to the website or workspace HTML. -->
+            <div :id="previewToolbarId" class="preview-controls" />
             <button v-if="canImmerse" class="ghost head-btn immersion-toggle" :class="{ on: immersive }" :title="t(immersive ? 'immersiveBrowser.exitTip' : 'immersiveBrowser.enter')" :aria-label="t(immersive ? 'immersiveBrowser.exit' : 'immersiveBrowser.enter')" :aria-pressed="Boolean(immersive)" @click="emit('update:immersive', !immersive)">
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="2" stroke="currentColor"/><rect x="8" y="7" width="5" height="5" rx="1" fill="currentColor" opacity=".8"/></svg>
               <span>{{ t(immersive ? 'immersiveBrowser.exit' : 'immersiveBrowser.enter') }}</span>
@@ -806,14 +804,26 @@ function startDrag(e: MouseEvent) {
                    same viewer the files panel uses, as a tab — the way a browser
                    opens a PDF or an image as a tab rather than a lightbox. Back
                    closes the tab; there is no tree to return to in the hub. -->
+              <WebServicePane
+                v-else-if="tb.kind === 'website' && tb.webServiceId && tb.parentSession && tb.parentSession === sessionId"
+                :ref="value => previewRef(tb.id, value)"
+                :session-id="tb.parentSession"
+                :service-id="tb.webServiceId"
+                :open-request="tb.websiteOpenRequest"
+                :toolbar-target="`#${previewToolbarId}`"
+                :active="hubOpen && tab?.id === tb.id"
+                @open-browser="emit('openWebsiteBrowser', $event)"
+              />
               <HTMLBrowserPane
                 v-else-if="tb.kind === 'html' && tb.path && tb.parentSession"
                 :path="tb.path"
                 :session-id="tb.parentSession"
                 :initial-url="tb.url"
                 :initial-id="tb.htmlPreviewId"
+                :toolbar-target="`#${previewToolbarId}`"
                 :active="hubOpen && tab?.id === tb.id"
                 @claim-capability="emit('claimHtmlCapability', tb.id, $event)"
+                @open-browser="emit('openHtmlBrowser', $event)"
               />
               <SkillDocumentPreview
                 v-else-if="tb.kind === 'skill' && tb.skill && tb.path && tb.parentSession"
@@ -893,18 +903,6 @@ function startDrag(e: MouseEvent) {
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="3" width="7" height="6" rx="1.5" stroke="currentColor" stroke-width="1.7"/><rect x="14" y="15" width="7" height="6" rx="1.5" stroke="currentColor" stroke-width="1.7"/><path d="M6.5 9v8a1 1 0 0 0 1 1H14m-2-3 3 3-3 3" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
         <span v-if="workflowRailState.show" class="workflow-rail-count" aria-hidden="true" data-testid="workflow-rail-run-status">{{ workflowRailState.badge }}</span>
         <span class="workflow-rail-announcement" role="status" aria-live="polite" aria-atomic="true">{{ workflowRailState.label }}</span>
-      </button>
-      <button
-        class="rail-btn"
-        :class="{ on: active === 'memory' }"
-        :title="sessionId ? t('memoryPanel.title') : t('memoryPanel.awaitSession')"
-        :aria-label="t('memoryPanel.title')"
-        :aria-expanded="active === 'memory'"
-        :disabled="!sessionId"
-        data-testid="memory-open"
-        @click="toggle('memory')"
-      >
-        <el-icon><Document /></el-icon>
       </button>
       <button
         class="rail-btn skills-entry"
@@ -1191,6 +1189,14 @@ function startDrag(e: MouseEvent) {
   border-bottom: 1px solid var(--el-border-color-extra-light);
   background: var(--el-bg-color-page);
   flex: 0 0 auto;
+  container: preview-toolbar / inline-size;
+}
+
+.preview-controls { display: flex; align-items: center; flex: 0 0 auto; min-width: 0; }
+.preview-controls:empty { display: none; }
+@container preview-toolbar (max-width: 700px) {
+  .head-btn.immersion-toggle { width: 28px; min-width: 28px; padding: 0; margin: 0 2px; }
+  .head-btn.immersion-toggle span { display: none; }
 }
 
 /* The strip: tabs butt against each other like a browser's, scroll sideways

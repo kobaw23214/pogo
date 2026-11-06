@@ -117,12 +117,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS taskqueue_one_running_per_task ON taskqueue_ru
 	if version != 1 {
 		return fail(fmt.Errorf("%w: unsupported queue schema version", ErrConflict))
 	}
-	if err := initWorkflowSchema(db); err != nil {
-		return fail(err)
-	}
-	if err := initWorkflowCallbackSchema(db); err != nil {
-		return fail(err)
-	}
 	if err := initAgentWorkflowSchema(db); err != nil {
 		return fail(err)
 	}
@@ -130,6 +124,14 @@ CREATE UNIQUE INDEX IF NOT EXISTS taskqueue_one_running_per_task ON taskqueue_ru
 		return fail(err)
 	}
 	return &Store{db: db}, nil
+}
+
+func prefixedColumns(prefix string) string {
+	fields := strings.Split(columns, ",")
+	for i := range fields {
+		fields[i] = prefix + "." + fields[i]
+	}
+	return strings.Join(fields, ",")
 }
 
 func (s *Store) Close() error { return s.db.Close() }

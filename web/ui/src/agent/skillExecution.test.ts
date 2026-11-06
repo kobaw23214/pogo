@@ -1,7 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
+import { computed } from 'vue';
+import { setLocale } from '@/i18n';
 import type { SkillExecutionStatus } from '@/api/skillTypes';
 import type { SkillUploadResult } from '@/api/types';
-import { canConfigureUploadedSkill, skillExecutionMessages, skillExecutionPlatforms, skillUploadState } from './skillExecution';
+import { canConfigureUploadedSkill, skillExecutionMessages, skillExecutionPlatforms, skillUploadState, skillExecutionDiagnosticDetails } from './skillExecution';
+afterEach(() => setLocale('zh-CN'));
 
 const execution = (overrides: Partial<SkillExecutionStatus> = {}): SkillExecutionStatus => ({
   configured: true,
@@ -37,6 +40,18 @@ describe('Skill execution presentation', () => {
 
   it('does not lose an executor issue when the selection has no issues', () => {
     expect(skillExecutionMessages(execution({ issue: 'Cannot start the executor' }))).toEqual(['Cannot start the executor']);
+  });
+
+  it('localizes host diagnostic codes reactively and keeps the original details available', () => {
+    const status = execution({ issue_code: 'PLATFORM_MISMATCH', issue: 'POGO_PLATFORM 声明 linux/amd64，但当前 Pogo 运行于 linux/arm64' });
+    setLocale('zh-CN');
+    const messages = computed(() => skillExecutionMessages(status, [{ code: 'CUSTOM_EXTENSION', message: '用户诊断原文' }]));
+    expect(messages.value).toContain('用户诊断原文');
+    expect(messages.value[1]).toContain('部署声明');
+    setLocale('en');
+    expect(messages.value[1]).toContain('deployment target');
+    expect(messages.value).toContain('用户诊断原文');
+    expect(skillExecutionDiagnosticDetails(status)).toEqual(['PLATFORM_MISMATCH: ' + status.issue]);
   });
 });
 

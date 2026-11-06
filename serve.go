@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -26,6 +27,7 @@ import (
 	"github.com/yosukeno/pogo/skills"
 	"github.com/yosukeno/pogo/tools"
 	"github.com/yosukeno/pogo/web"
+	"github.com/yosukeno/pogo/webservice"
 )
 
 type webOptions struct {
@@ -179,23 +181,35 @@ func serveWeb(o webOptions) error {
 		}
 		runtimeSkills = service
 	}
+	var managedHost atomic.Pointer[web.Manager]
+	managedServices, managedPrivateDirs, managedCleanup, err := managedWebServicesFromEnv(func(record webservice.Record) {
+		if host := managedHost.Load(); host != nil {
+			host.ManagedWebServiceChanged(record)
+		}
+	})
+	if err != nil {
+		return err
+	}
+	defer managedCleanup()
 	mgr, err := web.NewManager(web.Config{
-		BrowserURL:          os.Getenv("POGO_BROWSER_URL"),
-		BrowserToken:        os.Getenv("POGO_BROWSER_TOKEN"),
-		BrowserDesktopOwner: os.Getenv("POGO_BROWSER_DESKTOP_OWNER"),
-		SkillRuntime:        runtimeSkills,
-		Cwd:                 cwd,
-		SessionDir:          sessionDir,
-		Catalog:             o.catalog,
-		Model:               o.model,
-		Retries:             o.retries,
-		MaxTurns:            o.maxTurns,
-		GateTimeout:         o.gateTimeout,
-		ContextEdit:         o.contextEdit,
-		Compact:             o.compact,
-		Citations:           o.citations,
-		Followups:           o.followups,
-		Skills:              skillList,
+		WebServices:           managedServices,
+		WebServicePrivateDirs: managedPrivateDirs,
+		BrowserURL:            os.Getenv("POGO_BROWSER_URL"),
+		BrowserToken:          os.Getenv("POGO_BROWSER_TOKEN"),
+		BrowserDesktopOwner:   os.Getenv("POGO_BROWSER_DESKTOP_OWNER"),
+		SkillRuntime:          runtimeSkills,
+		Cwd:                   cwd,
+		SessionDir:            sessionDir,
+		Catalog:               o.catalog,
+		Model:                 o.model,
+		Retries:               o.retries,
+		MaxTurns:              o.maxTurns,
+		GateTimeout:           o.gateTimeout,
+		ContextEdit:           o.contextEdit,
+		Compact:               o.compact,
+		Citations:             o.citations,
+		Followups:             o.followups,
+		Skills:                skillList,
 		// The options the boot scan used, for the runtime reload a skill
 		// upload triggers: same locations, same flags.
 		SkillOptions: o.skills,
@@ -218,6 +232,7 @@ func serveWeb(o webOptions) error {
 	if err != nil {
 		return err
 	}
+	managedHost.Store(mgr)
 	defer mgr.Close()
 
 	opts := web.ServerOptions{

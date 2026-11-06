@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	"github.com/yosukeno/pogo/agent"
@@ -33,6 +34,17 @@ func newChildGate() agent.ToolGate {
 		return nil
 	}
 	return &childGate{fd: fd}
+}
+
+func (g *childGate) fileAccessPrompt(cwd string) string {
+	access := g.fd.FileAccess()
+	if access == nil {
+		return ""
+	}
+	if access.FullAccess() {
+		return fmt.Sprintf("Inherited file access: the parent's full access currently allows ordinary project files throughout the account workspace %q, including sibling Agent projects. Relative paths still start from %q. Only tools actually granted to this child may run; an explore child remains read-only. Every tool call rechecks the parent's current policy.", access.Root, cwd)
+	}
+	return fmt.Sprintf("Inherited file access: ordinary project files are limited to %q and explicit readable roots. The parent's current policy is checked again before every tool call.", cwd)
 }
 
 // Review implements agent.ToolGate.

@@ -54,7 +54,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{ compact: [] }>();
 
-const { t, te } = useI18n();
+const { t, te, locale } = useI18n();
 
 const open = ref(false);
 const expanded = reactive(new Set<string>());
@@ -260,7 +260,7 @@ const cachePct = computed(() => {
 const fresh = computed(() =>
   props.usage ? Math.max(props.usage.input - (props.usage.cache_read ?? 0), 0) : 0,
 );
-const grouped = (n: number) => n.toLocaleString("en-US");
+const grouped = (n: number) => n.toLocaleString(locale.value);
 
 // The button shows only the icon and the bar, so the numbers live in the
 // tooltip; the breakdown is a click away.

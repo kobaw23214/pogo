@@ -4,7 +4,7 @@ import type { SkillDocumentContent, SkillDocumentUpdate } from "@/api/types";
 import type { useSkillDocumentEditing } from "./skillDocumentEditing";
 const hooks = vi.hoisted(() => ({ cleanup: [] as (() => void)[] }));
 vi.mock("vue", async original => ({ ...await original<typeof import("vue")>(), onMounted() {}, onBeforeUnmount: (fn: () => void) => hooks.cleanup.push(fn), useSSRContext: () => ({ modules: new Set() }) }));
-vi.mock("vue-i18n", () => ({ useI18n: () => ({ t: (key: string) => key }) }));
+vi.mock("vue-i18n", async original => ({ ...await original<typeof import("vue-i18n")>(), useI18n: () => ({ t: (key: string) => key }) }));
 vi.mock("./MarkdownView.vue", () => ({ default: {} }));
 vi.mock("./CodeBlock.vue", () => ({ default: {} }));
 vi.mock("./ConfirmDialog.vue", () => ({ default: {} }));

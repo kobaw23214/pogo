@@ -1,6 +1,7 @@
 import test, { before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
+import { chromium } from 'playwright';
 import { createWorker } from '../src/server.js';
 
 // All requests and credentials below belong to this isolated, synthetic site.
@@ -10,7 +11,7 @@ const fixtureToken = 'synthetic-devtools-access-token';
 const fixturePassword = 'synthetic-devtools-password';
 const fixtureCookie = 'synthetic-devtools-cookie';
 const fixtureHeader = 'synthetic-devtools-header';
-let worker, site, base, origin, sequence = 0;
+let worker, browser, site, base, origin, sequence = 0;
 const requests = new Map();
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -143,13 +144,17 @@ before(async () => {
   });
   await new Promise(resolve => site.listen(0, '127.0.0.1', resolve));
   origin = `http://127.0.0.1:${site.address().port}`;
-  worker = await createWorker({ token, actionTimeout: 3000, idleMs: 60_000 });
+  // Protocol contract tests supply their own isolated browser; native media
+  // startup is covered separately and is unavailable on non-Wayland hosts.
+  browser = await chromium.launch({ headless: true });
+  worker = await createWorker({ token, browser, actionTimeout: 3000, idleMs: 60_000 });
   const address = await worker.listen(0);
   base = `http://127.0.0.1:${address.port}`;
 });
 
 after(async () => {
   await worker?.close();
+  await browser?.close();
   site?.closeAllConnections();
   if (site) await new Promise(resolve => site.close(resolve));
 });
@@ -170,6 +175,35 @@ test('help, DOM and Runtime use standard CDP in the same current page; retired e
     const compatible = await execute(id, { action: 'eval', expression: 'document.title' });
     assert.equal(compatible.data.ok, false);
     assert.match(compatible.data.error, /retired/);
+  });
+});
+
+test('bound page CDP dispatches to the selected Agent tab and retains strict field and authority checks', async () => {
+  await withSession('cdp-bound-page', async id => {
+    const first = (await request(`/sessions/${id}/state`)).data;
+    assert.equal((await execute(id, { action: 'tab', tab_action: 'new', url: `${origin}/fixture?case=bound-second` })).data.ok, true);
+    const second = (await request(`/sessions/${id}/state`)).data;
+    assert.notEqual(second.active_tab, first.active_tab);
+    const binding = state => ({ tab_id: state.active_tab, context_ref: state.context_ref, control_epoch: state.control_epoch });
+    const bound = (page, method, params = {}, extra = {}) => execute(id, { action: 'devtools', ...binding(page), method, params, ...extra });
+    const read = { expression: '({title:document.title,caseID:new URL(location.href).searchParams.get("case"),probe:typeof window.boundProbe})', returnByValue: true };
+    const original = successful(await bound(first, 'Runtime.evaluate', read));
+    assert.deepEqual(original.result.result.value, { title: 'DevTools fixture', caseID: id, probe: 'undefined' });
+    assert.equal(successful(await bound(second, 'Runtime.evaluate', read)).result.result.value.caseID, 'bound-second');
+
+    const unknown = refused(await bound(first, 'Runtime.evaluate', { expression: 'window.boundProbe=99', returnByValue: true }, { unknown: true }));
+    assert.match(unknown.error, /DEVTOOLS_UNSUPPORTED_FIELD/);
+    assert.match(refused(await bound(first, 'Browser.close')).error, /DEVTOOLS_METHOD_DENIED/);
+    assert.match(refused(await bound(first, 'Runtime.evaluate', { expression: '42', sessionId: 'foreign' })).error, /DEVTOOLS_CROSS_SESSION_PARAM_DENIED/);
+    assert.equal((await bound(first, 'Runtime.evaluate', read, { context_ref: `ctx_${'0'.repeat(24)}` })).status, 409);
+    assert.equal((await bound(first, 'Runtime.evaluate', read, { control_epoch: first.control_epoch + 1 })).status, 409);
+    assert.equal(successful(await bound(first, 'Runtime.evaluate', read)).result.result.value.probe, 'undefined', 'refused fields must not execute page code');
+
+    const owner = await request(`/sessions/${id}/control`, 'POST', { mode: 'human', tab_id: second.active_tab, context_ref: second.context_ref });
+    assert.equal(owner.status, 200, JSON.stringify(owner.data));
+    const humanPage = await bound({ ...second, control_epoch: owner.data.control_epoch }, 'Runtime.evaluate', read);
+    assert.equal(humanPage.status, 409, 'a fresh human-page binding does not grant Agent control');
+    assert.equal(humanPage.data.code, 'TAB_HUMAN_CONTROL');
   });
 });
 
@@ -352,8 +386,15 @@ test('a real click breakpoint returns pending promptly, exposes local state and 
 
 test('Runtime.evaluate can stop at debugger and paused time does not consume its execution deadline', { timeout: 15_000 }, async () => {
   await withSession('cdp-eval-breakpoint', async id => {
+    const bindingState = (await request(`/sessions/${id}/state`)).data;
+    const pageBinding = { tab_id: bindingState.active_tab, context_ref: bindingState.context_ref, control_epoch: bindingState.control_epoch };
+    assert.equal((await execute(id, { action: 'tab', tab_action: 'new', url: `${origin}/fixture?case=pending-other-tab` })).data.ok, true);
+    const otherState = (await request(`/sessions/${id}/state`)).data;
+    const otherBinding = { tab_id: otherState.active_tab, context_ref: otherState.context_ref, control_epoch: otherState.control_epoch };
+    assert.equal((await execute(id, { action: 'tab', target: pageBinding.tab_id })).data.ok, true);
+    const boundDevtools = (method, params = {}) => execute(id, { action: 'devtools', ...pageBinding, method, params });
     successful(await devtools(id, 'Debugger.enable'));
-    const operation = { op_id: 'native-eval-breakpoint-once', action: 'devtools', method: 'Runtime.evaluate', params: { returnByValue: true, awaitPromise: true, expression: `(() => {
+    const operation = { op_id: 'native-eval-breakpoint-once', action: 'devtools', ...pageBinding, method: 'Runtime.evaluate', params: { returnByValue: true, awaitPromise: true, expression: `(() => {
       const nativeLocal = { answer: 42 };
       window.nativeEvalStarted = (window.nativeEvalStarted || 0) + 1;
       debugger;
@@ -366,7 +407,10 @@ test('Runtime.evaluate can stop at debugger and paused time does not consume its
     assert.equal(evaluation.data.ok, false, JSON.stringify(evaluation.data));
     assert.match(evaluation.data.error, /debugger.*pending|pending.*debugger/i);
     assert.ok(performance.now() - startedAt < 2000, 'a paused eval must not wait for the execution deadline');
-    const paused = await waitFor(async () => successful(await devtools(id, 'events.list', { method: 'Debugger.paused', limit: 100 })),
+    const wrongPage = refused(await execute(id, { action: 'devtools', ...otherBinding, method: 'help' }));
+    assert.match(wrongPage.error, /pending.*another page/);
+    assert.equal((await request(`/sessions/${id}/state`)).data.active_tab, pageBinding.tab_id, 'refusing another page must preserve the pending page');
+    const paused = await waitFor(async () => successful(await boundDevtools('events.list', { method: 'Debugger.paused', limit: 100 })),
       value => value.items.some(item => item.params.callFrames?.length), 'native eval breakpoint missing');
     const frame = paused.items.flatMap(item => item.params.callFrames ?? [])[0];
     assert.ok(frame.callFrameId);
@@ -376,11 +420,11 @@ test('Runtime.evaluate can stop at debugger and paused time does not consume its
     const state = (await request(`/sessions/${id}/state`)).data;
     assert.equal(state.debugger_paused, true);
     assert.equal(state.devtools_blocked, false, 'a deliberate breakpoint is not an unknown execution timeout');
-    const inspected = successful(await devtools(id, 'Debugger.evaluateOnCallFrame', {
+    const inspected = successful(await boundDevtools('Debugger.evaluateOnCallFrame', {
       callFrameId: frame.callFrameId, expression: 'nativeLocal.answer', returnByValue: true,
     }));
     assert.equal(inspected.result.result.value, 42);
-    successful(await devtools(id, 'Debugger.resume'));
+    successful(await boundDevtools('Debugger.resume'));
     await waitFor(async () => (await request(`/sessions/${id}/state`)).data,
       current => !current.busy && !current.debugger_paused, 'native eval did not complete after resume');
     const snapshot = await execute(id, { action: 'snapshot' });

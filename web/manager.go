@@ -30,6 +30,7 @@ import (
 	"github.com/yosukeno/pogo/skillruntime"
 	"github.com/yosukeno/pogo/skills"
 	"github.com/yosukeno/pogo/tools"
+	"github.com/yosukeno/pogo/webservice"
 )
 
 // subPaneIf loans the browser pane to this session's children, or withholds
@@ -58,6 +59,9 @@ var (
 )
 
 type Config struct {
+	// WebServices is optional, configured only with a real runtime and gateway.
+	WebServices           *webservice.Manager
+	WebServicePrivateDirs []string
 	// Catalog is the authoritative session-ownership registry (catalog/). Nil
 	// keeps the classic single-user mode: no owner anywhere, every session
 	// visible to the shared token. Non-nil switches the server to per-user
@@ -181,6 +185,8 @@ type Config struct {
 // one run. Concurrency across sessions is unrestricted; within a session it is
 // one.
 type Manager struct {
+	webServicesReady         bool
+	webServicePrivateRelease func()
 	cfg                      Config
 	sentinelMarkers          sync.Map // immutable first-record navigation roles
 	backgroundTaskMarkers    sync.Map // immutable first-record schedule execution roles
@@ -189,12 +195,9 @@ type Manager struct {
 	sentinelParents          sync.Map // legacy native receipt projection, keyed by source file fingerprint
 	browserDownloadPrefsPath string
 	studio                   *studioStore
-	workflows                *workflowStore
-	workflowCallbackStop     func()
 	// Bound by the authenticated Web host; model arguments never supply a
 	// principal, credential, or arbitrary workflow owner.
-	workflowAuthoringHost *Server
-	agentWorkflowHost     *Server
+	agentWorkflowHost *Server
 	// Installed once by a configured Web Office host before requests start.
 	// The factory binds the live editor tool to trusted conversation identity;
 	// unconfigured and non-docs conversations have no Office tool.
@@ -210,10 +213,6 @@ type Manager struct {
 	// writable through a different Agent's command tools.
 	officeCommandProtection func(cwd string, owner *identity.Scope) (string, error)
 	officeRegisterDocument  func(cwd string, owner *identity.Scope, absolute string) error
-	// wfruns owns workflow run state: the in-memory active set, the per-run
-	// hubs, and recovery of the wf-runs directory. Built in NewManager right
-	// after the workflows store it reads definitions from.
-	wfruns *wfRunManager
 
 	// Derived from cfg.Skills once, because every session needs the same three
 	// projections of it and rebuilding them per session is pure waste.
@@ -436,14 +435,9 @@ func NewManager(cfg Config) (*Manager, error) {
 	if err != nil {
 		return nil, fmt.Errorf("agent studio: %w", err)
 	}
-	workflows, err := openWorkflowStore(cfg.SessionDir)
-	if err != nil {
-		return nil, fmt.Errorf("workflows: %w", err)
-	}
 
 	m := &Manager{
 		studio:              studio,
-		workflows:           workflows,
 		cfg:                 cfg,
 		subagentConcurrency: concurrency,
 		journal:             tools.NewDirJournal(filepath.Join(cfg.SessionDir, "journal", journalDirKey(cfg.Cwd)), cfg.Cwd),
@@ -458,22 +452,9 @@ func NewManager(cfg Config) (*Manager, error) {
 	// live catalogs: a selection can only name what exists right now.
 	studio.refs = m.validateStudioRefs
 	studio.bindSkillTools = m.normalizeStudioSkillTools
-	workflows.refs = m.validateWorkflowRefs
-	m.wfruns = newWFRunManager(filepath.Join(cfg.SessionDir, "wf-runs"), m)
 	m.taskRuns = newTaskRunRuntime(m)
 	if _, err := m.taskRuns.database(true); err != nil {
-		return nil, fmt.Errorf("workflow control store: %w", err)
-	}
-	m.wfruns.recover()
-	if err := m.importWorkflowHistory(m.taskRuns.store); err != nil {
-		_ = m.taskRuns.store.Close()
-		_ = m.taskRuns.lease.Close()
-		return nil, fmt.Errorf("workflow history: %w", err)
-	}
-	if err := m.reconcileWorkflowSegments(m.taskRuns.store); err != nil {
-		_ = m.taskRuns.store.Close()
-		_ = m.taskRuns.lease.Close()
-		return nil, fmt.Errorf("workflow recovery: %w", err)
+		return nil, fmt.Errorf("task control store: %w", err)
 	}
 	m.rebuildSkillViews()
 	// Complete reset before starting any goroutines. Constructor failures must
@@ -483,11 +464,6 @@ func NewManager(cfg Config) (*Manager, error) {
 		_ = m.taskRuns.lease.Close()
 		return nil, fmt.Errorf("studio format reset: %w", err)
 	}
-	// Runs caught idle by the crash continue once the skill views exist; the
-	// human-wait timeout sweep runs beside them.
-	m.wfruns.resumePending()
-	m.wfruns.wg.Add(1)
-	go m.wfruns.runSweep()
 
 	// The shadow repo sits next to the journal. Failure (no git, an
 	// unwritable dir) turns checkpointing off, not the server: rewind still
@@ -512,6 +488,11 @@ func NewManager(cfg Config) (*Manager, error) {
 		m.mcpPool.Reconcile(context.Background(), mcpCfg)
 		m.mcpBase = mcpCfg
 		m.mcpOwnerPools = map[string]*mcpclient.Pool{}
+	}
+	if err := m.prepareWebServicesHost(); err != nil {
+		_ = m.taskRuns.store.Close()
+		_ = m.taskRuns.lease.Close()
+		return nil, err
 	}
 	m.sentinels = newSentinelRuntime(m)
 	m.wg.Add(1)
@@ -1037,15 +1018,9 @@ func (m *Manager) Close() {
 	for id, load := range m.sessionLoads {
 		loads[id] = load
 	}
-	stopCallbacks := m.workflowCallbackStop
 	m.mu.Unlock()
 
 	close(m.stop)
-	// Drain callback HTTP and leases while their shared persistent database
-	// is still open. Any remaining events stay queued for the next process.
-	if stopCallbacks != nil {
-		stopCallbacks()
-	}
 	if m.sentinels != nil {
 		m.sentinels.cancel()
 	}
@@ -1068,10 +1043,13 @@ func (m *Manager) Close() {
 			m.officeRevokeSession(id)
 		}
 	}
-	if m.wfruns != nil {
-		m.wfruns.close()
-	}
 	m.wg.Wait()
+	if m.cfg.WebServices != nil {
+		_ = m.cfg.WebServices.Close()
+	}
+	if m.webServicePrivateRelease != nil {
+		m.webServicePrivateRelease()
+	}
 	// The pool goes last: the sessions above have drained their runs, so no
 	// MCP tool call can still be in flight to have its transport vanish
 	// underneath it.
@@ -1494,9 +1472,7 @@ func (m *Manager) loadReservedSession(id string, load *sessionLoad) (*Session, e
 	}
 	m.mu.Unlock()
 	if err == nil && s != nil && s.studioID != "" {
-		if _, syncErr := s.SyncStudioToolPolicy(); syncErr != nil {
-			s.hub.Publish(Event{Type: EvError, Error: "工具配置尚未同步：" + syncErr.Error()})
-		}
+		s.syncStudioCapabilitiesAtIdle()
 	}
 	if err != nil && s != nil {
 		s.closeUnpublished()
@@ -1684,6 +1660,11 @@ func (m *Manager) Delete(id string) error {
 	// so retained/active-read TTL protection does not preserve a deleted scope.
 	// On failure the transcript and ownership row remain intact for retry;
 	// files already removed during a partial cleanup cannot be restored.
+	if m.cfg.WebServices != nil {
+		if err := m.cfg.WebServices.DeleteSession(context.Background(), sessionResultOwnerKey(resultOwner), id); err != nil {
+			return fmt.Errorf("managed Web service cleanup pending; conversation retained for retry: %w", err)
+		}
+	}
 	removeSpill := tools.RemoveResultScopeSpill
 	if m.spillScopeCleanup != nil {
 		removeSpill = m.spillScopeCleanup
@@ -1823,7 +1804,9 @@ func (m *Manager) newSession(store *session.Store, cfg config.Resolved, history 
 	toolSelection := m.studioNativeSelection(binding.effectiveNativeAgent())
 	browserTool := m.browserAllowed(owner)
 	if studioBound {
-		subset, only := m.studioSelection(binding.Agent)
+		effective := binding.Agent
+		effective.MCPServers = binding.effectiveMCPServers()
+		subset, only := m.studioSelection(effective)
 		if subset != nil {
 			v = m.filterSkillViews(v, subset)
 			invocationSkills = subset
@@ -1963,8 +1946,8 @@ func (m *Manager) newSession(store *session.Store, cfg config.Resolved, history 
 		// The capability contract of the pinned definition revision: the
 		// model allowlist SetModel checks against, the skills /skill:name may
 		// expand, and the server set every MCP refresh re-narrows to. Model and
-		// Skill/native policies may move at idle boundaries; MCP selections and
-		// Agent instructions retain their original definition snapshot.
+		// Skill/native/MCP policies may move at idle boundaries; Agent identity
+		// and instructions retain their original definition snapshot.
 		s.studioModels = binding.allowedModels()
 		s.invocationSkills = invocationSkills
 		s.mcpOnly = mcpOnly
@@ -2076,12 +2059,14 @@ func (m *Manager) newSession(store *session.Store, cfg config.Resolved, history 
 		legacyResultPaths = tools.LegacyResultPaths(msgs)
 	}
 	s.agent = agent.New(agent.Config{
-		Client: s.client(cfg),
+		Client:        s.client(cfg),
+		RuntimePrompt: s.fileAccessPrompt,
 		// The subagent tool is registered here too, not only in the terminal: the
 		// browser is where an approval gate exists, so it is the mode where
 		// delegating work is most useful and most in need of supervision.
 		Registry: tools.New(tools.Options{
 			Cwd:                       cwd,
+			FileAccess:                s.fileAccess(),
 			UserInput:                 s.userInput,
 			AsyncUserInput:            s.userInput,
 			ShellJobs:                 s.shellJobs,
@@ -2093,6 +2078,7 @@ func (m *Manager) newSession(store *session.Store, cfg config.Resolved, history 
 			Watches:                   m.watchBackendForConversation(s),
 			BackgroundTasks:           m.backgroundBackendForConversation(s),
 			AgentWorkflows:            m.agentWorkflowToolBackend(s),
+			WebServices:               m.webServiceBackend(s),
 			CommandProtectionManifest: commandProtectionManifest,
 			// The pinned definition's native-tool selection; nil for legacy and
 			// ordinary sessions, which keeps every built-in exactly as before.

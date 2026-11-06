@@ -18,7 +18,7 @@ import { browserFavicon } from "@/agent/browserFavicon";
 // are still running — at a glance. A dropdown hides exactly that; see the
 // opencode and Claude Code tab requests for how the complaint reads when it
 // does.
-export type SheetId = "files" | "hub" | "shortcuts" | "tasks" | "memory" | "skills" | "workflows";
+export type SheetId = "files" | "hub" | "shortcuts" | "tasks" | "skills" | "workflows";
 
 export const PANEL_PREFIX = "panel:";
 export const SUBAGENT_PREFIX = "subagent:";
@@ -26,10 +26,11 @@ export const BROWSER_PREFIX = "browser:";
 export const PREVIEW_PREFIX = "preview:";
 export const SKILL_PREFIX = "skill:";
 export const HTML_PREFIX = "html:";
+export const WEBSITE_PREFIX = "website:";
 export const SENTINEL_PREFIX = "sentinel:";
 export const TASK_PREFIX = "task:";
 
-export type TabKind = "shell" | "panel" | "subagent" | "browser" | "preview" | "skill" | "html" | "sentinel" | "task";
+export type TabKind = "shell" | "panel" | "subagent" | "browser" | "preview" | "skill" | "html" | "website" | "sentinel" | "task";
 
 export interface OpenFileTarget {
   path: string;
@@ -72,6 +73,10 @@ export interface DockTab {
   url?: string;
   /** Transient capability for a client-rendered HTML tab; never persisted. */
   htmlPreviewId?: string;
+  /** Stable website reference only; a pane owns its transient grant URL. */
+  webServiceId?: string;
+  /** Explicit open click, deliberately omitted from persisted tabs. */
+  websiteOpenRequest?: number;
   /** Validated image data from the current browser page, never a remote URL. */
   favicon?: string;
   browserBinding?: BrowserSheetBinding;
@@ -126,7 +131,10 @@ export interface SheetState {
  */
 export function migrateSheet(stored: StoredSheet): SheetState {
   const v = stored.sheet;
-  if (v === "files" || v === "hub" || v === "shortcuts" || v === "tasks" || v === "memory" || v === "skills" || v === "workflows") return { sheet: v, tab: null };
+  // Memory management moved to platform settings. Do not restore a removed
+  // sheet as an empty open dock for users with an older saved layout.
+  if (v === "memory") return { sheet: null, tab: null };
+  if (v === "files" || v === "hub" || v === "shortcuts" || v === "tasks" || v === "skills" || v === "workflows") return { sheet: v, tab: null };
   if (v === "shell") return { sheet: "hub", tab: "shell" };
   if (v && v.startsWith(PANEL_PREFIX)) return { sheet: "hub", tab: v };
   if (v) return { sheet: null, tab: null };
@@ -141,6 +149,7 @@ export function migrateSheet(stored: StoredSheet): SheetState {
  * Previews opened at a line also update their location and reveal it again.
  */
 export function openTab(tabs: DockTab[], tab: DockTab): DockTab[] {
+  if (tab.kind === "website" && tabs.some(t => t.id === tab.id)) return tabs.map(t => t.id === tab.id ? { ...t, websiteOpenRequest: tab.websiteOpenRequest, label: tab.label } : t);
   if (tab.kind === "preview" && (tab.citation || tab.lineStart !== undefined)) {
     const existing = tabs.find((t) => t.id === tab.id);
     const next = { ...tab, revealVersion: (existing?.revealVersion ?? 0) + 1 };
@@ -213,6 +222,11 @@ export function restoreTabs(stored: StoredTabs, _panels: PanelInfo[]): { tabs: D
 
 function normalizeStoredTab(t: DockTab): DockTab | null {
   if (!t || typeof t !== "object") return null;
+  if (t.kind === "website") {
+    const valid = (value: unknown): value is string => typeof value === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(value);
+    if (!valid(t.parentSession) || !valid(t.webServiceId) || t.id !== `${WEBSITE_PREFIX}${t.parentSession}:${t.webServiceId}`) return null;
+    return { id: t.id, label: typeof t.label === "string" && t.label ? t.label : t.webServiceId, kind: "website", parentSession: t.parentSession, webServiceId: t.webServiceId, closable: true };
+  }
   if (t.kind === "task") {
     const valid = (value: unknown): value is string => typeof value === "string" && /^[A-Za-z0-9_.-]{1,128}$/.test(value) && !value.includes("..");
     const source = (value: unknown): value is string => typeof value === "string" && /^[A-Za-z0-9][A-Za-z0-9._-]{0,39}$/.test(value);

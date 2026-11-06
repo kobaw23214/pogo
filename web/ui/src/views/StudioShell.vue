@@ -1,9 +1,24 @@
 <script setup lang="ts">
-import { defineAsyncComponent, onMounted, ref } from "vue";
-const ManageView = defineAsyncComponent(() => import("./ManageView.vue"));
-const AgentView = defineAsyncComponent(() => import("./AgentView.vue"));
-const WorkflowView = defineAsyncComponent(() => import("./WorkflowView.vue"));
+import { useI18n } from "vue-i18n";
+const { t: tr } = useI18n();
+import { defineAsyncComponent, h, onMounted, ref } from "vue";
+const ManageView = defineAsyncComponent({
+  loader: () => import("./ManageView.vue"),
+  loadingComponent: () => h(StudioEntryPage, { kind: "management", section: props.section }),
+  delay: 0,
+});
+const AgentView = defineAsyncComponent({
+  loader: () => import("./AgentView.vue"),
+  loadingComponent: () => h(StudioEntryPage, {
+    kind: "chat",
+    agentId: props.agentId,
+    managedChat: props.managedChat,
+    embedded: props.embedded,
+  }),
+  delay: 0,
+});
 import StudioLogin from "@/components/studio/StudioLogin.vue";
+import StudioEntryPage from "@/components/studio/StudioEntryPage.vue";
 import Logo from "@/components/Logo.vue";
 import { api, setToken } from "@/api/client";
 import { navigateStudio, platformApi } from "@/api/platform";
@@ -18,9 +33,7 @@ import { managedChatPath, type StudioSection } from "@/agent/studioPresentation"
  * password/token gate, and the backend's can_manage decides what the catalog
  * allows. Chat routes (/a/{id}, /manage/agents/{id}/chat) render the original
  * full-Pogo AgentView directly: it owns its auth and agent gate, and a
- * published visitor never touches the admin management API. Workflow routes
- * (/manage/workflows/{id}) render the full-screen WorkflowView editor behind
- * the same login gate and catalog load as the management shell.
+ * published visitor never touches the admin management API.
  *
  * Everything here styles against the theme tokens, so Paper and Graphite (and
  * every other skin) inherit the shell whole.
@@ -28,9 +41,9 @@ import { managedChatPath, type StudioSection } from "@/agent/studioPresentation"
 const props = withDefaults(
   defineProps<{
     agentId?: string;
-    workflowId?: string;
     invalidRoute?: boolean;
     section?: StudioSection;
+    memoryAgentId?: string;
     managedChat?: boolean;
     embedded?: boolean;
   }>(),
@@ -41,10 +54,11 @@ const agents = ref<PlatformAgent[]>([]);
 const models = ref<PlatformModel[]>([]);
 const templates = ref<AgentTemplate[]>([]);
 const loading = ref(true);
+const catalogReady = ref(false);
 const saving = ref(false);
 const error = ref("");
 const canManage = ref(false);
-const accountName = ref("我的工作空间");
+const accountName = ref("");
 const authRequired = ref(false);
 const passwordEnabled = ref(false);
 const loginBusy = ref(false);
@@ -65,7 +79,7 @@ async function load() {
   try {
     const auth = await api.authStatus();
     passwordEnabled.value = auth.password;
-    accountName.value = auth.user || "我的工作空间";
+    accountName.value = auth.user || "";
     const [data, catalog] = await Promise.all([platformApi.list(), api.models()]);
     if (request !== loadRequest) return;
     // A refresh started before a successful save contains an older catalog.
@@ -77,6 +91,7 @@ async function load() {
       provider: model.provider,
       available: model.configured,
     }));
+    catalogReady.value = true;
     authRequired.value = false;
     // Templates are dialog furniture, not catalog data: a failed fetch must
     // not blank the manage page, and the dialog surfaces its own retry.
@@ -89,7 +104,7 @@ async function load() {
   } catch (e) {
     if (request !== loadRequest) return;
     if ((e as { status?: number }).status === 401) authRequired.value = true;
-    else error.value = (e as Error).message || "暂时无法连接工作空间，请重试。";
+    else error.value = (e as Error).message || tr('studioManagement.text606');
   } finally {
     if (request === loadRequest) loading.value = false;
   }
@@ -100,7 +115,7 @@ async function login(payload: { mode: "password" | "token"; username: string; pa
   loginError.value = "";
   if (payload.mode === "token") {
     if (!payload.accessKey.trim()) {
-      loginError.value = "请输入工作空间访问密钥";
+      loginError.value = tr('studioManagement.text478');
       return;
     }
     loginBusy.value = true;
@@ -112,14 +127,14 @@ async function login(payload: { mode: "password" | "token"; username: string; pa
       location.reload();
     } catch (e) {
       loginError.value =
-        (e as { status?: number }).status === 401 ? "访问密钥不正确，请重试。" : (e as Error).message;
+        (e as { status?: number }).status === 401 ? tr('studioManagement.text607') : (e as Error).message;
     } finally {
       loginBusy.value = false;
     }
     return;
   }
   if (!payload.username.trim() || !payload.password) {
-    loginError.value = "请输入账号和密码";
+    loginError.value = tr('studioManagement.text477');
     return;
   }
   loginBusy.value = true;
@@ -128,7 +143,7 @@ async function login(payload: { mode: "password" | "token"; username: string; pa
     await load();
   } catch (e) {
     loginError.value =
-      (e as { status?: number }).status === 401 ? "账号或密码不正确，请重试。" : (e as Error).message;
+      (e as { status?: number }).status === 401 ? tr('studioManagement.text608') : (e as Error).message;
   } finally {
     loginBusy.value = false;
   }
@@ -162,7 +177,7 @@ async function updateAgent(id: string, input: PlatformAgentInput, revision: numb
     const updated = await platformApi.update(id, input, revision);
     agentMutation++;
     agents.value = agents.value.map((agent) =>
-      agent.id === id ? { ...updated, conversation_count: agent.conversation_count } : agent,
+      agent.id === id ? { ...updated, conversation_count: agent.conversation_count, user_message_count: agent.user_message_count } : agent,
     );
     manager.value?.creationSucceeded();
   } catch (e) {
@@ -249,28 +264,6 @@ onMounted(() => {
     />
   </div>
 
-  <!-- Workflow editor: its own full-screen page behind the same login gate as
-       the management shell; it loads the catalog (palette, models) like a
-       management route and the workflow definition itself. -->
-  <div v-else-if="props.workflowId" class="studio-workbench">
-    <StudioLogin
-      v-if="authRequired"
-      :password-enabled="passwordEnabled"
-      :busy="loginBusy"
-      :error="loginError"
-      @submit="login"
-      @clear-error="loginError = ''"
-    />
-    <WorkflowView
-      v-else
-      :key="props.workflowId"
-      :workflow-id="props.workflowId"
-      :agents="agents"
-      :models="models"
-      :can-manage="canManage"
-    />
-  </div>
-
   <div v-else class="studio-shell">
     <StudioLogin
       v-if="authRequired"
@@ -283,9 +276,9 @@ onMounted(() => {
 
     <div v-else-if="props.invalidRoute" class="studio-fallback">
       <Logo :size="36" class="fallback-logo" />
-      <h1>这个 Agent 链接不完整。</h1>
-      <p>{{ props.managedChat ? '回到工作空间，重新选择你想对话的 Agent。' : '请检查链接，或向提供此 Agent 的管理员获取新的访问地址。' }}</p>
-      <button v-if="props.managedChat" class="primary inline" @click="navigateStudio('/manage')">返回我的 Agents</button>
+      <h1>{{ tr('studioManagement.text609') }}</h1>
+      <p>{{ props.managedChat ? tr('studioManagement.text610') : tr('studioManagement.text611') }}</p>
+      <button v-if="props.managedChat" class="primary inline" @click="navigateStudio('/manage')">{{ tr('studioManagement.text612') }}</button>
     </div>
 
     <ManageView
@@ -295,12 +288,14 @@ onMounted(() => {
       :models="models"
       :templates="templates"
       :loading="loading"
+      :catalog-ready="catalogReady"
       :saving="saving"
       :error="error"
       :can-manage="canManage"
-      :account-name="accountName"
+      :account-name="accountName || tr('studioManagement.text605')"
       :password-enabled="passwordEnabled"
       :section="props.section"
+      :memory-agent-id="props.memoryAgentId"
       @create="createAgent"
       @update="updateAgent"
       @remove="requestRemove"
@@ -312,13 +307,13 @@ onMounted(() => {
 
     <dialog ref="deleteDialog" class="delete-dialog" @cancel="deleteBusy && $event.preventDefault()">
       <span class="delete-glyph" aria-hidden="true">−</span>
-      <h2>移除这位 Agent？</h2>
-      <p>“{{ deletingAgent?.name }}”的访问入口将关闭，正在生成的回答会停止。历史会话会保留。</p>
+      <h2>{{ tr('studioManagement.text613') }}</h2>
+      <p>{{ tr('studioSentences.removeAgent', { name: deletingAgent?.name ?? '' }) }}</p>
       <p v-if="deleteError" class="form-error" role="alert">{{ deleteError }}</p>
       <div class="dialog-actions">
-        <button class="ghost" :disabled="deleteBusy" @click="deleteDialog?.close()">保留 Agent</button>
+        <button class="ghost" :disabled="deleteBusy" @click="deleteDialog?.close()">{{ tr('studioManagement.text615') }}</button>
         <button class="danger" :disabled="deleteBusy" @click="removeAgent">
-          {{ deleteBusy ? "正在移除…" : "确认移除" }}
+          {{ deleteBusy ? tr('studioManagement.text616') : tr('studioManagement.text617') }}
         </button>
       </div>
     </dialog>

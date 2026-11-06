@@ -2,6 +2,8 @@ package tools
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -72,36 +74,36 @@ func (*ToolResultRead) ExecutionMode() ExecutionMode { return Parallel }
 
 func (*ToolResultRead) Description() string {
 	return "Read immutable saved tool output without repeating the original action. All views require the host result_id except list. " +
-		"list discovers this session's result metadata using optional tool/filter and a scan-cursor offset (default limit 20/max 100); follow next_offset, not item counts. It does not read source bodies. " +
-		"retain protects an existing result for days (default 30/max 90); release removes explicit protection, not the result. These change only local retention, not source data or observation time. " +
-		"summary gives a bounded overview, not full evidence. text reads UTF-8 byte ranges (offset 0; limit default 8192/max 32768). " +
-		"search finds a case-sensitive literal pattern (1..1024 UTF-8 bytes), with context_lines default 1/max 5; offset counts matches and limit defaults 20/max 200. Returned byte ranges support targeted text reads. No regex. " +
-		"json selects an RFC 6901 pointer; arrays page by items (20/max 200), strings by UTF-8 bytes. native exposes a protocol directory or explicit pointer; encoded media remains metadata. " +
-		"query processes one saved JSON array (max 100000 rows), with ordered AND where filters, select projection and count/sum/min/max/avg over ALL matching stored rows. Numeric aggregates are exact integer/rational strings; missing/null/non-numeric counts remain distinct. " +
-		"sort orders included rows before pagination; group_by requires aggregate and pages groups instead of source rows (max 1000 groups). Group sort pointers address group objects, e.g. /aggregate/value. " +
-		"Aggregates normally omit row details; include_rows=true requests them. Grouped queries forbid select/include_rows=true, but allow offset/limit for groups. " +
-		"A page_displayed=false/model_budget_omitted receipt is NOT a read page: keep its offset and filters, narrow the request or make context space, never repeat the same omitted request in a loop. " +
-		"Counts/completion concern only the selected saved observation, never the entire remote dataset. Reading storage does not refresh the source. Original failure/incompleteness remains visible. Missing/expired IDs are recovery gaps; never replay side-effecting actions to rebuild them."
+		"list: session metadata only, optional tool/filter, scan-cursor offset, limit 20/max100. Follow next_offset, not item counts. " +
+		"retain: protect for days from now (30/max90). release removes explicit retention, not the result; neither changes source data or observation time. " +
+		"summary: bounded overview, not full evidence. text: UTF-8 byte ranges (offset 0; limit 8192/max32768). " +
+		"search: case-sensitive literal pattern (1..1024 UTF-8 bytes, no regex), context_lines 1/max5, match offset, limit 20/max200. Byte ranges allow targeted text reads. " +
+		"json: RFC 6901 pointer; arrays page by items (20/max200), strings by decoded UTF-8 bytes. Optional SHA-256 covers the saved string/actual page, not JSON escapes, upstream completeness or automatic tool-to-tool transfer. native: protocol directory or explicit pointer; media stays metadata. " +
+		"query: one saved JSON array, max100000 rows; ordered AND where filters, select, count/sum/min/max/avg over ALL matching rows. Numeric aggregates are exact integer/rational strings; missing/null/non-numeric counts stay distinct. " +
+		"sort precedes pagination; group_by requires aggregate, pages groups not source rows (max1000). Group sort uses group-object pointers, e.g. /aggregate/value. " +
+		"Aggregates omit rows unless include_rows=true. Groups forbid select/include_rows=true; offset/limit page groups. " +
+		"page_displayed=false/model_budget_omitted means NO read page: keep offset/filters, narrow or make context space; do not loop unchanged omitted requests. " +
+		"Counts/completion cover selected saved observations only, never whole remote datasets. Reads do not refresh sources; original failure/incompleteness remains visible. Missing/expired IDs are recovery gaps; never replay side effects to rebuild them."
 }
 
 func (*ToolResultRead) InputSchema() map[string]any {
 	return object(nil, map[string]any{
-		"result_id":     prop("string", "Required except list: immutable R + 64 lowercase hex digits; never a path"),
+		"result_id":     prop("string", "Except list: immutable host R + 64 lowercase hex digits, never a path"),
 		"view":          map[string]any{"type": "string", "enum": []string{"summary", "text", "json", "native", "query", "search", "list", "retain", "release"}, "description": "Default summary. list needs no ID; retain/release affect local retention only"},
 		"pointer":       prop("string", "RFC 6901, e.g. /rows; escape ~ as ~0 and / as ~1. Query selects an array. Native empty returns a directory"),
-		"offset":        map[string]any{"type": "integer", "minimum": 0, "description": "Zero-based bytes for text/strings; items for arrays/query; groups for group_by; matches for search; scan cursor for list"},
-		"limit":         map[string]any{"type": "integer", "minimum": 1, "maximum": resultReadTextMax, "description": "Text bytes: 8192/max32768; rows/groups/hits: 20/max200; list: 20/max100. Model pages may be smaller"},
-		"pattern":       map[string]any{"type": "string", "minLength": 1, "maxLength": resultSearchPatternMax, "description": "search: required case-sensitive literal, <=1024 UTF-8 bytes; no regex"},
-		"context_lines": map[string]any{"type": "integer", "minimum": 0, "maximum": resultSearchContextMax, "description": "search: context lines each side, default1/max5; snippets preserve exact byte ranges"},
+		"offset":        map[string]any{"type": "integer", "minimum": 0, "description": "Zero-based bytes (text/strings), items (arrays/query), groups (group_by), matches (search), scan cursor (list)"},
+		"limit":         map[string]any{"type": "integer", "minimum": 1, "maximum": resultReadTextMax, "description": "Default/max: text bytes8192/32768, rows/groups/hits20/200, list20/100. Model budget may reduce pages"},
+		"pattern":       map[string]any{"type": "string", "minLength": 1, "maxLength": resultSearchPatternMax, "description": "search: required case-sensitive literal, 1..1024 UTF-8 bytes; no regex"},
+		"context_lines": map[string]any{"type": "integer", "minimum": 0, "maximum": resultSearchContextMax, "description": "search: surrounding lines each side, default1/max5; exact snippet byte ranges"},
 		"where":         resultQueryWhereSchema(),
-		"select":        map[string]any{"type": "array", "maxItems": resultQueryMaxSelect, "items": prop("string", "Row-relative RFC 6901 pointer"), "description": "query rows only: <=32 pointers; fields preserve missing/null. Omit for full rows; unavailable with group_by"},
+		"select":        map[string]any{"type": "array", "maxItems": resultQueryMaxSelect, "items": prop("string", "Row-relative RFC 6901 pointer"), "description": "query rows: <=32 pointers; preserves missing/null. Omit for full rows; no group_by"},
 		"aggregate":     resultQueryAggregateSchema(),
 		"include_rows":  map[string]any{"type": "boolean", "description": "query: false with aggregate, otherwise true. False forbids offset/limit/select except group pages. Groups forbid true"},
 		"sort":          resultQuerySortSchema(),
 		"group_by":      resultQueryGroupBySchema(),
 		"tool":          prop("string", "list: exact original tool name"),
 		"filter":        prop("string", "list: literal metadata filter; does not search result bodies"),
-		"days":          map[string]any{"type": "integer", "minimum": 1, "maximum": ResultMaxRetentionDays, "description": "retain: days from now, default30/max90; never refreshes source"},
+		"days":          map[string]any{"type": "integer", "minimum": 1, "maximum": ResultMaxRetentionDays, "description": "retain: days from now, default30/max90; no source refresh"},
 	})
 }
 
@@ -291,6 +293,7 @@ func resultTextRange(text string, offset, limit int) (int, int) {
 
 func readResultJSON(ctx context.Context, record StoredToolResult, args toolResultReadArgs, details ToolResultReadDetails) (Result, error) {
 	var root any
+	var savedNative any
 	var ok bool
 	if args.View == "native" {
 		root, ok = resultDecodeJSON(record.Native)
@@ -298,6 +301,7 @@ func readResultJSON(ctx context.Context, record StoredToolResult, args toolResul
 			return Result{}, err
 		}
 		if ok {
+			savedNative = root
 			root = resultNativeModelView(root)
 		}
 	} else {
@@ -327,7 +331,15 @@ func readResultJSON(ctx context.Context, record StoredToolResult, args toolResul
 		return Result{}, err
 	}
 	if text, isString := value.(string); isString {
-		return readResultJSONString(ctx, text, args, details, envelope, valueBudget)
+		fingerprint := true
+		if args.View == "native" {
+			original, originalErr := resultResolvePointer(savedNative, args.Pointer)
+			originalText, isSavedString := original.(string)
+			// The media fence can synthesize readable metadata such as a
+			// redaction reason. It must not be labelled a saved-value hash.
+			fingerprint = originalErr == nil && isSavedString && originalText == text
+		}
+		return readResultJSONString(ctx, text, args, details, envelope, valueBudget, fingerprint)
 	}
 	if array, isArray := value.([]any); isArray {
 		limit := 20
@@ -400,7 +412,7 @@ func readResultJSON(ctx context.Context, record StoredToolResult, args toolResul
 // Structured/native strings need their own byte ranges: the original textual
 // observation is not guaranteed to contain values returned only in structured
 // content. The range is over decoded UTF-8 bytes, not JSON escape sequences.
-func readResultJSONString(ctx context.Context, text string, args toolResultReadArgs, details ToolResultReadDetails, envelope map[string]any, valueBudget int) (Result, error) {
+func readResultJSONString(ctx context.Context, text string, args toolResultReadArgs, details ToolResultReadDetails, envelope map[string]any, valueBudget int, fingerprint bool) (Result, error) {
 	limit := resultReadTextDefault
 	if args.Limit != nil {
 		limit = *args.Limit
@@ -441,7 +453,38 @@ func readResultJSONString(ctx context.Context, text string, args toolResultReadA
 	envelope["value_fragment"], envelope["offset"], envelope["end_offset"] = text[start:end], start, end
 	envelope["stored_string_bytes"], envelope["complete"] = len(text), details.Complete
 	envelope["fragment_only"] = start != 0 || end != len(text)
+	if fingerprint {
+		storedHash, err := resultSelectedStringSHA256(ctx, text)
+		if err != nil {
+			return Result{}, err
+		}
+		pageHash, err := resultSelectedStringSHA256(ctx, text[start:end])
+		if err != nil {
+			return Result{}, err
+		}
+		envelope["stored_value_sha256"], envelope["page_sha256"] = storedHash, pageHash
+		envelope["page_string_bytes"] = end - start
+		envelope["hash_scope"] = "SHA-256 of decoded UTF-8 bytes: stored_value is the selected saved string; page is only [offset,end_offset). Neither proves upstream/source completeness."
+	}
 	return boundedToolResultRead(envelope, details)
+}
+
+// Hash only the already selected saved value. Chunking avoids a second
+// whole-value allocation and keeps a large immutable read cancellable.
+func resultSelectedStringSHA256(ctx context.Context, value string) (string, error) {
+	hash := sha256.New()
+	for len(value) > 0 {
+		if err := ctx.Err(); err != nil {
+			return "", err
+		}
+		n := min(len(value), 32*1024)
+		_, _ = hash.Write([]byte(value[:n]))
+		value = value[n:]
+	}
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(hash.Sum(nil)), nil
 }
 
 func resultResolvePointer(root any, pointer string) (any, error) {

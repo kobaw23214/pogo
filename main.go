@@ -696,6 +696,15 @@ func run(o options) error {
 	toolOpts := toolOptions(cwd, cfg.Model,
 		append(skills.Roots(skillList), readRootsEnv()...),
 		mem.Roots(), synthTools, mcpTools, o.skills.Paths)
+	gate := newChildGate()
+	var runtimePrompt func() string
+	if child, ok := gate.(*childGate); ok {
+		toolOpts.FileAccess = child.fd.FileAccess()
+		if toolOpts.Guard != nil {
+			toolOpts.Guard.FileAccess = toolOpts.FileAccess
+		}
+		runtimePrompt = func() string { return child.fileAccessPrompt(cwd) }
+	}
 	// This CLI/FD path has no image resolver or analyze_image tool, even when
 	// the selected model accepts images. It can operate the parent's DOM.
 	toolOpts.BrowserImageMode = tools.BrowserImageNone
@@ -729,12 +738,13 @@ func run(o options) error {
 		Client:           client,
 		Registry:         tools.New(toolOpts),
 		SystemPrompt:     agent.SystemPrompt(cwd, sections...),
+		RuntimePrompt:    runtimePrompt,
 		MaxTurns:         o.maxTurns,
 		ToolOutputBudget: agent.ToolOutputBudgetConfig{ContextWindow: cfg.ContextWindow, MaxOutputTokens: cfg.MaxTokens},
 		SoftTurns:        o.softTurns,
 		// Nil unless this process is a subagent whose parent handed it an approval
 		// channel. The terminal keeps no gate, which is what keeps -p scriptable.
-		Gate:                newChildGate(),
+		Gate:                gate,
 		StagnationThreshold: o.stagnationThreshold,
 		TokenBudget:         o.tokenBudget,
 		CostBudget:          o.costBudget,

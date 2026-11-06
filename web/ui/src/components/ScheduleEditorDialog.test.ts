@@ -6,7 +6,7 @@ import type { ScheduleJob, ScheduleJobCreate } from "@/api/types";
 import type { ShortcutSnapshot, ShortcutsView } from "@/api/shortcuts";
 const host = vi.hoisted(() => ({ create: vi.fn(), update: vi.fn(), preview: vi.fn(), icons: vi.fn(), entry: vi.fn(), list: vi.fn(), skills: vi.fn(), resolve: vi.fn(), upload: vi.fn(), cleanup: [] as (() => void)[] }));
 vi.mock("vue", async original => ({ ...await original<typeof import("vue")>(), onBeforeUnmount: (fn: () => void) => host.cleanup.push(fn), useSSRContext: () => ({ modules: new Set() }) }));
-vi.mock("vue-i18n", async () => { const { ref } = await import("vue"); return { useI18n: () => ({ t: (key: string) => key, locale: ref("zh-CN") }) }; });
+vi.mock("vue-i18n", async original => { const { ref } = await import("vue"); return { ...await original<typeof import("vue-i18n")>(), useI18n: () => ({ t: (key: string) => key, locale: ref("zh-CN") }) }; });
 vi.mock("@/api/client", () => ({ api: { scheduleCreateJob: host.create, scheduleUpdateJob: host.update, schedulePreview: host.preview, skills: host.skills, uploadAttachment: host.upload }, authHeaders: () => ({}) }));
 vi.mock("@/api/information", () => ({ informationApi: { entry: host.entry } }));
 vi.mock("@/api/shortcuts", async original => ({ ...await original<typeof import("@/api/shortcuts")>(), shortcutsApi: { list: host.list }, resolveStarterShortcut: host.resolve }));

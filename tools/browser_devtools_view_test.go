@@ -176,7 +176,7 @@ func TestBrowserDevToolsViewDoesNotProjectFailureOrOtherAction(t *testing.T) {
 			args = json.RawMessage(`{"action":"devtools","method":"Runtime.evaluate"}`)
 		}
 		result, err := browser.Execute(context.Background(), args)
-		if err != nil || !strings.Contains(result.Text, string(raw)) || len(link.ops) != 1 {
+		if (err != nil) != !tc.ok || !strings.Contains(result.Text, string(raw)) || len(link.ops) != 1 {
 			t.Fatalf("failure or non-devtools output changed: %+v %v %s", tc, err, result.Text)
 		}
 		_, retained := result.Details.(map[string]any)["devtools_data"]

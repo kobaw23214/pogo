@@ -2,7 +2,7 @@ package tools
 
 import "fmt"
 
-var optionalNativeNames = []string{ShortcutManageName, ShortcutDeleteName, ShortcutMergeName, SkillSaveName, WatchName, WatchTestName, WatchDecideName, BackgroundTaskName, AgentWorkflowReadName, AgentWorkflowEditName, AgentWorkflowEnableName, AgentWorkflowRunName, "write", "edit", "bash", ShellTasksName, ShellOutputName, ShellStopName, "browser"}
+var optionalNativeNames = []string{WebServiceName, ShortcutManageName, ShortcutDeleteName, ShortcutMergeName, SkillSaveName, WatchName, WatchTestName, WatchDecideName, BackgroundTaskName, AgentWorkflowReadName, AgentWorkflowEditName, AgentWorkflowEnableName, AgentWorkflowRunName, "write", "edit", "bash", ShellTasksName, ShellOutputName, ShellStopName, "browser"}
 
 // HostNativeTool also finds a temporarily withheld host capability so model
 // metadata can stay current without registering it or granting its execution.
@@ -23,6 +23,9 @@ func nativeToolInstances(o Options, writeRoots []string, spill string, r *Regist
 		}
 	}
 	if !o.ReadOnly {
+		if o.WebServices != nil {
+			available[WebServiceName] = &WebService{Backend: o.WebServices}
+		}
 		if o.BackgroundTasks != nil {
 			available[BackgroundTaskName] = &BackgroundTask{Backend: o.BackgroundTasks}
 		}
@@ -31,8 +34,8 @@ func nativeToolInstances(o Options, writeRoots []string, spill string, r *Regist
 				available[tool.Name()] = tool
 			}
 		}
-		available["write"] = &Write{Cwd: o.Cwd, Roots: writeRoots, Journal: o.Journal, ProtectionManifest: o.CommandProtectionManifest}
-		available["edit"] = &Edit{Cwd: o.Cwd, Roots: writeRoots, Journal: o.Journal, ProtectionManifest: o.CommandProtectionManifest}
+		available["write"] = &Write{Cwd: o.Cwd, Roots: writeRoots, FileAccess: o.FileAccess, Journal: o.Journal, ProtectionManifest: o.CommandProtectionManifest}
+		available["edit"] = &Edit{Cwd: o.Cwd, Roots: writeRoots, FileAccess: o.FileAccess, Journal: o.Journal, ProtectionManifest: o.CommandProtectionManifest}
 		available["bash"] = &Bash{Cwd: o.Cwd, Guard: o.Guard, SpillDir: spill, Scope: o.Scope, ProtectionManifest: o.CommandProtectionManifest, Jobs: o.ShellJobs}
 		for _, tool := range shellJobTools(o.ShellJobs) {
 			available[tool.Name()] = tool

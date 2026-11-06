@@ -253,6 +253,9 @@ func childArgs(job Job) []string {
 // the child's event stream into the job's log files, into a buffer for
 // frame parsing, and onto mirror when the caller wants a live view (run-now).
 func ChildRunner(ctx context.Context, job Job, logs LogPaths, mirror io.Writer) RunOutcome {
+	if job.WorkflowID != "" {
+		return RunOutcome{Err: ErrRetiredWorkflow.Error(), ExitCode: 1}
+	}
 	if job.AgentID != "" || job.Timezone != "" || job.TurnLimitMode != "" || job.ApprovalMode != "" {
 		return RunOutcome{Err: "Agent schedules require the web Agent runtime; refusing bare CLI execution", ExitCode: 1}
 	}

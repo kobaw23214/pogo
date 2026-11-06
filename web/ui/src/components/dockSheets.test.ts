@@ -15,7 +15,7 @@ describe("migrateSheet", () => {
     expect(migrateSheet({ sheet: "files" })).toEqual({ sheet: "files", tab: null });
     expect(migrateSheet({ sheet: "hub" })).toEqual({ sheet: "hub", tab: null });
     expect(migrateSheet({ sheet: "skills" })).toEqual({ sheet: "skills", tab: null });
-    expect(migrateSheet({ sheet: "memory" })).toEqual({ sheet: "memory", tab: null });
+    expect(migrateSheet({ sheet: "memory" })).toEqual({ sheet: null, tab: null });
     expect(migrateSheet({ sheet: "shortcuts" })).toEqual({ sheet: "shortcuts", tab: null });
     expect(migrateSheet({ sheet: "workflows" })).toEqual({ sheet: "workflows", tab: null });
   });

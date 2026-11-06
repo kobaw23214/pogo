@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useI18n } from "vue-i18n";
+const { t: tr } = useI18n();
 import { computed, ref } from "vue";
 import { Check, Close, CopyDocument, Key, TopRight } from "@element-plus/icons-vue";
 import AgentAvatar from "@/components/AgentAvatar.vue";
@@ -83,7 +85,7 @@ async function copy(kind: "link" | "link-key" | "iframe") {
     clearTimeout(copiedTimer);
     copiedTimer = setTimeout(() => (copiedKind.value = null), 2000);
   } else {
-    copyError.value = "自动复制失败：浏览器拒绝了剪贴板权限。请直接选中上方文本手动复制。";
+    copyError.value = tr('studioManagement.text187');
   }
 }
 
@@ -94,8 +96,8 @@ defineExpose({ open, close });
   <dialog ref="dlg" class="publish" aria-labelledby="publish-title" @close="onClosed">
     <div class="pub-shell">
       <header class="pub-head">
-        <h2 id="publish-title">发布与嵌入</h2>
-        <button type="button" class="iconbtn" aria-label="关闭" @click="close">
+        <h2 id="publish-title">{{ tr('studioManagement.text007') }}</h2>
+        <button type="button" class="iconbtn" :aria-label="tr('studioManagement.text054')" @click="close">
           <el-icon aria-hidden="true"><Close /></el-icon>
         </button>
       </header>
@@ -104,36 +106,35 @@ defineExpose({ open, close });
         <div class="pub-agent">
           <AgentAvatar :icon="agent.icon" :color="agent.color" :size="38" />
           <span class="pub-agent-name">{{ agent.name }}</span>
-          <span class="pub-status">已发布</span>
+          <span class="pub-status">{{ tr('studioManagement.text003') }}</span>
         </div>
 
         <section class="pub-section" aria-labelledby="pub-link-label">
-          <span id="pub-link-label" class="pub-label">发布链接</span>
+          <span id="pub-link-label" class="pub-label">{{ tr('studioManagement.text188') }}</span>
           <div class="pub-field">
-            <input class="input" type="text" readonly :value="url" aria-label="发布链接地址" @focus="($event.target as HTMLInputElement).select()" />
+            <input class="input" type="text" readonly :value="url" :aria-label="tr('studioManagement.text189')" @focus="($event.target as HTMLInputElement).select()" />
           </div>
           <div class="pub-actions">
             <a class="btn solid" :href="url" target="_blank" rel="noopener noreferrer">
-              <el-icon aria-hidden="true"><TopRight /></el-icon>打开页面
-            </a>
+              <el-icon aria-hidden="true"><TopRight /></el-icon>{{ tr('studioManagement.text190') }} </a>
             <button type="button" class="btn soft" @click="copy('link')">
               <el-icon aria-hidden="true"><component :is="copiedKind === 'link' ? Check : CopyDocument" /></el-icon>
-              {{ copiedKind === "link" ? "已复制" : "复制链接" }}
+              {{ copiedKind === "link" ? tr('studioManagement.text191') : tr('studioManagement.text192') }}
             </button>
             <button v-if="urlWithKey" type="button" class="btn soft" @click="copy('link-key')">
               <el-icon aria-hidden="true"><component :is="copiedKind === 'link-key' ? Check : Key" /></el-icon>
-              {{ copiedKind === "link-key" ? "已复制" : "复制带密钥链接" }}
+              {{ copiedKind === "link-key" ? tr('studioManagement.text191') : tr('studioManagement.text193') }}
             </button>
           </div>
         </section>
 
         <section class="pub-section" aria-labelledby="pub-embed-label">
-          <span id="pub-embed-label" class="pub-label">嵌入到你的网站</span>
-          <textarea class="input code" rows="3" readonly :value="snippet" aria-label="iframe 嵌入代码" @focus="($event.target as HTMLTextAreaElement).select()" />
+          <span id="pub-embed-label" class="pub-label">{{ tr('studioManagement.text194') }}</span>
+          <textarea class="input code" rows="3" readonly :value="snippet" :aria-label="tr('studioManagement.text195')" @focus="($event.target as HTMLTextAreaElement).select()" />
           <div class="pub-actions">
             <button type="button" class="btn soft" @click="copy('iframe')">
               <el-icon aria-hidden="true"><component :is="copiedKind === 'iframe' ? Check : CopyDocument" /></el-icon>
-              {{ copiedKind === "iframe" ? "已复制" : "复制 iframe 代码" }}
+              {{ copiedKind === "iframe" ? tr('studioManagement.text191') : tr('studioManagement.text196') }}
             </button>
           </div>
         </section>

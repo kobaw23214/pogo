@@ -1,8 +1,12 @@
 package tools
 
 import (
+	"context"
+	"encoding/json"
 	"slices"
 	"testing"
+
+	"github.com/yosukeno/pogo/webservice"
 )
 
 // enabledNames is the assertion view of a registry: just the names, in
@@ -16,11 +20,32 @@ func enabledNames(r *Registry) []string {
 }
 
 func TestEnabledNilKeepsEveryBuiltin(t *testing.T) {
-	r := New(Options{Cwd: t.TempDir(), Todo: true, Subagent: &Subagent{}, Images: &ImageAnalyze{Ask: fixedAsk("x")}, Browser: &stubLink{}, Shortcuts: &shortcutRegistryBackend{}, ShortcutManagement: &shortcutManagementFixture{}, SkillAuthor: &skillAuthorFixture{}, Watches: &fakeWatchBackend{}, BackgroundTasks: &fakeBackgroundTaskBackend{}, Workflow: &workflowToolFixture{}, AgentWorkflows: &agentWorkflowFixture{}})
+	backend := serviceBackendFunc(func(context.Context, webservice.Request) (json.RawMessage, error) {
+		return json.RawMessage(`{}`), nil
+	})
+	r := New(Options{Cwd: t.TempDir(), Todo: true, Subagent: &Subagent{}, Images: &ImageAnalyze{Ask: fixedAsk("x")}, Browser: &stubLink{}, Shortcuts: &shortcutRegistryBackend{}, ShortcutManagement: &shortcutManagementFixture{}, SkillAuthor: &skillAuthorFixture{}, Watches: &fakeWatchBackend{}, BackgroundTasks: &fakeBackgroundTaskBackend{}, AgentWorkflows: &agentWorkflowFixture{}, WebServices: backend})
 	for _, info := range BuiltinCatalog() {
 		if _, ok := r.Get(info.Name); !ok {
 			t.Fatalf("nil Enabled lost %s: %v", info.Name, enabledNames(r))
 		}
+	}
+}
+
+func TestEnabledNilDoesNotInventUnconfiguredWebService(t *testing.T) {
+	selected := []string{WebServiceName}
+	for _, tc := range []struct {
+		name    string
+		enabled *[]string
+	}{{"default", nil}, {"explicit", &selected}} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := New(Options{Cwd: t.TempDir(), Enabled: tc.enabled, WebServices: nil})
+			if _, ok := r.Get(WebServiceName); ok {
+				t.Fatal("tool selection invented an unconfigured managed runtime")
+			}
+			if _, ok := r.Get("read"); !ok {
+				t.Fatal("unconfigured managed runtime removed the protected core")
+			}
+		})
 	}
 }
 
@@ -102,5 +127,39 @@ func TestEnabledLeavesDeclaredAndMCPToolsAlone(t *testing.T) {
 	r := New(Options{Cwd: t.TempDir(), Enabled: &sel, Synth: []Tool{stub}})
 	if _, ok := r.Get("declared_thing"); !ok {
 		t.Fatalf("empty builtin selection removed a declared tool: %v", enabledNames(r))
+	}
+}
+
+func TestRetiredPlatformToolNamesCannotBeRebound(t *testing.T) {
+	all := []string{WorkflowDiscoverName, WorkflowReadName, WorkflowValidateName, WorkflowEditName, WorkflowTestName, WorkflowRunName, WorkflowPublishName}
+	selected := []string{WorkflowReadName, WorkflowEditName}
+	for _, selection := range []*[]string{nil, &selected} {
+		for _, ro := range []bool{false, true} {
+			r := New(Options{Cwd: t.TempDir(), Enabled: selection, ReadOnly: ro})
+			for _, name := range all {
+				if _, ok := r.Get(name); ok || BuiltinSelected(selection, name) {
+					t.Fatalf("retired platform tool registered for an Agent: %s", name)
+				}
+				if !BuiltinNameSet()[name] {
+					t.Fatalf("historical saved tool name no longer loads: %s", name)
+				}
+			}
+		}
+	}
+	empty := []string{}
+	{
+		var synth, projected []Tool
+		for _, name := range all {
+			synth = append(synth, nameStub{name: name})
+			projected = append(projected, &MCPTool{wireName: name})
+		}
+		r := New(Options{Cwd: t.TempDir(), Enabled: &empty, Synth: synth, MCP: projected})
+		for _, snapshot := range []*Registry{r, r.WithMCP(projected)} {
+			for _, name := range all {
+				if _, ok := snapshot.Get(name); ok {
+					t.Fatal("unselected host workflow tool invented by external projection", name)
+				}
+			}
+		}
 	}
 }

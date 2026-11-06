@@ -6,6 +6,7 @@ type Part struct {
 	Type       string          `json:"type"`
 	Text       string          `json:"text,omitempty"`
 	Name       string          `json:"name,omitempty"`
+	Server     string          `json:"server,omitempty"`
 	Path       string          `json:"path,omitempty"`
 	AsFile     bool            `json:"as_file,omitempty"`
 	Favicon    string          `json:"favicon,omitempty"`
@@ -15,6 +16,13 @@ type Part struct {
 	Language   string          `json:"language,omitempty"`
 	Parts      []Part          `json:"parts,omitempty"`
 	Office     *OfficeSnapshot `json:"office,omitempty"`
+}
+
+// MCPReference identifies a user-selected method, never a capability grant or
+// an executable call. The live session resolves this pair independently.
+type MCPReference struct {
+	Server string `json:"server"`
+	Name   string `json:"name"`
 }
 
 type OfficeLocator struct {

@@ -8,6 +8,7 @@ import CodeBlock from "./CodeBlock.vue";
 import { resolveSkillDocumentLink, skillDocumentLanguage, useSkillDocumentNavigation } from "./skillDocumentNavigation";
 import { useSkillDocumentEditing } from "./skillDocumentEditing";
 import ConfirmDialog from "./ConfirmDialog.vue";
+import { knownHostReason } from "@/agent/hostStatusCopy";
 
 const props = defineProps<{
   scopeKey: string;
@@ -58,7 +59,7 @@ const source = computed(() => {
   return atRoot.value && markdown.value ? text.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, "") : text;
 });
 const readOnlyReason = computed(() => props.managed && atRoot.value && document.value && !canEdit.value
-  ? document.value.edit_disabled_reason || t("skillDocuments.readOnly") : "");
+  ? knownHostReason(document.value.edit_disabled_reason) || t("skillDocuments.readOnly") : "");
 async function reloadLatest() {
   if (!(await editor.confirmLeave())) return;
   await retry();
@@ -109,7 +110,7 @@ watch([document, () => location.value.anchor], async () => {
       <div v-if="unavailable && !loading" class="unavailable-file" data-testid="skill-file-unavailable">
         <el-icon class="unavailable-icon"><Document /></el-icon><h3>{{ unavailable.name }}</h3>
         <p class="file-facts"><span>{{ unavailable.media_type || unavailable.kind }}</span><span>{{ bytes(unavailable.size_bytes) }}</span></p>
-        <p>{{ t('skillDocuments.notPreviewable') }}</p><p v-if="unavailable.reason" class="file-reason">{{ unavailable.reason }}</p>
+        <p>{{ t('skillDocuments.notPreviewable') }}</p><p v-if="unavailable.reason" class="file-reason">{{ knownHostReason(unavailable.reason) }}</p>
         <small>{{ t('skillDocuments.noExecution') }}</small>
       </div>
       <p v-else-if="loading" class="document-state" role="status">{{ t('skillDocuments.loading') }}</p>

@@ -1,3 +1,4 @@
+import { getLocale } from "@/i18n";
 // A folder upload reaches the message as one file entry per member, each
 // carrying its workspace-relative path ("uploads/<root>/<sub>/file"). The
 // bubble's flat chip row throws that structure away; this rebuilds the tree
@@ -39,7 +40,7 @@ interface Raw {
   file?: AttachFile;
 }
 
-const byName = (a: Raw, b: Raw) => a.name.localeCompare(b.name, "zh-Hans-CN", { numeric: true });
+const byName = (a: Raw, b: Raw) => a.name.localeCompare(b.name, getLocale(), { numeric: true });
 
 function toNode(raw: Raw): AttachNode {
   const kids = [...raw.kids.values()];
@@ -96,7 +97,7 @@ export function buildAttachTree(files: AttachFile[]): AttachTree {
   const roots = [...root.kids.values()].map(toNode);
   // toNode sorts a node's own children but the root call sorted nothing, so
   // order the top level the same way: directories first, then files.
-  roots.sort((a, b) => (a.dir === b.dir ? a.name.localeCompare(b.name, "zh-Hans-CN", { numeric: true }) : a.dir ? -1 : 1));
+  roots.sort((a, b) => (a.dir === b.dir ? a.name.localeCompare(b.name, getLocale(), { numeric: true }) : a.dir ? -1 : 1));
   return { roots, hasDir: roots.some((r) => r.dir) };
 }
 

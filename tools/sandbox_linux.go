@@ -18,8 +18,8 @@ import (
 )
 
 var (
-	sandboxOnce   sync.Once
-	sandboxCached SandboxPolicy
+	sandboxPolicies sandboxPolicyCache
+	sandboxReport   sync.Once
 )
 
 // probeTimeout bounds the startup check. bwrap setup is milliseconds; anything
@@ -27,8 +27,8 @@ var (
 // is "unavailable", not a hung startup.
 const probeTimeout = 10 * time.Second
 
-// InitSandbox resolves the session's policy, probing bubblewrap the first time
-// and caching the answer for the process.
+// InitSandbox resolves the effective policy and probes bubblewrap on the first
+// enabled policy, caching machine facts independently of the deployment mode.
 //
 // It reports the outcome on stderr once, which is the point of doing it here
 // rather than lazily inside the first command. Codex learned the same thing:
@@ -38,16 +38,13 @@ const probeTimeout = 10 * time.Second
 // deployment refused to start commands" and "the deployment ran forty commands
 // unconfined".
 func InitSandbox() SandboxPolicy {
-	sandboxOnce.Do(func() {
-		sandboxCached = probeSandbox(SandboxPolicyFromEnv())
-		// The report speaks in the *effective* mode: a restored runtime
-		// override is part of the truth a startup line tells.
-		reportSandbox(applyOverride(sandboxCached))
+	policy := sandboxPolicies.resolve(SandboxPolicyFromEnv, func(p SandboxPolicy) SandboxPolicy {
+		p.PrivateDirs = runtimeSkillPrivateDirs()
+		return probeSandbox(p)
 	})
-	// The runtime override resolves per call, outside the Once: the probe
-	// results are machine facts and stay cached, the mode is a decision the
-	// operator (or the settings dialog) can change without a restart.
-	return applyOverride(sandboxCached)
+	policy.PrivateDirs = runtimeSkillPrivateDirs()
+	sandboxReport.Do(func() { reportSandbox(policy) })
+	return policy
 }
 
 // probeSandbox fills in Bwrap, Proc and Unavailable.
@@ -116,6 +113,8 @@ func pathExists(p string) bool {
 // interesting cases are the two where containment is not what was asked for.
 func reportSandbox(p SandboxPolicy) {
 	switch {
+	case p.Refuses():
+		fmt.Fprintf(os.Stderr, "pogo: %v\n", p.RefusalError())
 	case p.Mode == SandboxOff:
 		// Say where "off" came from: the env, or the runtime override — a
 		// distinction that matters when someone is hunting for why the
@@ -127,10 +126,6 @@ func reportSandbox(p SandboxPolicy) {
 			fmt.Fprintf(os.Stderr, "pogo: %s=%s — bash and declared tools run unconfined.\n",
 				EnvSandbox, SandboxOff)
 		}
-	case p.Refuses():
-		fmt.Fprintf(os.Stderr, "pogo: sandbox unavailable (%s) and %s=%s — "+
-			"bash and declared tools will be refused. Install bubblewrap, or set %s=%s.\n",
-			p.Unavailable, EnvSandbox, SandboxEnforce, EnvSandbox, SandboxDegrade)
 	case !p.Active():
 		fmt.Fprintf(os.Stderr, "pogo: sandbox unavailable (%s) — bash and declared tools "+
 			"run unconfined, as they did before sandboxing existed. Set %s=%s to refuse instead.\n",

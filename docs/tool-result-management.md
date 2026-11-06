@@ -704,3 +704,26 @@ test-only deadline is now 60 seconds, with all recovery/identity assertions
 unchanged; the previously failing check and new log/search checks pass under
 race instrumentation. Production run/request/recovery limits were not changed.
 No Docker deployment was performed.
+
+## Selected string fingerprints (2026-11-06)
+
+JSON and native string pages expose `stored_value_sha256` for the selected
+saved string and `page_sha256` / `page_string_bytes` for the actual returned
+UTF-8 fragment. Hashes cover decoded string bytes, including original spaces,
+escapes and line breaks. They do not certify upstream completeness: original
+failure, truncation and stored-completeness fields keep their existing meaning.
+Synthesized media explanations do not receive a saved-value fingerprint.
+
+Model-budget trimming recomputes the page fingerprint after selecting the final
+UTF-8 fragment. A very small budget favors content over optional hash metadata;
+an omitted page has no stale fingerprint. Computation is bounded and cancellable.
+This supports byte-level verification while arguments continue through normal
+tool validation and approval.
+
+The accompanying tool-failure audit also adds precise Browser, Bash and website
+action guidance. `go run ./cmd/measure-schema`, using the same default browser
+session shape on both snapshots, measured **25197 → 24997 wire bytes across
+13 tools**. Browser is 7209 bytes (group ceiling 7400), `tool_result` is 6152,
+and Bash is 1263. The 25200-byte total ceiling remains unchanged. These figures
+measure fixed declarations, rather than optional deployment tools, output-page
+bytes or production token/latency savings.

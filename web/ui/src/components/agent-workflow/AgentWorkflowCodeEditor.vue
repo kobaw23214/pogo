@@ -13,19 +13,22 @@ import type { AgentWorkflowCodeBinding, AgentWorkflowCodeSpec } from '@/api/agen
 
 const props = defineProps<{ modelValue: string; language: AgentWorkflowCodeSpec['language']; inputs: Record<string, AgentWorkflowCodeBinding>; disabled?: boolean; label: string }>();
 const emit = defineEmits<{ 'update:modelValue': [string] }>();
-const { locale } = useI18n();
-const english = computed(() => locale.value.startsWith('en'));
-const text = computed(() => english.value ? {
-  view: 'View', edit: 'Edit code', done: 'Done editing', readonly: 'Read only', copy: 'Copy', copied: 'Copied', copyError: 'Copy failed. Select the code to copy.',
-  help: 'Ctrl/Cmd + Space: suggestions · Ctrl/Cmd + ]: indent · Tab: move focus',
-  viewing: 'Syntax highlighting · Select and copy code', editing: 'Changes stay in the workflow draft. Save the workflow to keep them.',
-  suggest: 'Suggestions', input: 'Node input', lines: 'lines',
-} : {
-  view: '查看', edit: '编辑代码', done: '完成编辑', readonly: '只读', copy: '复制', copied: '已复制', copyError: '复制失败，请选中代码复制。',
-  help: 'Ctrl/Cmd + Space 显示提示 · Ctrl/Cmd + ] 缩进 · Tab 移动焦点',
-  viewing: '语法高亮 · 可选中并复制代码', editing: '修改保留在流程草稿中，请保存流程以保留修改。',
-  suggest: '代码提示', input: '节点输入', lines: '行',
-});
+const { t, locale } = useI18n();
+const text = computed(() => ({
+  view: t("uiCoverage.codeEditor.view"),
+  edit: t("uiCoverage.codeEditor.edit"),
+  done: t("uiCoverage.codeEditor.done"),
+  readonly: t("uiCoverage.codeEditor.readonly"),
+  copy: t("uiCoverage.codeEditor.copy"),
+  copied: t("uiCoverage.codeEditor.copied"),
+  copyError: t("uiCoverage.codeEditor.copyError"),
+  help: t("uiCoverage.codeEditor.help"),
+  viewing: t("uiCoverage.codeEditor.viewing"),
+  editing: t("uiCoverage.codeEditor.editing"),
+  suggest: t("uiCoverage.codeEditor.suggest"),
+  input: t("uiCoverage.codeEditor.input"),
+  lines: t("uiCoverage.codeEditor.lines"),
+}));
 const host = ref<HTMLElement | null>(null), editing = ref(false), copied = ref(false), copyError = ref(false);
 const canEdit = computed(() => editing.value && !props.disabled);
 const lineCount = computed(() => props.modelValue.split(/\r\n|\r|\n/).length);
@@ -123,7 +126,7 @@ watch(() => props.modelValue, value => {
 });
 watch(() => props.language, value => view?.dispatch({ effects: languageMode.reconfigure(value === 'python' ? python() : javascript()) }));
 watch(() => props.disabled, disabled => { if (disabled) editing.value = false; });
-watch([canEdit, () => props.label], () => view?.dispatch({ effects: [mode.reconfigure(editorMode()), accessibility.reconfigure(contentAttributes())] }));
+watch([canEdit, () => props.label, locale], () => view?.dispatch({ effects: [mode.reconfigure(editorMode()), accessibility.reconfigure(contentAttributes())] }));
 async function edit() { if (props.disabled) return; editing.value = true; await nextTick(); view?.focus(); }
 function suggest() { if (canEdit.value && view) { view.focus(); startCompletion(view); } }
 async function copy() {

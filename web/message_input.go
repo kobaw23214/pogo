@@ -56,6 +56,8 @@ func normalizeMessageInput(prompt string, attachments []string, parts []MessageI
 				text.WriteString(part.Text)
 			case "element":
 				text.WriteString(part.Text)
+			case "mcp":
+				text.WriteString(skills.MCPInputText(part.Server, part.Name))
 			case "file":
 				files = append(files, part.Path)
 			case "office":
@@ -77,7 +79,7 @@ func normalizeMessageInput(prompt string, attachments []string, parts []MessageI
 	return text.String(), files, nil
 }
 
-// Every consumer uses the same preorder traversal for explicit Skill indexes.
+// Every consumer uses the same preorder traversal for Skill/MCP atom indexes.
 func flatInputParts(parts []MessageInputPart) []MessageInputPart { return inputref.Flatten(parts) }
 
 func orderedInputBlocks(parts []MessageInputPart, files map[string][]llm.Block, skillBlocks ...map[int]llm.Block) []llm.Block {
@@ -95,7 +97,7 @@ func orderedInputBlocks(parts []MessageInputPart, files map[string][]llm.Block, 
 				}
 			case "file":
 				blocks = append(blocks, files[inputAttachmentKey(part)]...)
-			case "skill":
+			case "skill", "mcp":
 				if len(skillBlocks) > 0 {
 					if block, ok := skillBlocks[0][current]; ok {
 						blocks = append(blocks, block)
@@ -125,11 +127,18 @@ func inputAttachmentKey(part MessageInputPart) string {
 	return part.Path
 }
 
-// prepareInputSkills resolves only explicit atoms. Ordinary prose and observed
-// page/file content are never scanned for executable skill instructions.
+// prepareInputSkills resolves explicit Skill and MCP atoms. Ordinary prose and
+// observed page/file content are never scanned for executable instructions.
 func (s *Session) prepareInputSkills(parts []MessageInputPart) (map[int]llm.Block, mcpobserve.Metadata, bool, error) {
 	var observed mcpobserve.Metadata
 	blocks := map[int]llm.Block{}
+	methods, err := s.inputMCPMethods(parts)
+	if err != nil {
+		return nil, observed, false, err
+	}
+	for index, method := range methods {
+		blocks[index] = mcpInputBlock(method)
+	}
 	available := s.mgr.Skills()
 	s.mu.Lock()
 	if s.studioID != "" {
@@ -224,5 +233,6 @@ func (s *Session) checkInputSkillAccess(parts []MessageInputPart) error {
 			return fmt.Errorf("%w: browser device is not bound", errMessageInputInvalid)
 		}
 	}
-	return nil
+	_, err := s.inputMCPMethods(parts)
+	return err
 }

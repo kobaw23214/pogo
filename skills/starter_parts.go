@@ -47,7 +47,7 @@ func ValidateInputParts(parts []StarterInputPart, layout, fileMode string) strin
 			if nodes > 512 {
 				return "ordered input exceeds 512 nodes"
 			}
-			size += len(part.Type) + len(part.Text) + len(part.Path) + len(part.Name) + len(part.Favicon) + len(part.ShortcutID) + len(part.Title) + len(part.Icon) + len(part.Language)
+			size += len(part.Type) + len(part.Text) + len(part.Path) + len(part.Name) + len(part.Server) + len(part.Favicon) + len(part.ShortcutID) + len(part.Title) + len(part.Icon) + len(part.Language)
 			if part.Office != nil {
 				o := part.Office
 				size += len(o.Path) + len(o.Title) + len(o.Editor) + len(o.Text) + len(o.Sheet) + len(o.Range) + len(o.CanvasVersion) + len(o.CapturedAt) + len(o.SourceSession)
@@ -66,6 +66,9 @@ func ValidateInputParts(parts []StarterInputPart, layout, fileMode string) strin
 			}
 			if part.Type != "office" && part.Office != nil {
 				return "office metadata requires an Office snapshot"
+			}
+			if part.Type != "mcp" && part.Server != "" {
+				return "server metadata requires an MCP reference"
 			}
 			switch part.Type {
 			case "text":
@@ -95,6 +98,11 @@ func ValidateInputParts(parts []StarterInputPart, layout, fileMode string) strin
 			case "skill":
 				if !ValidInputSkillName(part.Name) || part.Text != "" || part.Path != "" || part.AsFile || part.Favicon != "" {
 					return "invalid skill reference"
+				}
+				meaningful = true
+			case "mcp":
+				if !ValidInputMCPReference(part.Server, part.Name) || part.Text != "" || part.Path != "" || part.AsFile || part.Favicon != "" {
+					return "invalid MCP reference"
 				}
 				meaningful = true
 			case "shortcut":

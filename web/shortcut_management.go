@@ -186,7 +186,7 @@ func (b *shortcutToolBackend) managementMutate(ctx context.Context, action strin
 	if err = b.access(ctx, true); err != nil {
 		return out, err
 	}
-	if err = writeWorkflowFileAtomic(p, encoded.Bytes()); err != nil {
+	if err = writePrivateFileAtomic(p, encoded.Bytes()); err != nil {
 		return out, errors.New("快捷方式整理保存失败；原版本已保留")
 	}
 	if changes == nil {

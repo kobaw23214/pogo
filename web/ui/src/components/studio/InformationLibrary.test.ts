@@ -5,7 +5,7 @@ import { InformationAPIError, type InformationEntry, type InformationTree } from
 import type { ShortcutSnapshot } from "@/api/shortcuts";
 const host = vi.hoisted(() => ({ tree: vi.fn(), entry: vi.fn(), update: vi.fn(), create: vi.fn(), skills: vi.fn(), cleanups: [] as (() => void)[] }));
 vi.mock("vue", async original => ({ ...await original<typeof import("vue")>(), provide: vi.fn(), onBeforeUnmount: (fn: () => void) => host.cleanups.push(fn), useSSRContext: () => ({ modules: new Set() }) }));
-vi.mock("vue-i18n", () => ({ useI18n: () => ({ t: (key: string) => key, locale: { value: "zh-CN" } }) }));
+vi.mock("vue-i18n", async original => ({ ...await original<typeof import("vue-i18n")>(), useI18n: () => ({ t: (key: string) => key, locale: { value: "zh-CN" } }) }));
 vi.mock("element-plus", () => ({ ElMessage: { success: vi.fn() } }));
 vi.mock("@/api/information", async original => ({ ...await original<typeof import("@/api/information")>(), informationApi: { tree: host.tree, entry: host.entry, update: host.update, create: host.create } }));
 vi.mock("@/api/client", async original => { const actual = await original<typeof import("@/api/client")>(); return { ...actual, api: { ...actual.api, skills: host.skills } }; });

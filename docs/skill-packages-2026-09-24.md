@@ -41,7 +41,7 @@ name 必填，1–64 个小写字母、数字或连字符，无首尾或连续�
 - Agent 的公开输入只用 skills 数组；绑定及锁由服务端生成。带工具的 Skill 可与普通 Skill、MCP 同时选择。
 - 同一 Pogo 容器内使用 bubblewrap 独立进程。工具、规则和索引只挂载给对应调用；普通 shell 不能读取私有运行目录。
 - 执行器支持 Linux/amd64 和 Linux/arm64，需要可用 bubblewrap。`POGO_PLATFORM` 可声明 `linux/amd64` 或 `linux/arm64`，未设置时按实际运行架构检测；声明不能覆盖实际架构。系统库和 ELF 校验按架构选择，包内 runtime 声明和程序也必须匹配。当前 MalAgent 1.3.4 包仅提供 amd64 运行时，修改环境变量或 manifest 不能转换其中程序。
-- 安装成功与执行就绪分别返回：上传结果的 `status=installed` 表示包已保存，`ready`、`execution`、`issues` 表示平台及配置预检结果，不承诺每次工具调用成功。平台不兼容或执行器不可用时仍可安装、管理并保存 Agent 草稿，但不能发布为就绪状态。当前工作流没有复用普通会话完整的绑定与执行装配，见 [工作流限制](workflow.md)。
+- 安装成功与执行就绪分别返回：上传结果的 `status=installed` 表示包已保存，`ready`、`execution`、`issues` 表示平台及配置预检结果，不承诺每次工具调用成功。平台不兼容或执行器不可用时仍可安装、管理并保存 Agent 草稿，但不能发布为就绪状态。Agent 内部工作流沿用所属 Agent 的已授权能力，并在续跑前重新检查能力快照，见 [内部工作流](agent-internal-workflows.md)。
 - `workspaceData` 可将声明的文档型资产物化到选中该 Skill 的 Agent 会话工作区；它与留在私有执行目录内的程序、规则和索引不同，不应都描述为普通文件工具不可读。
 - Skill 说明可通过会话 Skill 列表和 /skill:name 使用；模型通过 skill_read 读取所选 Skill 的 references 文档，不能借此读取运行时或数据文件。
 - 会话文件和产物仍是私有资源；调用重查已停用状态和绑定，不将模型提供的路径当成授权。

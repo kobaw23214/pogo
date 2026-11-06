@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -15,6 +16,37 @@ import (
 type mcpBoundaryClient struct {
 	entered chan struct{}
 	release chan struct{}
+}
+
+func TestAgentMCPCommitFailureAndBusyDoNotMutateRegistry(t *testing.T) {
+	a := New(Config{Client: &mcpBoundaryClient{}, Registry: tools.New(tools.Options{Cwd: t.TempDir()}), SystemPrompt: "system"})
+	tool, err := tools.NewMCPTool("fixture", &mcp.Tool{Name: "new", InputSchema: map[string]any{"type": "object"}}, 0, func(context.Context, string, json.RawMessage) (*mcp.CallToolResult, error) {
+		return &mcp.CallToolResult{}, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	before := a.OverheadTokens()
+	commitErr := errors.New("policy store unavailable")
+	if err := a.ReplaceMCPWithCommit([]tools.Tool{tool}, func() error { return commitErr }); !errors.Is(err, commitErr) {
+		t.Fatalf("commit failure=%v", err)
+	}
+	if _, ok := a.registry.Get(tool.Name()); ok || a.OverheadTokens() != before {
+		t.Fatal("failed commit changed definitions or overhead")
+	}
+	committed := false
+	a.running = true
+	err = a.ReplaceMCPWithCommit([]tools.Tool{tool}, func() error { committed = true; return nil })
+	a.running = false
+	if err == nil || committed {
+		t.Fatal("busy replacement persisted a policy")
+	}
+	if err := a.ReplaceMCPWithCommit([]tools.Tool{tool}, func() error { committed = true; return nil }); err != nil || !committed {
+		t.Fatalf("idle commit=%v", err)
+	}
+	if _, ok := a.registry.Get(tool.Name()); !ok {
+		t.Fatal("successful commit lost tool")
+	}
 }
 
 func (*mcpBoundaryClient) Model() string { return "fixture" }

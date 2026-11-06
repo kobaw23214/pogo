@@ -115,7 +115,7 @@ func (m *Manager) appendToolShortcut(owner *identity.Scope, agentID, requestID, 
 	if err = enc.Encode(doc); err != nil || data.Len() > shortcutsMaxBody {
 		return result, errors.New("private shortcut storage limit reached")
 	}
-	if err = writeWorkflowFileAtomic(p, data.Bytes()); err != nil {
+	if err = writePrivateFileAtomic(p, data.Bytes()); err != nil {
 		return result, errors.New("shortcut save failed; previous version preserved")
 	}
 	return shortcuts.CreateResult{Shortcut: shortcutEntry(entry), Revision: doc.Revision, RequestID: requestID}, nil

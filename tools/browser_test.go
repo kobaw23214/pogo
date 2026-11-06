@@ -57,8 +57,8 @@ func TestBrowserReadableContentMetadataUsesWorkerText(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			link := &stubLink{replies: []BrowserReply{tc.reply}}
 			result, err := (&Browser{Link: link}).Execute(context.Background(), op(t, map[string]any{"action": "snapshot"}))
-			if err != nil {
-				t.Fatal(err)
+			if (err != nil) != !tc.reply.OK {
+				t.Fatalf("executor status did not reach tool error: %v", err)
 			}
 			if got := result.Details.(map[string]any)["has_readable_content"]; got != tc.want {
 				t.Fatalf("readable content = %v, want %v", got, tc.want)
@@ -200,8 +200,8 @@ func TestBrowserFormatsReply(t *testing.T) {
 
 	link.replies = []BrowserReply{{OK: false, Error: "ref e9 not found in the current page snapshot; take a new snapshot first"}}
 	res, err = b.Execute(context.Background(), op(t, map[string]any{"action": "click", "target": "e9"}))
-	if err != nil {
-		t.Fatalf("a page-level failure is a result, not an error: %v", err)
+	if err == nil {
+		t.Fatal("a page-level failure must mark the tool as failed and retain its result")
 	}
 	if !strings.Contains(res.Text, "not found in the current page snapshot") {
 		t.Fatalf("page failure text should reach the model: %s", res.Text)
@@ -363,8 +363,8 @@ func TestBrowserBatchFailureCarriesTheStepsThatRan(t *testing.T) {
 			{"action": "snapshot"},
 		},
 	}))
-	if err != nil {
-		t.Fatalf("a page-level batch failure is a result, not an error: %v", err)
+	if err == nil {
+		t.Fatal("a failed batch must mark the tool as failed and retain completed steps")
 	}
 	for _, want := range []string{"stopped at step 2/3", "1. type — ok", "2. click — failed", "covered by"} {
 		if !strings.Contains(res.Text, want) {
@@ -427,8 +427,8 @@ func TestBrowserReportsPendingDialogs(t *testing.T) {
 		Dialogs: []string{"alert: 会话已过期"},
 	}}
 	res, err = b.Execute(context.Background(), op(t, map[string]any{"action": "click", "target": "e5"}))
-	if err != nil {
-		t.Fatal(err)
+	if err == nil {
+		t.Fatal("failed dialog-blocked click was reported as successful")
 	}
 	if !strings.Contains(res.Text, "会话已过期") {
 		t.Fatalf("a dialog is often why the action failed; it must travel with the failure: %s", res.Text)

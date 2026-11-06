@@ -15,11 +15,8 @@
 | 身份、账号、会话归属 | [多用户说明](multiuser.md) |
 | 工作空间共用资料、目录树、快捷方式与 Agent 读取 | [信息库](information-library.md) |
 | 文件、Shell、Skill 沙箱的实际边界 | [安全边界](security.md) |
-| 工作流格式、发布与运行限制 | [工作流](workflow.md) |
-| 工作流权限与统一运行管理 | [第一阶段](workflow-stage1.md) |
-| 工作流嵌入其他系统、身份映射与接入示例 | [工作流嵌入](workflow-embedding.md) |
-| 业务单运行隔离、回调签名与失败恢复 | [业务单与后台回调](workflow-business-callback.md) |
-| 禁止发起人自批与自动分配审批人 | [审批策略与分配](workflow-approval-policy.md) |
+| Agent 对话建流、画布、版本、本人确认与运行记录 | [Agent 内部工作流](agent-internal-workflows.md) |
+| 后台执行、定时计划与条件监听 | [后台任务](background-tasks.md)、[定时任务](automation.md) |
 | Skill ZIP、私有运行声明、安装和迁移 | [Skill 包](skill-packages-2026-09-24.md)、[组合语义](agent-runtime-composition-2026-09-24.md)、[运行规范](skill-runtime-v1/README.md) |
 | 模型和工具调用协议兼容 | [配置](configuration.md)、[工具协议兼容](tool-protocol-compatibility-2026-09-29.md) |
 | MCP 目录刷新、监控、配置导出 | [刷新](mcp-client-refresh.md)、[监控](mcp-monitoring.md)、[导出](mcp-export.md) |

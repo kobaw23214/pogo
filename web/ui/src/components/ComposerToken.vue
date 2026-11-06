@@ -5,7 +5,7 @@ import CommandTokenIcon from "./CommandTokenIcon.vue";
 import "./commandToken.css";
 
 const props = defineProps<{
-  kind: "skill" | "command";
+  kind: "skill" | "mcp" | "command";
   name: string;
   label: string;
   typeLabel: string;
@@ -16,7 +16,7 @@ const props = defineProps<{
 const emit = defineEmits<{ change: []; remove: [] }>();
 const { t } = useI18n();
 const primary = ref<HTMLButtonElement>();
-const invocation = computed(() => props.kind === "skill" ? `/skill:${props.name}` : `/${props.name}`);
+const invocation = computed(() => props.kind === "skill" ? `/skill:${props.name}` : props.kind === "mcp" ? `/mcp:${props.name}` : `/${props.name}`);
 const title = computed(() => [invocation.value, props.description].filter(Boolean).join("\n"));
 
 function onKeydown(event: KeyboardEvent) {

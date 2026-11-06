@@ -26,7 +26,8 @@ type Ls struct {
 	Cwd string
 	// Roots are extra directories this tool may list outside Cwd, already
 	// canonical. See tools.CanonicalRoots.
-	Roots []string
+	Roots      []string
+	FileAccess *FileAccess
 }
 
 type lsArgs struct {
@@ -68,7 +69,11 @@ func (t *Ls) Execute(ctx context.Context, raw json.RawMessage) (Result, error) {
 	if a.Path == "" {
 		a.Path = "."
 	}
-	dir, err := resolve(t.Cwd, a.Path, t.Roots...)
+	roots, err := fileAccessRoots(t.Cwd, t.Roots, t.FileAccess)
+	if err != nil {
+		return Result{}, err
+	}
+	dir, err := resolve(t.Cwd, a.Path, roots...)
 	if err != nil {
 		return Result{}, err
 	}

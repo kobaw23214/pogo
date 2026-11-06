@@ -1,5 +1,6 @@
 import type { MessageInputPart, OfficeReferenceSnapshot } from "@/api/types";
 import { validShortcutLanguage } from "@/components/shortcutPresentation";
+import { mcpInvocationText, validMcpReference, type MCPReference } from "./mcpInvocation";
 
 export const shortcutStructureLimits = { depth: 5, nodes: 512, bytes: 256 * 1024 } as const;
 export function cloneInputParts(parts: readonly MessageInputPart[]): MessageInputPart[] { return JSON.parse(JSON.stringify(parts)); }
@@ -7,10 +8,11 @@ export function officeSnapshotText(office: OfficeReferenceSnapshot): string {
   return `[Office选区：${[office.title, office.sheet, office.range].filter(Boolean).join(" · ")}；版本 ${office.canvas_version}${office.information ? `；来源 信息库 ${office.information.entry_id}；保存版本 ${office.information.version}；只读选取；资料快照 ${office.information.snapshot_sha256}` : ""}${office.dirty ? "；包含未保存编辑" : ""}]\n${office.text}`;
 }
 export function inputPartsText(parts: readonly MessageInputPart[]): string {
-  return parts.map(part => part.type === "text" || part.type === "element" ? part.text : part.type === "file" ? `〔${part.path.split("/").pop()}〕` : part.type === "skill" ? `/skill:${part.name} ` : part.type === "office" ? officeSnapshotText(part.office) : `[资料：${part.title}]\n${part.parts?.length ? inputPartsText(part.parts) : part.text}`).join("");
+  return parts.map(part => part.type === "text" || part.type === "element" ? part.text : part.type === "file" ? `〔${part.path.split("/").pop()}〕` : part.type === "skill" ? `/skill:${part.name} ` : part.type === "mcp" ? `${mcpInvocationText(part.server, part.name)} ` : part.type === "office" ? officeSnapshotText(part.office) : `[资料：${part.title}]\n${part.parts?.length ? inputPartsText(part.parts) : part.text}`).join("");
 }
 export function inputPartsHaveFiles(parts: readonly MessageInputPart[]): boolean { return parts.some(part => part.type === "file" || part.type === "shortcut" && !!part.parts?.length && inputPartsHaveFiles(part.parts)); }
 export function inputPartsSkills(parts: readonly MessageInputPart[]): string[] { return parts.flatMap(part => part.type === "skill" ? [part.name] : part.type === "shortcut" && part.parts ? inputPartsSkills(part.parts) : []); }
+export function inputPartsMcps(parts: readonly MessageInputPart[]): MCPReference[] { return parts.flatMap(part => part.type === "mcp" ? [{ server: part.server, name: part.name }] : part.type === "shortcut" && part.parts ? inputPartsMcps(part.parts) : []); }
 /** Clipboard and UI guard. The server independently enforces identical limits. */
 export function validateInputParts(parts: readonly MessageInputPart[], ancestors: string[] = []): string {
   let nodes = ancestors.length, size = 0;
@@ -22,12 +24,13 @@ export function validateInputParts(parts: readonly MessageInputPart[], ancestors
     for (const part of list) {
       if (++nodes > shortcutStructureLimits.nodes) return "nodes";
       if (!part || typeof part !== "object") return "invalid";
-      for (const key of ["type", "text", "path", "name", "favicon", "shortcut_id", "title", "icon", "language"] as const) { const value = (part as unknown as Record<string, unknown>)[key]; if (typeof value === "string") size += bytes(value); }
+      for (const key of ["type", "text", "path", "name", "server", "favicon", "shortcut_id", "title", "icon", "language"] as const) { const value = (part as unknown as Record<string, unknown>)[key]; if (typeof value === "string") size += bytes(value); }
       if (part.type === "office" && part.office) { for (const value of Object.values(part.office)) if (typeof value === "string") size += bytes(value); if (part.office.information) size += bytes(part.office.information.entry_id || "") + bytes(part.office.information.snapshot_sha256 || "") + 16; if (part.office.locator) for (const value of Object.values(part.office.locator)) if (typeof value === "string") size += bytes(value); }
       if (size > shortcutStructureLimits.bytes) return "bytes";
       if (part.type === "text" || part.type === "element") { if (badText(part.text, part.type === "element" ? 32 * 1024 : 256 * 1024)) return "invalid"; }
       else if (part.type === "file") { if (!relativePath(part.path)) return "invalid"; }
       else if (part.type === "skill") { if (typeof part.name !== "string" || !/^[^\s"'`<>/\\]{1,128}$/.test(part.name)) return "invalid"; }
+      else if (part.type === "mcp") { if (!validMcpReference(part)) return "invalid"; }
       else if (part.type === "office") {
         const v = part.office;
         if (!v || (v.editor !== "word" && v.editor !== "cell") || badText(v.text, 65536) || !v.text.trim() || badText(v.title, 1024) || !v.title.trim() || !relativePath(v.path) || badText(v.canvas_version, 512) || !v.canvas_version) return "invalid";

@@ -36,6 +36,7 @@ const props = defineProps<{
    */
   serverOffset?: number | null;
   folded: boolean;
+  toggleDisabled?: boolean;
 }>();
 
 const emit = defineEmits<{ toggle: [] }>();
@@ -62,9 +63,9 @@ const activity = computed(() => liveActivity(props.live));
   <button
     class="livework"
     :class="{ folded }"
-    :disabled="gated"
+    :disabled="gated || toggleDisabled"
     :aria-expanded="!folded"
-    :title="gated ? undefined : folded ? t('workLog.showWork') : t('workLog.hideWork')"
+    :title="gated || toggleDisabled ? undefined : folded ? t('workLog.showWork') : t('workLog.hideWork')"
     @click="emit('toggle')"
   >
     <span class="pulse" aria-hidden="true"><i /><i /></span>

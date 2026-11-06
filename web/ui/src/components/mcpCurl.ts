@@ -10,6 +10,7 @@
 // which is all the file — and therefore this board — ever knows.
 
 import type { MCPServerConfig } from "@/api/types";
+import { gt } from "@/i18n";
 
 // sq single-quotes POSIX-style: everything literal except a single quote
 // itself, which closes, escapes and reopens ('\'').
@@ -70,14 +71,14 @@ function streamableCurl(sc: MCPServerConfig): string {
   const url = sc.url?.trim() || "<url>";
   const base = [`-H ${sq("Content-Type: application/json")}`, `-H ${sq("Accept: application/json, text/event-stream")}`, ...authHeaderLines(sc)];
   return [
-    "# 1) initialize 握手；-i 打印响应头，从里面拿 Mcp-Session-Id",
+    gt("settingsCoverage.curl.initialize"),
     `curl -i -N -X POST ${sq(url)} \\`,
     ...cont(base),
     `  -d ${sq(INITIALIZE_BODY)}`,
     "",
-    "# 2) 列出工具（把上一步响应头里的 Mcp-Session-Id 填进来）",
+    gt("settingsCoverage.curl.listTools"),
     `curl -N -X POST ${sq(url)} \\`,
-    ...cont([...base, `-H ${sq("Mcp-Session-Id: <填上一步的响应头值>")}`]),
+    ...cont([...base, `-H ${sq("Mcp-Session-Id: <MCP_SESSION_ID>")}`]),
     `  -d ${sq(TOOLS_LIST_BODY)}`,
   ].join("\n");
 }
@@ -96,20 +97,22 @@ function sseCurl(sc: MCPServerConfig): string {
   } catch {
     // an unparseable URL keeps the raw text as the placeholder it already is
   }
-  const post = `${origin}<回发路径>`;
+  // Keep replacement markers stable across languages, while translating only
+  // the explanatory comments around these literal shell commands.
+  const post = `${origin}<post-path>`;
   const postHead = [`-H ${sq("Content-Type: application/json")}`, ...auth];
   return [
-    "# 1) 旧版 SSE 传输：先挂流；流里的 endpoint 事件会给出回发路径（形如 /messages/?session_id=xxx）",
+    gt("settingsCoverage.curl.sseOpen"),
     `curl -N ${sq(url)} \\`,
     ...cont([`-H ${sq("Accept: text/event-stream")}`, ...auth]),
-    `  # ↑ 这条一直挂着；真正的 POST 在下面`,
+    `  ${gt("settingsCoverage.curl.sseKeepOpen")}`,
     "",
-    "# 2) 往回发路径 POST initialize（地址 = 源站 + 上一步给的路径）",
+    gt("settingsCoverage.curl.sseInitialize"),
     `curl -N -X POST ${sq(post)} \\`,
     ...cont(postHead),
     `  -d ${sq(INITIALIZE_BODY)}`,
     "",
-    "# 3) 同一个回发地址上列出工具",
+    gt("settingsCoverage.curl.sseListTools"),
     `curl -N -X POST ${sq(post)} \\`,
     ...cont(postHead),
     `  -d ${sq(TOOLS_LIST_BODY)}`,
@@ -120,9 +123,9 @@ function sseCurl(sc: MCPServerConfig): string {
 // cwd first when set (as a comment, it is pogo's chdir not a shell cd), then
 // env prefixes and the command line. Env values are verbatim, $VAR included.
 function stdioCurl(sc: MCPServerConfig): string {
-  const lines = ["# stdio 是本地子进程，没有 curl；pogo 实际执行的是："];
+  const lines = [gt("settingsCoverage.curl.stdio")];
   if (sc.cwd?.trim()) {
-    lines.push(`# （指定了 cwd：pogo 先 cd ${sq(sc.cwd.trim())} 再起进程）`);
+    lines.push(gt("settingsCoverage.curl.stdioCwd", { directory: sq(sc.cwd.trim()) }));
   }
   const env = Object.entries(sc.env ?? {}).map(([k, v]) => `${k}=${sq(v)}`);
   const cmd = [shArg(sc.command?.trim() || "<command>"), ...(sc.args ?? []).map(shArg)];

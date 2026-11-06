@@ -152,10 +152,7 @@ func (l *mcpLayer) reserveAgentCall(ctx context.Context, sess *Session) (context
 		return nil, nil, err
 	}
 	if sess.studioID != "" {
-		if _, err := sess.SyncStudioToolPolicy(); err != nil {
-			return nil, nil, err
-		}
-		if _, err := sess.SyncStudioSkillPolicy(); err != nil {
+		if err := sess.syncStudioCapabilities(""); err != nil {
 			return nil, nil, err
 		}
 	}
@@ -186,8 +183,7 @@ func (l *mcpLayer) reserveAgentCall(ctx context.Context, sess *Session) (context
 		// not pass through the conversation run's finish hook.
 		_, _ = sess.SyncModelConfig()
 		if sess.studioID != "" {
-			_, _ = sess.SyncStudioSkillPolicy()
-			_, _ = sess.SyncStudioToolPolicy()
+			sess.syncStudioCapabilitiesAtIdle()
 		}
 	}, nil
 }

@@ -75,7 +75,7 @@ function compact(n: number): string {
       <AnswerText v-else-if="!notice.error && notice.result" :source="notice.result" />
       <div class="foot">
         <span v-if="notice.kind === 'shell'" class="shell-id">{{ notice.id }}</span>
-        <span v-if="notice.kind === 'shell' && typeof notice.exitCode === 'number'" class="tok">exit {{ notice.exitCode }}</span>
+        <span v-if="notice.kind === 'shell' && typeof notice.exitCode === 'number'" class="tok">{{ t('cite.exitCode', { code: notice.exitCode }) }}</span>
         <span v-if="notice.mode" class="chip">{{ notice.mode }}</span>
         <span v-if="notice.inputTok !== undefined" class="tok">
           {{ compact(notice.inputTok) }}↑ / {{ compact(notice.outTok ?? 0) }}↓

@@ -24,6 +24,7 @@ RUN go mod download
 COPY wayland/stream/ ./
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH go build -trimpath -ldflags "-s -w" -o /out/pogo-wlstream .
 FROM ${BASE_IMAGE}
+LABEL io.pogo.browser.gateway-route="canonical-ip-host-mapping-v1"
 USER root
 RUN apt-get update && apt-get install -y --no-install-recommends python3 python3-venv \
     libavcodec60 libavfilter9 libx264-164 libxkbcommon0 libwayland-client0 libwayland-server0 libpixman-1-0 libinput10 \

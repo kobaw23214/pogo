@@ -8,11 +8,12 @@ vi.mock("vue-i18n", () => ({ useI18n: () => ({ t: (key: string) => key }) }));
 vi.mock("@/api/client", () => ({ api: { createHTMLPreview: host.create, revokeHTMLPreview: host.revoke } }));
 import HTMLBrowserPane from "./HTMLBrowserPane.vue";
 
-interface Props { path: string; sessionId: string; initialUrl?: string; initialId?: string; active: boolean; showToolbar?: boolean; }
-interface Controller { current: Ref<{ id: string; url: string } | null>; loading: Ref<boolean>; failed: Ref<string>; updated: Ref<boolean>; settle(): void; reload(): Promise<void>; }
+interface Props { path: string; sessionId: string; initialUrl?: string; initialId?: string; active: boolean; showToolbar?: boolean; toolbarTarget?: string; }
+interface Controller { current: Ref<{ id: string; url: string } | null>; loading: Ref<boolean>; failed: Ref<string>; updated: Ref<boolean>; browserOpening: Ref<boolean>; settle(): void; reload(): Promise<void>; openBrowser(): Promise<void>; }
 const firstId = "a".repeat(32), nextId = "b".repeat(32);
 const url = (letter: string) => `/api/html-previews/${letter.repeat(64)}/index.html`;
 const capability = (id = nextId, value: unknown = url("b")) => ({ id, url: value });
+const nativeCapability = () => ({ ...capability(), browser_url: `http://pogo.internal${url("b")}` });
 const scopes: ReturnType<typeof effectScope>[] = [];
 async function flush() { for (let count = 0; count < 8; count++) await Promise.resolve(); await nextTick(); }
 function deferred<T>() { let resolve!: (value: T) => void; const promise = new Promise<T>(done => { resolve = done; }); return { promise, resolve }; }
@@ -35,8 +36,11 @@ async function render(c: Controller, props: Props) {
   return renderToString(app);
 }
 interface RuntimeNode { tag: string; props: Record<string, unknown>; children: RuntimeNode[]; parent: RuntimeNode | null; text?: string; }
-function mountRuntime(extra: Partial<Props> = {}) {
+function mountRuntime(extra: Partial<Props> = {}, attachToolbar = false) {
   const node = (tag: string, text?: string): RuntimeNode => ({ tag, props: {}, children: [], parent: null, text });
+  const toolbar = node("shared-toolbar");
+  const root = node("root");
+  const allNodes = (parent: RuntimeNode): RuntimeNode[] => [parent, ...parent.children.flatMap(allNodes)];
   const insert = (child: RuntimeNode, parent: RuntimeNode, anchor: RuntimeNode | null = null) => {
     if (child.parent) child.parent.children.splice(child.parent.children.indexOf(child), 1);
     const index = anchor ? parent.children.indexOf(anchor) : -1;
@@ -50,19 +54,23 @@ function mountRuntime(extra: Partial<Props> = {}) {
     parentNode: child => child.parent, nextSibling: child => child.parent?.children[child.parent.children.indexOf(child) + 1] ?? null,
     patchProp: (element, key, _oldValue, value) => { element.props[key] = value; },
     insertStaticContent: (text, parent, anchor) => { const child = node("#static", text); insert(child, parent, anchor); return [child, child]; },
+    querySelector: selector => attachToolbar ? allNodes(root).find(child => child.props.id === selector.slice(1)) ?? null : selector === "#shared-toolbar" ? toolbar : null,
   });
   // Vitest's Vue transform supplies only ssrRender. Compile the actual template
   // for a runtime mount so Vue performs its real Boolean prop normalization.
   const template = readFileSync(new URL("./HTMLBrowserPane.vue", import.meta.url), "utf8").split("<template>")[1]!.split("</template>")[0]!;
   const source = HTMLBrowserPane as unknown as { setup(props: Props, context: unknown): object };
   const runtimeComponent = { ...HTMLBrowserPane, setup: (props: Props, context: unknown) => ({ ...source.setup(props, context) }), render: compile(template) };
-  const root = node("root"), props = { path: "reports/index.html", sessionId: "session-a", initialId: firstId, initialUrl: url("a"), active: true, ...extra };
-  const app = renderer.createApp({ render: () => h(runtimeComponent as unknown as Parameters<typeof h>[0], props) });
+  const props = reactive({ path: "reports/index.html", sessionId: "session-a", initialId: firstId, initialUrl: url("a"), active: true, ...extra });
+  const app = renderer.createApp({ render: () => {
+    const pane = h(runtimeComponent as unknown as Parameters<typeof h>[0], props);
+    return attachToolbar ? h("div", [h("div", { id: "shared-toolbar" }), pane]) : pane;
+  } });
   app.component("el-icon", defineComponent({ setup: (_, { slots }) => () => h("span", slots.default?.()) }));
   app.component("Refresh", defineComponent({ render: () => h("svg") }));
   app.mount(root);
-  const allNodes = (parent: RuntimeNode): RuntimeNode[] => [parent, ...parent.children.flatMap(allNodes)];
-  return { find: (tag: string) => allNodes(root).filter(child => child.tag === tag), close: () => app.unmount() };
+  const actualToolbar = () => attachToolbar ? allNodes(root).find(child => child.props.id === "shared-toolbar")! : toolbar;
+  return { props, find: (tag: string) => allNodes(root).filter(child => child.tag === tag), toolbar: (tag: string) => allNodes(actualToolbar()).filter(child => child.tag === tag), close: () => app.unmount() };
 }
 beforeEach(() => {
   vi.useFakeTimers(); host.create.mockReset().mockResolvedValue(capability()); host.revoke.mockReset().mockResolvedValue({ ok: true });
@@ -72,7 +80,7 @@ afterEach(() => { host.mounted.splice(0); host.cleanup.splice(0).forEach(callbac
 describe("HTMLBrowserPane capability lifecycle", () => {
   it("shows the refresh toolbar when the runtime caller omits showToolbar", () => {
     const pane = mountRuntime();
-    try { expect(pane.find("button")).toHaveLength(1); expect(pane.find("button")[0]?.props["aria-label"]).toBe("filePreview.htmlReload"); }
+    try { expect(pane.find("button")).toHaveLength(2); expect(pane.find("button")[0]?.props["aria-label"]).toBe("filePreview.htmlReload"); expect(pane.find("button")[1]?.props["aria-label"]).toBe("filePreview.htmlOpenBrowser"); }
     finally { pane.close(); }
   });
 
@@ -82,11 +90,59 @@ describe("HTMLBrowserPane capability lifecycle", () => {
     finally { pane.close(); }
   });
 
+  it("shares the tab row only while this HTML preview is active, keeping its iframe mounted", async () => {
+    const pane = mountRuntime({ toolbarTarget: "#shared-toolbar", active: false });
+    try {
+      const frame = pane.find("iframe")[0]; expect(pane.toolbar("button")).toHaveLength(0); expect(pane.find("header")).toHaveLength(0);
+      pane.props.active = true; await nextTick(); expect(pane.toolbar("button")).toHaveLength(2); expect(pane.find("header")).toHaveLength(0);
+      expect(pane.find("iframe")[0]).toBe(frame);
+      pane.props.active = false; await nextTick(); expect(pane.toolbar("button")).toHaveLength(0); expect(pane.find("iframe")[0]).toBe(frame);
+    } finally { pane.close(); }
+  });
+
+  it("keeps embedded HTML artifacts free of toolbar actions even with a shared target", () => {
+    const pane = mountRuntime({ toolbarTarget: "#shared-toolbar", showToolbar: false });
+    try { expect(pane.toolbar("button")).toHaveLength(0); expect(pane.find("button")).toHaveLength(0); expect(pane.find("iframe")).toHaveLength(1); }
+    finally { pane.close(); }
+  });
+  it("waits until the first dock mount attaches its shared toolbar", async () => {
+    const pane = mountRuntime({ toolbarTarget: "#shared-toolbar" }, true);
+    try {
+      await nextTick(); expect(pane.toolbar("header")).toHaveLength(1); expect(pane.toolbar("button")).toHaveLength(2);
+      expect(pane.find("iframe")).toHaveLength(1);
+    } finally { pane.close(); }
+  });
+
   it("adopts and claims a valid one-shot initial capability without issuing a duplicate", async () => {
     const { c, mounted, emit } = mount(); mounted(); await flush();
     expect(c.current.value).toEqual({ id: firstId, url: url("a") }); expect(c.loading.value).toBe(true); expect(host.create).not.toHaveBeenCalled();
     expect(emit).toHaveBeenCalledExactlyOnceWith("claimCapability", firstId);
     c.settle(); expect(c.loading.value).toBe(false); expect(c.updated.value).toBe(false);
+  });
+
+  it("opens a separate native-browser capability without transferring the iframe's capability", async () => {
+    const { c, emit, close } = mount(); c.settle(); host.create.mockResolvedValueOnce(nativeCapability()); await c.openBrowser();
+    expect(host.create).toHaveBeenCalledExactlyOnceWith("session-a", "reports/index.html");
+    expect(emit).toHaveBeenCalledWith("openBrowser", { id: nextId, url: nativeCapability().browser_url, sessionId: "session-a" });
+    expect(c.current.value).toEqual({ id: firstId, url: url("a") });
+    close();
+    expect(host.revoke).toHaveBeenCalledWith("session-a", firstId);
+    expect(host.revoke).not.toHaveBeenCalledWith("session-a", nextId);
+  });
+
+  it("revokes a late native-browser receipt after the file changes", async () => {
+    const { c, props, emit } = mount(); c.settle(); const pending = deferred<ReturnType<typeof capability>>(); host.create.mockReturnValueOnce(pending.promise);
+    const request = c.openBrowser(); props.path = "reports/new.html"; props.initialId = undefined; props.initialUrl = undefined;
+    await flush(); pending.resolve(capability("c".repeat(32))); await request;
+    expect(emit).not.toHaveBeenCalledWith("openBrowser", expect.anything());
+    expect(host.revoke).toHaveBeenCalledWith("session-a", "c".repeat(32));
+    expect(c.browserOpening.value).toBe(false);
+  });
+
+  it("rejects an invalid native-browser URL without replacing the iframe", async () => {
+    const { c, emit } = mount(); c.settle(); host.create.mockResolvedValueOnce({ ...capability(), browser_url: "javascript:alert(1)" }); await c.openBrowser();
+    expect(emit).not.toHaveBeenCalled(); expect(host.revoke).toHaveBeenCalledWith("session-a", nextId);
+    expect(c.failed.value).toBe("filePreview.htmlInvalidPreview"); expect(c.current.value?.id).toBe(firstId);
   });
 
   it("requests a capability when no initial value is supplied and does not claim a parent-owned URL", async () => {

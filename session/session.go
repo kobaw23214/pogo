@@ -1063,7 +1063,7 @@ func AttachmentTitle(m llm.Message) string {
 func UserInputTitle(m llm.Message) string {
 	hasShortcut := false
 	for _, block := range m.Content {
-		hasShortcut = hasShortcut || block.InputShortcut != nil || block.InputOffice != nil
+		hasShortcut = hasShortcut || block.InputShortcut != nil || block.InputOffice != nil || block.InputMCP != nil
 	}
 	if m.InputLayout == "" && !hasShortcut {
 		if text := m.Text(); text != "" {
@@ -1079,6 +1079,10 @@ func UserInputTitle(m llm.Message) string {
 			if block.InputShortcut != nil {
 				title.WriteString("〔" + block.InputShortcut.Title + "〕")
 				index += min(max(block.InputShortcut.BlockCount, 0), len(m.Content)-index-1)
+				continue
+			}
+			if block.InputMCP != nil {
+				title.WriteString("〔MCP: " + block.InputMCP.Server + "/" + block.InputMCP.Name + "〕")
 				continue
 			}
 			if block.InputOffice != nil {

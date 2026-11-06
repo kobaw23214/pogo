@@ -1,17 +1,26 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, ref } from 'vue';
+import { computed, defineAsyncComponent, h, nextTick, onBeforeUnmount, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { Close, Grid, List, Menu, Plus, Refresh, Search } from '@element-plus/icons-vue';
 import StudioPreferences from '@/components/studio/StudioPreferences.vue';
-const InformationLibrary = defineAsyncComponent(() => import('@/components/studio/InformationLibrary.vue'));
-const SettingsDialog = defineAsyncComponent(() => import('@/components/SettingsDialog.vue'));
+import StudioEntrySkeleton from '@/components/studio/StudioEntrySkeleton.vue';
+import { createStudioCatalogLoading } from '@/agent/studioEntry';
+const InformationLibrary = defineAsyncComponent({
+  loader: () => import('@/components/studio/InformationLibrary.vue'),
+  loadingComponent: () => h(StudioEntrySkeleton, { area: 'settings' }),
+  delay: 0,
+});
+const SettingsDialog = defineAsyncComponent({
+  loader: () => import('@/components/SettingsDialog.vue'),
+  loadingComponent: () => h(StudioEntrySkeleton, { area: 'settings' }),
+  delay: 0,
+});
 import AgentCard from '@/components/studio/AgentCard.vue';
 import AgentEditorDialog from '@/components/studio/AgentEditorDialog.vue';
 import PublishDialog from '@/components/studio/PublishDialog.vue';
 import StudioSidebar from '@/components/studio/StudioSidebar.vue';
 import SkillLibrary from '@/components/studio/SkillLibrary.vue';
 import SkillMonitorPanel from '@/components/SkillMonitorPanel.vue';
-import WorkflowList from '@/components/workflow/WorkflowList.vue';
 import type { AgentTemplate, PlatformAgent, PlatformAgentInput, PlatformCapabilities, PlatformModel } from '@/agent/platformTypes';
 import { navigateStudio, platformApi } from '@/api/platform';
 import {
@@ -20,7 +29,6 @@ import {
   agentStats,
   agentCapabilitySummary,
   agentModelsLabel,
-  categoryChips,
   filterAgents,
   managedChatPath,
   sectionForSettingsSection,
@@ -34,7 +42,7 @@ import {
 /**
  * The Studio's management surface. It owns the shared shell — the native Pogo
  * sidebar, the page header, the module body — and renders one module at a
- * time: the Agent catalog for 我的 Agents, the workflow list for 平台工作流
+ * time: the Agent catalog for 我的 Agents, the shared resource libraries
  * (its editor is a full-screen route, not a module), the real SettingsDialog
  * inline for the configuration modules (模型配置 / MCP 管理 / 账号与安全 /
  * 设置), and the real Skill library plus its monitor under Skill 管理.
@@ -46,6 +54,7 @@ const props = withDefaults(
     models: PlatformModel[];
     templates: AgentTemplate[];
     loading: boolean;
+    catalogReady?: boolean;
     saving: boolean;
     error: string;
     canManage: boolean;
@@ -54,8 +63,9 @@ const props = withDefaults(
      *  modules fall back to the Agents page instead of rendering orphans. */
     passwordEnabled: boolean;
     section?: StudioSection;
+    memoryAgentId?: string;
   }>(),
-  { section: 'agents', passwordEnabled: false },
+  { section: 'agents', passwordEnabled: false, catalogReady: undefined },
 );
 
 const emit = defineEmits<{
@@ -68,7 +78,7 @@ const emit = defineEmits<{
   dismissError: [];
 }>();
 
-const { t } = useI18n();
+const { t: tr } = useI18n();
 
 /* ---------------------------------- chrome ---------------------------------- */
 
@@ -78,16 +88,22 @@ const navOpen = ref(false);
  *  account surfaces (账号与安全 / 设置) fall back to the Agents page on a
  *  deployment without the account system — the sidebar does not offer them
  *  there either, so a deep link must not land on an orphaned module. */
-const activeSection = computed<StudioSection>(() => visibleSection(props.section, props.passwordEnabled));
+const catalogSucceeded = computed(() => props.catalogReady ?? !props.error);
+const initialLoading = createStudioCatalogLoading(computed(() => props.loading), catalogSucceeded);
+// Until the initial catalog/auth pass settles, false is an unknown permission,
+// not proof that the requested account module should become the Agents page.
+const activeSection = computed<StudioSection>(() => initialLoading.value || !catalogSucceeded.value
+  ? props.section
+  : visibleSection(props.section, props.passwordEnabled));
 
-const title = computed(() => activeSection.value === 'workflows' ? t('workflow.list.title') : STUDIO_SECTION_LABELS[activeSection.value]);
+const title = computed(() => STUDIO_SECTION_LABELS[activeSection.value]);
 const subtitle = computed(() => {
-  if (activeSection.value === 'workflows') return t('workflow.list.subtitle');
   if (activeSection.value !== 'agents') return STUDIO_SECTION_DESCS[activeSection.value];
-  if (props.loading && !props.agents.length) return '正在载入你的工作空间…';
+  if (initialLoading.value) return tr('studioManagement.text574');
+  if (!catalogSucceeded.value) return STUDIO_SECTION_DESCS.agents;
   const s = agentStats(props.agents, props.models);
-  const parts = [`${s.total} 个 Agent`, `${s.ready} 已发布`, `${s.draft} 草稿`, `${s.availableModels} 个可用模型`];
-  if (!props.canManage) parts.push('只读权限');
+  const parts = [tr('studioManagement.text575', { value0: s.total }), tr('studioManagement.text576', { value0: s.ready }), tr('studioManagement.text577', { value0: s.draft }), tr('studioManagement.text578', { value0: s.availableModels })];
+  if (!props.canManage) parts.push(tr('studioManagement.text579'));
   return parts.join(' · ');
 });
 
@@ -103,51 +119,19 @@ function onSettingsNavigate(section: Parameters<typeof sectionForSettingsSection
 /* ------------------------------ agents module ------------------------------ */
 
 const query = ref('');
-const categoryFilter = ref('all');
 const statusFilter = ref<AgentStatusFilter>('all');
 const viewMode = ref<'grid' | 'list'>('grid');
 
-/* markdown role-card import: paste one document, get one Agent (server maps
-   frontmatter → identity, body → instructions); success refreshes the list. */
-const importOpen = ref(false);
-const importText = ref('');
-const importBusy = ref(false);
-const importError = ref('');
-
-function openImport() {
-  importText.value = '';
-  importError.value = '';
-  importOpen.value = true;
-}
-
-async function submitImport() {
-  if (importBusy.value || !importText.value.trim()) return;
-  importBusy.value = true;
-  importError.value = '';
-  try {
-    await platformApi.importAgent(importText.value);
-    importOpen.value = false;
-    toast('已导入');
-    emit('refresh');
-  } catch (e) {
-    importError.value = (e as Error).message;
-  } finally {
-    importBusy.value = false;
-  }
-}
-
 const statusChips = [
-  { value: 'all' as const, label: '全部状态' },
-  { value: 'ready' as const, label: '已发布' },
-  { value: 'draft' as const, label: '草稿' },
+  { value: 'all' as const, get label() { return tr('studioManagement.text581'); } },
+  { value: 'ready' as const, get label() { return tr('studioManagement.text003'); } },
+  { value: 'draft' as const, get label() { return tr('studioManagement.text004'); } },
 ];
 
-const categories = computed(() => categoryChips(props.agents));
-const filtered = computed(() => filterAgents(props.agents, query.value, statusFilter.value, categoryFilter.value));
+const filtered = computed(() => filterAgents(props.agents, query.value, statusFilter.value));
 
 function clearFilters() {
   query.value = '';
-  categoryFilter.value = 'all';
   statusFilter.value = 'all';
 }
 
@@ -180,7 +164,7 @@ async function loadCapabilities() {
     capabilities.value = catalog;
   } catch (e) {
     if (request !== capabilitiesRequest) return;
-    capabilitiesError.value = (e as Error).message || '技能与 MCP 清单加载失败';
+    capabilitiesError.value = (e as Error).message || tr('studioManagement.text582');
   } finally {
     if (request === capabilitiesRequest) capabilitiesLoading.value = false;
   }
@@ -243,7 +227,7 @@ function onEditorClosed() {
 /** Called by the parent after a successful create/update. Never on failure. */
 function creationSucceeded() {
   editor.value?.close();
-  toast('已保存');
+  toast(tr('studioManagement.text583'));
   if (activeSection.value !== 'agents') void navigateStudio('/manage');
 }
 defineExpose({ creationSucceeded });
@@ -276,11 +260,6 @@ function gotoMcpTrace(traceId: string) {
   navigateStudio('/manage/mcp');
 }
 
-/* ------------------------------ workflows module ------------------------------ */
-
-/** The workflows page owns its data (the shell's catalog is the Agents one);
-    the header's refresh/create buttons reach in through this ref. */
-const workflowPanel = ref<InstanceType<typeof WorkflowList> | null>(null);
 
 onBeforeUnmount(() => clearTimeout(toastTimer));
 </script>
@@ -298,7 +277,7 @@ onBeforeUnmount(() => clearTimeout(toastTimer));
 
     <div class="page">
       <header v-if="activeSection !== 'information'" class="page-head">
-        <button type="button" class="iconbtn nav-toggle" aria-label="打开导航" @click="navOpen = true">
+        <button type="button" class="iconbtn nav-toggle" :aria-label="tr('studioManagement.text584')" @click="navOpen = true">
           <el-icon aria-hidden="true"><Menu /></el-icon>
         </button>
         <div class="head-text">
@@ -309,43 +288,23 @@ onBeforeUnmount(() => clearTimeout(toastTimer));
           <button
             type="button"
             class="iconbtn tip"
-            :class="{ spinning: loading }"
-            data-tip="刷新列表"
-            aria-label="刷新列表"
+            :class="{ spinning: loading && !initialLoading }"
+            :data-tip="tr('studioManagement.text585')"
+            :aria-label="tr('studioManagement.text585')"
             :disabled="loading"
             @click="emit('refresh')"
           >
             <el-icon aria-hidden="true"><Refresh /></el-icon>
           </button>
-          <button v-if="canManage" type="button" class="btn ghost" @click="openImport">
-            {{ t("workflow.import.button") }}
-          </button>
           <button v-if="canManage" type="button" class="btn solid" @click="openCreate">
-            <el-icon aria-hidden="true"><Plus /></el-icon>
-            创建 Agent
-          </button>
-        </div>
-        <div v-else-if="activeSection === 'workflows'" class="head-actions">
-          <button
-            type="button"
-            class="iconbtn tip"
-            :data-tip="t('workflow.list.refresh')"
-            :aria-label="t('workflow.list.refresh')"
-            @click="workflowPanel?.reload()"
-          >
-            <el-icon aria-hidden="true"><Refresh /></el-icon>
-          </button>
-          <button v-if="canManage" type="button" class="btn solid" @click="workflowPanel?.openCreate()">
-            <el-icon aria-hidden="true"><Plus /></el-icon>
-            {{ t('workflow.list.create') }}
-          </button>
+            <el-icon aria-hidden="true"><Plus /></el-icon> {{ tr('studioManagement.text050') }} </button>
         </div>
         <div v-else-if="activeSection === 'skills'" class="head-actions">
           <button
             type="button"
             class="iconbtn tip"
-            data-tip="刷新 Skill 数据"
-            aria-label="刷新 Skill 数据"
+            :data-tip="tr('studioManagement.text586')"
+            :aria-label="tr('studioManagement.text586')"
             @click="refreshSkills"
           >
             <el-icon aria-hidden="true"><Refresh /></el-icon>
@@ -355,8 +314,8 @@ onBeforeUnmount(() => clearTimeout(toastTimer));
 
       <div v-if="error && !editorOpen" class="errorbar" role="alert">
         <span class="errorbar-msg">{{ error }}</span>
-        <button type="button" class="btn ghost sm" @click="emit('refresh')">重试</button>
-        <button type="button" class="iconbtn sm" aria-label="关闭提示" @click="emit('dismissError')">
+        <button type="button" class="btn ghost sm" @click="emit('refresh')">{{ tr('studioManagement.text104') }}</button>
+        <button type="button" class="iconbtn sm" :aria-label="tr('studioManagement.text055')" @click="emit('dismissError')">
           <el-icon aria-hidden="true"><Close /></el-icon>
         </button>
       </div>
@@ -366,10 +325,10 @@ onBeforeUnmount(() => clearTimeout(toastTimer));
         <div class="toolbar">
           <div class="searchbox">
             <el-icon class="search-ico" aria-hidden="true"><Search /></el-icon>
-            <input v-model="query" type="search" placeholder="搜索名称、简介或模型" aria-label="搜索 Agent" />
+            <input v-model="query" type="search" :placeholder="tr('studioManagement.text587')" :aria-label="tr('studioManagement.text588')" />
           </div>
 
-          <div class="chip-row" role="group" aria-label="按状态筛选">
+          <div class="chip-row" role="group" :aria-label="tr('studioManagement.text589')">
             <button
               v-for="c in statusChips"
               :key="c.value"
@@ -383,29 +342,15 @@ onBeforeUnmount(() => clearTimeout(toastTimer));
             </button>
           </div>
 
-          <div v-if="categories.length > 2" class="chip-row" role="group" aria-label="按分类筛选">
-            <button
-              v-for="c in categories"
-              :key="c.value"
-              type="button"
-              class="chip"
-              :class="{ on: categoryFilter === c.value }"
-              :aria-pressed="categoryFilter === c.value"
-              @click="categoryFilter = c.value"
-            >
-              {{ c.label }}
-            </button>
-          </div>
-
-          <div class="viewtoggle" role="group" aria-label="切换视图">
+          <div class="viewtoggle" role="group" :aria-label="tr('studioManagement.text591')">
             <!-- tip-down: the toggle lives at the page's top, and an upward
                  bubble would cover the header actions above it. -->
             <button
               type="button"
               class="tip tip-down"
               :class="{ on: viewMode === 'grid' }"
-              data-tip="卡片视图"
-              aria-label="卡片视图"
+              :data-tip="tr('studioManagement.text592')"
+              :aria-label="tr('studioManagement.text592')"
               @click="viewMode = 'grid'"
             >
               <el-icon aria-hidden="true"><Grid /></el-icon>
@@ -414,8 +359,8 @@ onBeforeUnmount(() => clearTimeout(toastTimer));
               type="button"
               class="tip tip-down"
               :class="{ on: viewMode === 'list' }"
-              data-tip="列表视图"
-              aria-label="列表视图"
+              :data-tip="tr('studioManagement.text593')"
+              :aria-label="tr('studioManagement.text593')"
               @click="viewMode = 'list'"
             >
               <el-icon aria-hidden="true"><List /></el-icon>
@@ -423,36 +368,24 @@ onBeforeUnmount(() => clearTimeout(toastTimer));
           </div>
         </div>
 
-        <div v-if="loading && !agents.length" class="cards grid skel" aria-hidden="true">
-          <div v-for="i in 6" :key="i" class="skel-card">
-            <div class="skel-row">
-              <span class="skel-block skel-avatar" />
-              <div class="skel-lines">
-                <span class="skel-block line w60" />
-                <span class="skel-block line w40" />
-              </div>
-            </div>
-            <span class="skel-block line w100" />
-            <span class="skel-block line w80" />
-          </div>
+        <div v-if="initialLoading" role="status" :aria-label="tr('studioManagement.text574')" aria-busy="true">
+          <StudioEntrySkeleton area="cards" class="agent-catalog-skeleton" :class="viewMode" />
         </div>
 
-        <div v-else-if="!agents.length" class="empty">
-          <h2>还没有 Agent</h2>
-          <p>从一个好名字和一段清晰的指令开始，几分钟后它就能陪你工作。</p>
+        <div v-else-if="catalogReady !== false && !error && !agents.length" class="empty">
+          <h2>{{ tr('studioManagement.text594') }}</h2>
+          <p>{{ tr('studioManagement.text595') }}</p>
           <div class="empty-actions">
             <button v-if="canManage" type="button" class="btn solid" @click="openCreate">
-              <el-icon aria-hidden="true"><Plus /></el-icon>
-              创建第一个 Agent
-            </button>
+              <el-icon aria-hidden="true"><Plus /></el-icon> {{ tr('studioManagement.text596') }} </button>
           </div>
         </div>
 
-        <div v-else-if="!filtered.length" class="empty small">
-          <h2>没有匹配的 Agent</h2>
-          <p>换个关键词，或清除当前筛选条件试试。</p>
+        <div v-else-if="catalogReady !== false && !error && !filtered.length" class="empty small">
+          <h2>{{ tr('studioManagement.text597') }}</h2>
+          <p>{{ tr('studioManagement.text598') }}</p>
           <div class="empty-actions">
-            <button type="button" class="btn ghost" @click="clearFilters">清除筛选</button>
+            <button type="button" class="btn ghost" @click="clearFilters">{{ tr('studioManagement.text599') }}</button>
           </div>
         </div>
 
@@ -473,56 +406,58 @@ onBeforeUnmount(() => clearTimeout(toastTimer));
         </div>
       </section>
 
-      <!-- ── 平台工作流：卡片列表 + 新建对话框，编辑器走全屏路由 ────── -->
-      <section v-show="activeSection === 'workflows'" class="page-body" :aria-label="t('workflow.list.title')">
-        <WorkflowList ref="workflowPanel" :can-manage="canManage" />
+
+      <section v-show="activeSection === 'information'" class="page-body information-module" :aria-label="tr('studioManagement.text600')">
+        <div v-if="initialLoading" role="status" :aria-label="tr('common.loading')" aria-busy="true"><StudioEntrySkeleton area="settings" /></div>
+        <InformationLibrary v-else :active="activeSection === 'information'" :agents="agents"><template #navigation><button type="button" class="iconbtn nav-toggle information-nav-toggle" :aria-label="tr('studioManagement.text584')" @click="navOpen = true"><el-icon aria-hidden="true"><Menu /></el-icon></button></template></InformationLibrary>
       </section>
 
-      <section v-if="activeSection === 'information'" class="page-body information-module" aria-label="信息库"><InformationLibrary :agents="agents"><template #navigation><button type="button" class="iconbtn nav-toggle information-nav-toggle" aria-label="打开导航" @click="navOpen = true"><el-icon aria-hidden="true"><Menu /></el-icon></button></template></InformationLibrary></section>
-
       <!-- ── Skill 管理：真实技能库 + 原调用监控 ───────────────────── -->
-      <section v-show="activeSection === 'skills'" class="page-body skills-module" aria-label="Skill 管理">
-        <div class="module-tabs" role="tablist" aria-label="Skill 管理视图">
-          <button
-            type="button"
-            role="tab"
-            class="module-tab"
-            :class="{ on: skillsTab === 'library' }"
-            :aria-selected="skillsTab === 'library'"
-            @click="skillsTab = 'library'"
-          >
-            技能库
-          </button>
-          <button
-            type="button"
-            role="tab"
-            class="module-tab"
-            :class="{ on: skillsTab === 'monitor' }"
-            :aria-selected="skillsTab === 'monitor'"
-            @click="skillsTab = 'monitor'"
-          >
-            调用监控
-          </button>
-        </div>
+      <section v-show="activeSection === 'skills'" class="page-body skills-module" :aria-label="tr('studioManagement.text601')">
+        <div v-if="initialLoading" role="status" :aria-label="tr('common.loading')" aria-busy="true"><StudioEntrySkeleton area="cards" /></div>
+        <template v-else>
+          <div class="module-tabs" role="tablist" :aria-label="tr('studioManagement.text602')">
+            <button
+              type="button"
+              role="tab"
+              class="module-tab"
+              :class="{ on: skillsTab === 'library' }"
+              :aria-selected="skillsTab === 'library'"
+              @click="skillsTab = 'library'"
+            > {{ tr('studioManagement.text603') }} </button>
+            <button
+              type="button"
+              role="tab"
+              class="module-tab"
+              :class="{ on: skillsTab === 'monitor' }"
+              :aria-selected="skillsTab === 'monitor'"
+              @click="skillsTab = 'monitor'"
+            > {{ tr('studioManagement.text604') }} </button>
+          </div>
 
-        <div v-if="skillsTab === 'library'" class="skills-holder">
-          <SkillLibrary :key="`library-${skillsRefreshKey}`" ref="skillsPanel" :can-manage="canManage" @create="createFromSkills" />
-        </div>
-        <div v-else class="monitor-holder">
-          <SkillMonitorPanel :key="`monitor-${skillsRefreshKey}`" :active="true" @show-mcp-trace="gotoMcpTrace" />
-        </div>
+          <div v-if="skillsTab === 'library'" class="skills-holder">
+            <SkillLibrary :key="`library-${skillsRefreshKey}`" ref="skillsPanel" :can-manage="canManage" @create="createFromSkills" />
+          </div>
+          <div v-else class="monitor-holder">
+            <SkillMonitorPanel :key="`monitor-${skillsRefreshKey}`" :active="true" @show-mcp-trace="gotoMcpTrace" />
+          </div>
+        </template>
       </section>
 
       <!-- ── 配置模块：真实设置内容，内联而非弹窗 ────────────────────── -->
-      <section v-show="activeSection !== 'agents' && activeSection !== 'workflows' && activeSection !== 'skills' && activeSection !== 'information'" class="page-body module">
-        <div v-show="activeSection === 'settings'" class="preferences-holder"><StudioPreferences /></div>
-        <SettingsDialog
-          :model-value="true"
-          embedded
-          :section="settingsSection"
-          @saved="emit('refresh')"
-          @navigate-section="onSettingsNavigate"
-        />
+      <section v-show="activeSection !== 'agents' && activeSection !== 'skills' && activeSection !== 'information'" class="page-body module">
+        <div v-if="initialLoading" role="status" :aria-label="tr('common.loading')" aria-busy="true"><StudioEntrySkeleton area="settings" /></div>
+        <template v-else>
+          <div v-show="activeSection === 'settings'" class="preferences-holder"><StudioPreferences /></div>
+          <SettingsDialog
+            :model-value="true"
+            embedded
+            :section="settingsSection"
+            :memory-agent-id="memoryAgentId"
+            @saved="emit('refresh')"
+            @navigate-section="onSettingsNavigate"
+          />
+        </template>
       </section>
     </div>
 
@@ -544,31 +479,6 @@ onBeforeUnmount(() => clearTimeout(toastTimer));
       @closed="onEditorClosed"
     />
     <PublishDialog ref="publishDlg" />
-
-    <el-dialog
-      :model-value="importOpen"
-      :title="t('workflow.import.title')"
-      width="min(560px, 94vw)"
-      :close-on-click-modal="false"
-      @update:model-value="importOpen = $event"
-    >
-      <div class="import-form">
-        <p class="import-hint">{{ t("workflow.import.hint") }}</p>
-        <el-input
-          v-model="importText"
-          type="textarea"
-          :rows="12"
-          :placeholder="t('workflow.import.placeholder')"
-        />
-        <p v-if="importError" class="import-error" role="alert">{{ t("workflow.import.failed", { msg: importError }) }}</p>
-      </div>
-      <template #footer>
-        <button type="button" class="btn ghost" :disabled="importBusy" @click="importOpen = false">{{ t("workflow.list.cancel") }}</button>
-        <button type="button" class="btn solid" :disabled="importBusy || !importText.trim()" @click="submitImport">
-          {{ importBusy ? t("workflow.import.busy") : t("workflow.import.confirm") }}
-        </button>
-      </template>
-    </el-dialog>
 
     <transition name="toast">
       <div v-if="toastMsg" class="toast" role="status">{{ toastMsg }}</div>
@@ -841,7 +751,8 @@ onBeforeUnmount(() => clearTimeout(toastTimer));
   color: var(--el-color-primary);
 }
 
-.cards.grid {
+.cards.grid,
+.agent-catalog-skeleton.grid {
   display: grid;
   /* Three cards per row at most, however wide the window — wider cards carry
      more of each Agent's story than a fifth narrow column would. The max()
@@ -850,80 +761,36 @@ onBeforeUnmount(() => clearTimeout(toastTimer));
   grid-template-columns: repeat(auto-fill, minmax(max(300px, calc((100% - 28px) / 3)), 1fr));
   gap: 14px;
 }
-.cards.list {
+.cards.list,
+.agent-catalog-skeleton.list {
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
-
-/* skeleton */
-.skel {
-  pointer-events: none;
+.agent-catalog-skeleton.grid,
+.agent-catalog-skeleton.list {
+  padding: 0;
 }
-.skel-card {
-  background: var(--el-bg-color);
-  border: 1px solid var(--el-border-color-lighter);
-  border-radius: var(--pg-radius-card);
-  padding: 16px 18px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.skel-row {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-}
-.skel-lines {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  flex: 1;
-}
-.skel-block {
-  display: block;
-  background: linear-gradient(
-    90deg,
-    var(--el-fill-color-light) 25%,
-    var(--el-fill-color-lighter) 50%,
-    var(--el-fill-color-light) 75%
-  );
-  background-size: 200% 100%;
-  animation: shimmer 1.4s ease-in-out infinite;
-}
-.skel-avatar {
-  width: 44px;
-  height: 44px;
-  border-radius: 13px;
-  flex: none;
-}
-.skel-block.line {
-  height: 12px;
-  border-radius: 6px;
-}
-.w40 {
-  width: 40%;
-}
-.w60 {
-  width: 60%;
-}
-.w80 {
-  width: 80%;
-}
-.w100 {
-  width: 100%;
-}
-@keyframes shimmer {
-  0% {
-    background-position: 180% 0;
+@media (min-width: 721px) {
+  .agent-catalog-skeleton.list :deep(.entry-card) {
+    display: grid;
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1.8fr) auto;
+    align-items: center;
+    gap: 16px;
+    min-height: 0;
+    padding: 13px 16px;
   }
-  100% {
-    background-position: -20% 0;
+  .agent-catalog-skeleton.list :deep(.entry-card-head) {
+    min-width: 0;
+    margin-bottom: 0;
   }
-}
-@media (prefers-reduced-motion: reduce) {
-  .skel-block {
-    animation: none;
+  .agent-catalog-skeleton.list :deep(.entry-card > .entry-line:not(:first-of-type):not(:last-child)) {
+    display: none;
+  }
+  .agent-catalog-skeleton.list :deep(.entry-card > .entry-line:last-child) {
+    width: 96px;
+    height: 30px;
+    border-radius: 6px;
   }
 }
 
@@ -1034,25 +901,6 @@ onBeforeUnmount(() => clearTimeout(toastTimer));
   .iconbtn.spinning .el-icon {
     animation: none;
   }
-}
-
-/* markdown import dialog */
-.import-form {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.import-hint {
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.7;
-  color: var(--el-text-color-secondary);
-}
-.import-error {
-  margin: 0;
-  font-size: 12px;
-  color: var(--el-color-danger);
-  line-height: 1.6;
 }
 
 /* toast */

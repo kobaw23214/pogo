@@ -8,6 +8,7 @@ import { uiIconsApi, UIIconsAPIError, UI_ICON_MODULES, type UIIcon, type UIIconM
 import { acceptUIIcons } from '@/agent/uiIcons';
 import { starterIconFor, starterIconNames } from './starterIcons';
 import AgentAvatar, { AVATAR_ICONS } from './AgentAvatar.vue';
+import StudioEntrySkeleton from './studio/StudioEntrySkeleton.vue';
 
 const props = defineProps<{active: boolean}>();
 const emit = defineEmits<{dirty: [value: boolean]}>();
@@ -119,7 +120,7 @@ defineExpose({hasUnsavedChanges: () => dirty.value, refresh: load});
     <p v-if="!canManage && saved" class="library-note">{{t('iconLibrary.readonly')}}</p>
     <div v-if="error" role="alert" class="library-alert bad">{{error}} <el-button text :icon="Refresh" @click="load">{{t('iconLibrary.retry')}}</el-button></div>
     <div v-if="notice" role="status" class="library-alert">{{notice}}</div>
-    <div v-if="loading && !saved" class="library-note">{{t('iconLibrary.loading')}}</div>
+    <div v-if="loading && !saved" role="status" :aria-label="t('iconLibrary.loading')" aria-busy="true"><StudioEntrySkeleton area="cards" style="padding: 0" /></div>
     <section v-if="generatorOpen && canManage" class="generator">
       <div class="section-title"><span><el-icon><MagicStick /></el-icon>{{t('iconLibrary.aiTitle')}}</span><el-button text :icon="Close" :aria-label="t('iconLibrary.close')" @click="cancelGeneration(); generatorOpen = false" /></div>
       <p>{{t('iconLibrary.aiHint')}}</p>

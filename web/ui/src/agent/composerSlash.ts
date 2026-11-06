@@ -1,4 +1,5 @@
-import { normalizeComposerParts, skillComposerPart, type ComposerPart } from "./composerParts";
+import { normalizeComposerParts, skillComposerPart, mcpComposerPart, type ComposerPart, type ComposerReferencePart } from "./composerParts";
+import type { MCPReference } from "./mcpInvocation";
 
 export interface ComposerSlashQuery { text: string; from: number; to: number }
 
@@ -15,6 +16,14 @@ export function composerSlashQuery(text: string, from: number, to = from): Compo
 /** Replace only the selected query with an explicit Skill card. Existing
  * references keep their identity and order, even in a textarea's prose view. */
 export function completeComposerTextSkill(parts: readonly ComposerPart[], query: ComposerSlashQuery, name: string): ComposerPart[] {
+  return completeComposerTextReference(parts, query, skillComposerPart(name));
+}
+
+export function completeComposerTextMcp(parts: readonly ComposerPart[], query: ComposerSlashQuery, reference: MCPReference): ComposerPart[] {
+  return completeComposerTextReference(parts, query, mcpComposerPart(reference.server, reference.name));
+}
+
+function completeComposerTextReference(parts: readonly ComposerPart[], query: ComposerSlashQuery, reference: ComposerReferencePart): ComposerPart[] {
   const textLength = parts.reduce((length, part) => length + (part.type === "text" ? part.text.length : 0), 0);
   if (query.from < 0 || query.to < query.from || query.to > textLength) return normalizeComposerParts(parts);
   const result: ComposerPart[] = [];
@@ -24,12 +33,12 @@ export function completeComposerTextSkill(parts: readonly ComposerPart[], query:
     const end = offset + part.text.length;
     if (offset < query.from) result.push({ type: "text", text: part.text.slice(0, Math.min(part.text.length, query.from - offset)) });
     if (!inserted && query.from < end) {
-      result.push(skillComposerPart(name));
+      result.push(reference);
       inserted = true;
     }
     if (end > query.to) result.push({ type: "text", text: part.text.slice(Math.max(0, query.to - offset)) });
     offset = end;
   }
-  if (!inserted) result.push(skillComposerPart(name));
+  if (!inserted) result.push(reference);
   return normalizeComposerParts(result);
 }

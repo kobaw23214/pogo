@@ -71,7 +71,7 @@ func inProcessFiring(dir string) bool {
 // Cron jobs get no special case: their period is not cheaply expressible, so
 // a missed cron fire simply runs once on the next pass and re-synchronises.
 func nextFire(j schedule.Job, now time.Time) *time.Time {
-	if !j.Enabled {
+	if !j.Enabled || j.WorkflowID != "" {
 		return nil
 	}
 	// An expired job never fires here either — RunOnce would refuse it at the
@@ -119,8 +119,7 @@ func nextFire(j schedule.Job, now time.Time) *time.Time {
 }
 
 // runSchedule is the goroutine: pass-sleep-pass. promptJobsFire mirrors
-// inProcessFiring's answer for prompt jobs; workflow jobs always fire here,
-// because the workflow runner only exists in this process — they register
+// inProcessFiring's answer for legacy prompt jobs; Agent jobs register
 // with the internal backend precisely so no OS trigger ever double-fires
 // them.
 func (m *Manager) runSchedule() {
@@ -168,7 +167,7 @@ func (m *Manager) fireDuePass(now time.Time, promptJobsFire bool) *time.Time {
 	}
 	var earliest *time.Time
 	for _, j := range jobs {
-		if !j.Enabled {
+		if !j.Enabled || j.WorkflowID != "" {
 			continue
 		}
 		if j.AgentID != "" {
@@ -180,7 +179,7 @@ func (m *Manager) fireDuePass(now time.Time, promptJobsFire bool) *time.Time {
 			}
 		}
 
-		if j.WorkflowID == "" && j.AgentID == "" && j.Timezone == "" && !promptJobsFire {
+		if j.AgentID == "" && j.Timezone == "" && !promptJobsFire {
 			continue
 		}
 		fire := nextFire(j, now)

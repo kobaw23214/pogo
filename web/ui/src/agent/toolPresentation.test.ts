@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { setLocale } from "@/i18n";
 import type { TimelineCall } from "./timeline";
-import { presentToolCall, toolCallState, toolGlyph } from "./toolPresentation";
+import { presentToolCall, toolCallState, toolControlOutcome, toolGlyph } from "./toolPresentation";
 
 const call = (name: string, extra: Partial<TimelineCall> = {}): TimelineCall => ({ callId: "c1", name: name as TimelineCall["name"], args: {}, running: false, orphaned: false, ...extra });
 const gate = { gate_id: "g1", call_id: "c1", tool: "read" as const, deadline: 123 };
@@ -91,5 +91,24 @@ describe("tool presentation", () => {
     expect(toolCallState(dispatched)).toBe("orphaned"); expect(presentToolCall(dispatched).meta).toBeUndefined();
     expect(toolCallState({ ...dispatched, taskNotice: { id: "bg1", brief: "task", failed: false, result: "actual result" } })).toBe("done");
     expect(toolCallState({ ...dispatched, childGates: [{ ...gate, origin: "bg1" }] })).toBe("gate");
+  });
+
+  it("keeps host refusals and cancellations distinct from execution failures without guessing arbitrary error text", () => {
+    const receipt = (text: string) => call("read", { result: { call_id: "c1", text, is_error: true } });
+    expect(toolControlOutcome(receipt("用户拒绝了这次调用"))).toBe("denied");
+    expect(presentToolCall(receipt("The user did not approve this call within 1m0s"))).toMatchObject({ state: "done", statusLabel: "超时未批准" });
+    expect(presentToolCall(receipt("Run was cancelled"))).toMatchObject({ state: "done", statusLabel: "已停止" });
+    expect(toolControlOutcome(receipt("remote API denied access"))).toBeUndefined();
+    expect(toolCallState(receipt("remote API denied access"))).toBe("error");
+    expect(toolControlOutcome(call("browser", { result: { call_id: "c1", is_error: true, text: '{"ok":false,"error":{"code":"TAB_HUMAN_CONTROL"}}' } }))).toBe("human-control");
+    expect(toolControlOutcome(call("browser", { result: { call_id: "c1", is_error: true, text: "browser snapshot failed: TAB_HUMAN_CONTROL: user owns tab" } }))).toBe("human-control");
+  });
+
+  it("reports observed result counts without turning missing metadata into zero or task success", () => {
+    expect(presentToolCall(call("read", { result: { call_id: "c1", text: "content", details: { path: "a", first_line: 1, total_lines: 20, shown_lines: 10, truncated: true } } })).meta).toBe("10 行");
+    expect(presentToolCall(call("read", { result: { call_id: "c1", text: "content" } })).meta).toBeUndefined();
+    expect(presentToolCall(call("browser", { result: { call_id: "c1", text: "partial", details: { action: "batch", ok: false, step_results: [{ action: "click", ok: true }, { action: "fill", ok: false }] } } })).meta).toBe("1/2 步成功");
+    expect(toolCallState(call("browser", { result: { call_id: "c1", text: "partial", details: { action: "batch", ok: false } } }))).toBe("error");
+    expect(presentToolCall(call("shell_stop", { args: { task_id: "job-4" } }))).toMatchObject({ name: "停止后台命令", target: "job-4" });
   });
 });

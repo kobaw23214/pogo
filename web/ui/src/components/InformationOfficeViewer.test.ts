@@ -5,7 +5,7 @@ import type { InformationOfficeView } from "@/api/informationOfficeView";
 const host = vi.hoisted(() => ({ open: vi.fn(), close: vi.fn(), status: vi.fn(), command: vi.fn(), bridge: vi.fn(), heartbeat: vi.fn(), load: vi.fn(), mounted: [] as (() => Promise<void>)[], cleanups: [] as (() => void)[], config: null as null | { events: { onDocumentReady(): Promise<void> } }, message: null as null | ((event: unknown) => void), destroyed: vi.fn(), activity: null as null | (() => void), stopActivity: vi.fn() }));
 vi.mock("vue", async original => ({ ...await original<typeof import("vue")>(), useSSRContext: () => ({ modules: new Set() }), useId: () => "fixture", onMounted: (fn: () => Promise<void>) => host.mounted.push(fn), onBeforeUnmount: (fn: () => void) => host.cleanups.push(fn) }));
 vi.mock("@/agent/officeSelectionActivity", () => ({ observeOfficeSelectionActivity: (_: unknown, changed: () => void) => { host.activity = changed; return host.stopActivity; } }));
-vi.mock("vue-i18n", () => ({ useI18n: () => ({ t: (key: string) => key }) }));
+vi.mock("vue-i18n", async original => { const { ref } = await import("vue"); return { ...await original<typeof import("vue-i18n")>(), useI18n: () => ({ t: (key: string) => key, locale: ref("zh-CN") }) }; });
 vi.mock("@/api/informationOfficeView", async original => ({ ...await original<typeof import("@/api/informationOfficeView")>(), openInformationOfficeView: host.open }));
 vi.mock("@/agent/officeTransport", async original => ({ ...await original<typeof import("@/agent/officeTransport")>(), loadOfficeEngine: host.load, officeBridge: host.bridge, officeApi: { close: host.close, status: host.status, heartbeat: host.heartbeat, command: host.command } }));
 import InformationOfficeViewer from "./InformationOfficeViewer.vue";

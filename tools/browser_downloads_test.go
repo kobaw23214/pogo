@@ -131,8 +131,8 @@ func TestBrowserDownloadsPreserveStatusBoundariesForUnavailableResponses(t *test
 		t.Run(tc.name, func(t *testing.T) {
 			link := &stubLink{replies: []BrowserReply{tc.reply}}
 			result, err := (&Browser{Link: link}).Execute(context.Background(), json.RawMessage(`{"action":"downloads"}`))
-			if err != nil {
-				t.Fatal(err)
+			if (err != nil) != !tc.reply.OK {
+				t.Fatalf("executor failure status was not preserved: %v", err)
 			}
 			for _, want := range []string{tc.want, "Only state:saved with a nonempty path", "Human takeover", "same download transfer and restrictions", "cannot bypass"} {
 				if !strings.Contains(result.Text, want) {

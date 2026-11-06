@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { setLocale } from "@/i18n";
+import { beforeEach, describe, expect, it } from "vitest";
 import type { InformationEntry } from "@/api/information";
 import { informationDescendants, informationPath, informationVisible, restoreInformationView } from "./informationLibrary";
 const entry = (id: string, parent_id: string, name: string, kind: InformationEntry["kind"] = "folder"): InformationEntry => ({ id, parent_id, name, kind, version: 1, created_at: "2026-10-18T00:00:00Z", updated_at: "2026-10-18T00:00:00Z" });
@@ -33,3 +34,6 @@ describe("Information library browsing", () => {
     expect(restoreInformationView("bad JSON", entries)).toEqual({ folder: "", selected: "", expanded: [], mode: "list", flat: false });
   });
 });
+
+// These fixtures assert Chinese labels/order; the interface now follows an explicit locale.
+beforeEach(() => setLocale("zh-CN"));

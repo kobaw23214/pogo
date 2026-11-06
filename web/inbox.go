@@ -210,6 +210,10 @@ func inboxPartsDigest(text, mode, layout string, parts []MessageInputPart) strin
 
 func (s *Session) ReceiveParts(id, text string, parts []MessageInputPart, layout, mode, expectedRun string) (InboxItem, error) {
 	var err error
+	parts, err = canonicalMCPInput(text, nil, parts, layout)
+	if err != nil {
+		return InboxItem{}, fmt.Errorf("%w: %v", errInboxInvalid, err)
+	}
 	text, _, err = normalizeMessageInput(text, nil, parts, layout)
 	if err != nil {
 		return InboxItem{}, errInboxInvalid
@@ -285,6 +289,10 @@ func (s *Session) EditInput(id, text string, revision int, withdraw bool) (Inbox
 func (s *Session) EditParts(id, text string, parts []MessageInputPart, layout string, revision int, withdraw bool) (InboxItem, error) {
 	if !withdraw {
 		var err error
+		parts, err = canonicalMCPInput(text, nil, parts, layout)
+		if err != nil {
+			return InboxItem{}, fmt.Errorf("%w: %v", errInboxInvalid, err)
+		}
 		text, _, err = normalizeMessageInput(text, nil, parts, layout)
 		if err != nil {
 			return InboxItem{}, errInboxInvalid

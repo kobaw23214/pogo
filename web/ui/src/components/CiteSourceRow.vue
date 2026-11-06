@@ -31,7 +31,7 @@ const excerptLabel = computed(() => t(outputExcerpt.value ? "cite.toolExcerpt"
 const recordedAt = computed(() => {
   if (!props.source.ts) return "";
   const value = new Date(props.source.ts);
-  return Number.isNaN(value.getTime()) ? "" : value.toLocaleString(locale.value === "zh-CN" ? "zh-CN" : "en", {
+  return Number.isNaN(value.getTime()) ? "" : value.toLocaleString(locale.value, {
     year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
   });
 });

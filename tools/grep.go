@@ -36,7 +36,8 @@ type Grep struct {
 	Cwd string
 	// Roots are extra directories this tool may search outside Cwd, already
 	// canonical. See tools.CanonicalRoots.
-	Roots []string
+	Roots      []string
+	FileAccess *FileAccess
 }
 
 type grepArgs struct {
@@ -94,7 +95,11 @@ func (t *Grep) Execute(ctx context.Context, raw json.RawMessage) (Result, error)
 		}
 	}
 
-	root, err := searchRoot(t.Cwd, a.Path, t.Roots)
+	roots, err := fileAccessRoots(t.Cwd, t.Roots, t.FileAccess)
+	if err != nil {
+		return Result{}, err
+	}
+	root, err := searchRoot(t.Cwd, a.Path, roots)
 	if err != nil {
 		return Result{}, err
 	}

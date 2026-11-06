@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { getLocale } from "@/i18n";
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { ElMessage } from "element-plus";
@@ -8,10 +9,12 @@ import type { SkillUploadResult } from "@/api/types";
 import type { AuthoredSkillSummary, SkillContent, SkillInfo, ToolCatalogEntry } from "@/api/types";
 import type { BuiltinToolEntry, McpServerGroup } from "@/api/types";
 import SkillDocumentViewer from "./SkillDocumentViewer.vue";
+import StudioEntrySkeleton from "./studio/StudioEntrySkeleton.vue";
 import ToolRow from "./tools/ToolRow.vue";
 import HiText from "./tools/HiText.vue";
 import { fuzzyScore } from "@/agent/fuzzy";
 import { skillUploadState } from "@/agent/skillExecution";
+import { builtinToolDescription, builtinSkillDescription } from "@/agent/builtinToolCopy";
 import SkillExecutionNotice from "./SkillExecutionNotice.vue";
 import McpMonitorPanel from "./McpMonitorPanel.vue";
 import AuthoredSkillDialog from "./AuthoredSkillDialog.vue";
@@ -45,13 +48,15 @@ const props = withDefaults(
     agentId?: string;
     active?: boolean;
     toolRevision?: number;
+    /** A committed Skill/MCP projection changed, independently of native tools. */
+    capabilityRevision?: number;
     toolsPending?: boolean;
     /** Hide the admin install controls; inspect/search stay. */
     readOnly?: boolean;
     /** Standalone management mode: no dock close buttons, fill the page. */
     embedded?: boolean;
   }>(),
-  { sessionId: "", agentId: "", active: true, toolRevision: 0, toolsPending: false, readOnly: false, embedded: false },
+  { sessionId: "", agentId: "", active: true, toolRevision: 0, capabilityRevision: 0, toolsPending: false, readOnly: false, embedded: false },
 );
 
 const { t, te } = useI18n();
@@ -125,7 +130,7 @@ async function load() {
     const session = props.sessionId || undefined;
     const [s, tl] = await Promise.all([api.skills(session), api.tools(session)]);
     if (generation !== catalogGeneration || !props.active) return;
-    skills.value = [...s.skills].sort((a, b) => a.name.localeCompare(b.name));
+    skills.value = [...s.skills];
     if (toolRequest === toolCatalogRequest) {
       tools.value = tl.tools;
       builtinTools.value = [...(tl.builtin ?? [])];
@@ -156,6 +161,31 @@ async function refreshTools() {
   } catch (error) {
     if (request === toolCatalogRequest && generation === catalogGeneration && props.active) toolCatalogError.value = error instanceof Error ? error.message : String(error);
   }
+}
+
+async function refreshCapabilities() {
+  if (!props.active || props.agentId && !props.sessionId) return;
+  const selectedName = selected.value?.name;
+  catalogGeneration++;
+  // A revoked document or a late read must not survive a committed projection.
+  // Preserve the user's lens/filter, and reopen only a still-authorized Skill.
+  back();
+  cache.clear();
+  catalogLoading.value = false;
+  skills.value = null;
+  tools.value = null;
+  builtinTools.value = [];
+  mcpGroups.value = null;
+  loadError.value = "";
+  toolCatalogError.value = "";
+  const loading = load();
+  // load() owns the new request generation. Compare against that generation,
+  // rather than the invalidated one, before restoring the authorized detail.
+  const generation = catalogGeneration;
+  await loading;
+  if (generation !== catalogGeneration || !props.active) return;
+  const retained = (skills.value as SkillInfo[] | null)?.find(skill => skill.name === selectedName);
+  if (retained) await openSkill(retained);
 }
 
 async function openSkill(skill: SkillInfo) {
@@ -211,7 +241,7 @@ const filterActive = computed(() => filter.value.trim() !== "");
 
 const filteredBuiltinTools = computed(() => {
   const q = filter.value.trim();
-  return builtinTools.value.filter(tool => !q || matches(q, tool.name, tool.description, tool.skill_binding ?? ''));
+  return builtinTools.value.filter(tool => !q || matches(q, tool.name, builtinToolDescription(tool.name, tool.description), tool.description, tool.skill_binding ?? ''));
 });
 const builtinToolGroups = computed(() => [
   { key: 'linked', title: 'studioTools.nativeLinkedTitle', tools: filteredBuiltinTools.value.filter(tool => !!tool.skill_binding) },
@@ -240,11 +270,11 @@ const toolFieldsOf = (tl: ToolCatalogEntry) => [
 ];
 
 const filteredSkills = computed(() => {
-  const list = (skills.value ?? []).filter(skill => skill.source !== "authored");
+  const list = (skills.value ?? []).filter(skill => skill.source !== "authored").sort((a, b) => a.name.localeCompare(b.name, getLocale()));
   const q = filter.value.trim();
   if (!q) return list;
   return list.filter((sk) => {
-    if (matches(q, sk.name, sk.description, sk.path, sk.source)) return true;
+    if (matches(q, sk.name, builtinSkillDescription(sk.name, sk.description, sk.source === "embedded"), sk.description, sk.path, sk.source)) return true;
     return (sk.tools ?? []).some((tl) => matches(q, ...toolFieldsOf(tl)));
   });
 });
@@ -252,7 +282,7 @@ const filteredSkills = computed(() => {
 const skillMatchedViaTools = (sk: SkillInfo) => {
   const q = filter.value.trim();
   if (!q) return false;
-  if (matches(q, sk.name, sk.description, sk.path, sk.source)) return false;
+  if (matches(q, sk.name, builtinSkillDescription(sk.name, sk.description, sk.source === "embedded"), sk.description, sk.path, sk.source)) return false;
   return (sk.tools ?? []).some((tl) => matches(q, ...toolFieldsOf(tl)));
 };
 
@@ -313,7 +343,7 @@ const serverTagline = (sv: McpServerGroup) =>
     : sv.last_error || "";
 
 const toolCount = (sk: SkillInfo) => sk.tools?.length ?? 0;
-const emptySkills = computed(() => skills.value !== null && skills.value.length === 0 && authored.value.length === 0 && !authoredError.value);
+const emptySkills = computed(() => skills.value !== null && skills.value.length === 0 && authored.value.length === 0 && !authoredLoading.value && !authoredError.value);
 
 // A different Agent session is a different catalog: refetch and drop the old
 // SKILL.md preview too, so the previous Agent's content can never linger.
@@ -347,6 +377,7 @@ watch(
 
 // Refresh effective tools in place; keep the selected description and filter.
 watch(() => props.toolRevision, () => { void refreshTools(); });
+watch(() => props.capabilityRevision, () => { void refreshCapabilities(); }, { flush: "sync" });
 onBeforeUnmount(() => { catalogGeneration++; detailGeneration++; authoredGeneration++; if (typeof window !== "undefined") window.removeEventListener("pogo-skills-changed", authoredChanged); });
 
 // ── Upload ─────────────────────────────────────────────────────────────────
@@ -509,7 +540,7 @@ watch(uploadOpen, (open) => {
         </button>
       </header>
       <div class="body">
-        <div v-if="detailLoading" class="note">{{ t("skillsPanel.loading") }}</div>
+        <div v-if="detailLoading" role="status" :aria-label="t('skillsPanel.loading')" aria-busy="true"><StudioEntrySkeleton area="document" /></div>
         <div v-else-if="detailError" class="note bad">{{ t("skillsPanel.loadFailed") }}{{ detailError }} <button class="ghost" type="button" @click="openSkill(selected)">{{ t("common.retry") }}</button></div>
         <SkillDocumentViewer v-else-if="detail" :key="`${sessionId}:${selected.name}`" :scope-key="`${sessionId}:${selected.name}`" :root-document="detail" :load-document="path => api.skillContent(selected!.name, sessionId || undefined, path)" />
       </div>
@@ -554,7 +585,7 @@ watch(uploadOpen, (open) => {
         <p v-if="toolsPending" class="tool-policy-pending" role="status" data-testid="tools-catalog-pending">{{ t('studioTools.pending') }}</p>
         <div v-if="agentId && !sessionId" class="note">{{ t("skillsPanel.sessionRequired") }}</div>
         <div v-else-if="loadError" class="note bad">{{ t("skillsPanel.loadFailed") }}{{ loadError }} <el-button size="small" text @click="reload">{{ t("mcpMonitor.retry") }}</el-button></div>
-        <div v-else-if="skills === null" class="note">{{ t("skillsPanel.loading") }}</div>
+        <div v-else-if="skills === null" role="status" :aria-label="t('skillsPanel.loading')" aria-busy="true"><StudioEntrySkeleton area="sessions" /></div>
         <div v-else-if="emptySkills && !filteredMcp.length && (view !== 'tool' || !builtinTools.length && !tools?.length)" class="note">
           {{ view === "tool"
             ? t(sessionId ? "skillsPanel.toolsEmptySession" : "skillsPanel.toolsEmpty")
@@ -580,11 +611,11 @@ watch(uploadOpen, (open) => {
             <section v-if="agentId" class="authored-skills" data-testid="authored-skills-list">
               <div class="section-head"><span>{{ t('skillAuthoring.library') }}</span><span class="section-note">{{ t('skillAuthoring.libraryHint') }}</span></div>
               <div v-if="authoredError" class="note bad" role="alert">{{ t('skillAuthoring.libraryFailed') }} <el-button text size="small" @click="loadAuthored">{{ t('skillAuthoring.retry') }}</el-button></div>
-              <p v-else-if="authoredLoading && !authored.length" class="note" role="status">{{ t('skillAuthoring.loading') }}</p>
+              <div v-else-if="authoredLoading && !authored.length" role="status" :aria-label="t('skillAuthoring.loading')" aria-busy="true"><StudioEntrySkeleton area="sessions" /></div>
               <p v-else-if="!authored.length" class="note authored-empty">{{ t('skillAuthoring.empty') }}</p>
               <button v-for="item in filteredAuthored" :key="item.id" type="button" class="authored-skill-card" data-testid="authored-skill-entry" @click="openAuthored(item)"><span><strong><HiText :text="item.name" :q="filter" /></strong><span class="tag">v{{ item.version }}</span><span v-if="!item.enabled" class="tag">{{ t('skillAuthoring.draft') }}</span></span><p><HiText :text="item.description" :q="filter" /></p></button>
             </section>
-            <div v-if="filterActive && !filteredSkills.length && !filteredAuthored.length" class="note">{{ t("skillsPanel.noSkillMatch") }}</div>
+            <div v-if="filterActive && !authoredLoading && !filteredSkills.length && !filteredAuthored.length" class="note">{{ t("skillsPanel.noSkillMatch") }}</div>
             <div v-for="sk in filteredSkills" :key="sk.name" class="skill-card">
               <div class="skill-head">
                 <button class="skill-name" :title="t('skillsPanel.openSkill')" @click="openSkill(sk)">
@@ -607,7 +638,7 @@ watch(uploadOpen, (open) => {
                   <el-icon class="caret"><ArrowDown /></el-icon>
                 </button>
               </div>
-              <div class="skill-desc"><HiText :text="sk.description" :q="filter" /></div>
+              <div class="skill-desc"><HiText :text="builtinSkillDescription(sk.name, sk.description, sk.source === 'embedded')" :q="filter" /></div>
               <div class="skill-source" :title="sk.path">
                 <HiText :text="sourceLabel(sk.source) + ' · ' + sk.path" :q="filter" />
               </div>
@@ -661,7 +692,7 @@ watch(uploadOpen, (open) => {
               <div class="section-head"><span>{{ t(group.title) }}</span><span class="section-note">{{ t(toolCatalogError ? 'studioTools.lastConfirmedHint' : sessionId ? 'studioTools.effectiveHint' : 'studioTools.catalogHint') }}</span></div>
               <div v-for="tool in group.tools" :key="tool.name" class="native-tool-row" data-testid="native-tool-row" :data-tool-name="tool.name">
                 <div><strong><HiText :text="tool.name" :q="filter" /></strong><span v-if="tool.skill_binding" class="tag">{{ t('studioTools.linkedSkill', { skill: tool.skill_binding }) }}</span><span v-if="tool.protected" class="tag">{{ t('studioTools.protected') }}</span><span v-if="tool.read_only" class="tag">{{ t('studioTools.readOnly') }}</span></div>
-                <p><HiText :text="tool.description" :q="filter" /></p>
+                <p><HiText :text="builtinToolDescription(tool.name, tool.description)" :q="filter" /></p>
               </div>
             </section>
 

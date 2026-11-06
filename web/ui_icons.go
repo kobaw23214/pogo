@@ -345,7 +345,7 @@ func (m *Manager) replaceUIIcons(in uiIconLibrary) (uiIconLibrary, error) {
 	if encoder.Encode(uiIconDocument{Version: 1, uiIconLibrary: in}) != nil || buffer.Len() > uiIconsMaxBody {
 		return uiIconLibrary{}, errors.New("图标库超过存储上限")
 	}
-	if writeWorkflowFileAtomic(path, buffer.Bytes()) != nil {
+	if writePrivateFileAtomic(path, buffer.Bytes()) != nil {
 		return uiIconLibrary{}, errors.New("图标保存失败；原版本已保留")
 	}
 	return in, nil

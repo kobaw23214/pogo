@@ -1,3 +1,4 @@
+import { gt } from "@/i18n";
 export type DataTableFormat = "csv" | "json";
 export interface DataTableColumn { id: string; label: string }
 export interface DataTableData { columns: DataTableColumn[]; rows: string[][] }
@@ -11,7 +12,7 @@ const MAX_COLUMNS = 40;
 const MAX_CELLS = 10_000;
 
 function columns(labels: string[]): DataTableColumn[] {
-  return labels.map((label, index) => ({ id: `c${index}`, label: label.trim() || `列 ${index + 1}` }));
+  return labels.map((label, index) => ({ id: `c${index}`, label: label.trim() || gt("uiCoverage.table.column", { index: index + 1 }) }));
 }
 
 function withinBudget(table: DataTableData): boolean {

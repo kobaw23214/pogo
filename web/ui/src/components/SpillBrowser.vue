@@ -7,7 +7,7 @@ import type { SpillEntries, SpillEntry, SpillFile } from "@/api/types";
 
 const props = defineProps<{ modelValue: boolean; root: string }>();
 const emit = defineEmits<{ "update:modelValue": [boolean] }>();
-const { t } = useI18n();
+const { t, locale } = useI18n();
 const visible = computed({ get: () => props.modelValue, set: value => emit("update:modelValue", value) });
 const directory = ref<SpillEntries | null>(null), file = ref<SpillFile | null>(null);
 const directoryLoading = ref(false), fileLoading = ref(false);
@@ -155,7 +155,7 @@ onBeforeUnmount(stop);
           <p v-if="fileLoading" class="pane-state" role="status">{{ t('spillBrowser.loading') }}</p>
           <div v-else-if="fileError" class="pane-state bad" role="alert">{{ fileError }}<button type="button" @click="loadFile(selectedPath)">{{ t('spillBrowser.retry') }}</button></div>
           <template v-else-if="file">
-            <header class="file-header"><strong>{{ file.name }}</strong><code>{{ fullFile }}</code><span>{{ formatBytes(file.size) }}<template v-if="file.modified_at"> · {{ new Date(file.modified_at).toLocaleString() }}</template></span></header>
+            <header class="file-header"><strong>{{ file.name }}</strong><code>{{ fullFile }}</code><span>{{ formatBytes(file.size) }}<template v-if="file.modified_at"> · {{ new Date(file.modified_at).toLocaleString(locale) }}</template></span></header>
             <p v-if="file.binary" class="pane-state">{{ t('spillBrowser.binary') }}</p>
             <template v-else>
               <p v-if="!file.content" class="pane-note">{{ t('spillBrowser.emptyFile') }}</p>

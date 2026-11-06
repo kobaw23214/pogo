@@ -7,6 +7,8 @@ import VueJsonPretty from "vue-json-pretty";
 import "vue-json-pretty/lib/styles.css";
 import { api } from "@/api/client";
 import { registerStudioNavigationGuard } from "@/agent/studioNavigation";
+import { executionDetailMode, setExecutionDetailMode, type ExecutionDetailMode } from "@/agent/worklogPrefs";
+import { skillStateLabel } from "@/agent/skillSelection";
 import type {
   AttachmentPolicy,
   ConfigProbeResult,
@@ -27,11 +29,16 @@ import type {
 import { highlightLines } from "./highlight";
 import { buildCurlPreview } from "./mcpCurl";
 import SettingsContainer from "./SettingsContainer.vue";
+import StudioEntrySkeleton from "@/components/studio/StudioEntrySkeleton.vue";
 import McpExportDialog from "./McpExportDialog.vue";
 import McpLogsPanel from "./McpLogsPanel.vue";
 import IconLibrarySettings from "./IconLibrarySettings.vue";
 import SpillBrowser from "./SpillBrowser.vue";
 import ModelMetadataProbe from "./ModelMetadataProbe.vue";
+import MemoryManager from "./MemoryManager.vue";
+import WebsiteSettings from "./WebsiteSettings.vue";
+const websiteSettingsDirty = ref(false);
+const websiteSettings = ref<{ discard(): void } | null>(null);
 const iconLibraryDirty = ref(false);
 import McpMonitorPanel from "./McpMonitorPanel.vue";
 import {
@@ -80,7 +87,7 @@ import {
 // client would send, so a changed configuration can be checked by hand before
 // it is trusted to a session.
 
-const props = defineProps<{ modelValue: boolean; embedded?: boolean; section?: SettingsSection }>();
+const props = defineProps<{ modelValue: boolean; embedded?: boolean; section?: SettingsSection; memoryAgentId?: string }>();
 const emit = defineEmits<{
   "update:modelValue": [boolean];
   saved: [];
@@ -89,7 +96,11 @@ const emit = defineEmits<{
   "navigate-section": [SettingsSection];
 }>();
 
-const { t } = useI18n();
+const { t, locale } = useI18n();
+const executionDetail = computed({
+  get: () => executionDetailMode.value,
+  set: (value: ExecutionDetailMode) => setExecutionDetailMode(value),
+});
 
 const visible = computed({
   get: () => props.modelValue,
@@ -118,8 +129,22 @@ const anchors = ["providers", "models", "config"] as const;
 type Anchor = (typeof anchors)[number];
 const anchor = ref<Anchor>("providers");
 const paneEl = ref<HTMLElement | null>(null);
+const memoryManager = ref<{ confirmLeave(): Promise<boolean> } | null>(null);
+const memoryDirty = ref(false);
 
-function goAnchor(a: Anchor) {
+async function changeSheet(next: SettingsSheet) {
+  if (sheet.value === "memory" && next !== "memory" && memoryDirty.value) {
+    if (!(await memoryManager.value?.confirmLeave())) return;
+  }
+  sheet.value = next;
+}
+
+function onMemoryAutoChanged(on: boolean) {
+  if (prefsLoaded.value) prefsLoaded.value.memory_auto = on;
+}
+
+async function goAnchor(a: Anchor) {
+  if (sheet.value === "memory" && memoryDirty.value && !(await memoryManager.value?.confirmLeave())) return;
   sheet.value = "service";
   // Light the clicked entry now; the smooth scroll's scrollspy events converge
   // on the same anchor at the destination.
@@ -240,6 +265,10 @@ const showRawPretty = computed(
 // the footer button and every dialog-native close (X, esc, overlay) via
 // before-close, so no path discards silently.
 async function tryClose(done: () => void) {
+  if (memoryDirty.value) {
+    if (!(await memoryManager.value?.confirmLeave())) return;
+    await nextTick();
+  }
   // Every sheet's edits are guarded, now that all saves live in the footer:
   // closing past a dirty allowlist or sandbox choice must warn the same way
   // it always has for providers and storage.
@@ -253,6 +282,7 @@ async function tryClose(done: () => void) {
       confirmButtonText: t("settingsDialog.discard"),
       cancelButtonText: t("settingsDialog.keepEditing"),
     });
+    websiteSettings.value?.discard();
     done();
   } catch {
     // keep editing
@@ -436,25 +466,46 @@ function cancelPwChange() {
 const meAdmin = ref(false);
 const accounts = ref<{ username: string; created?: string; admin?: boolean; has_token: boolean }[]>([]);
 const accountsError = ref("");
+const authReady = ref(false);
+const authLoading = ref(false);
+const authError = ref("");
+const accountsReady = ref(false);
+const accountsLoading = ref(false);
+let authRequest = 0;
+let accountsRequest = 0;
 
-function loadAuthMode(includeAccounts = true) {
-  api.authStatus().then(
-    (st) => {
-      // Delegated embeds do not mount these server-wide credential settings.
-      if (st.mode === "token" || st.mode === "password") authMode.value = st.mode;
-      meAdmin.value = st.admin;
-      if (st.admin && includeAccounts) void loadAccounts();
-    },
-    () => (authMode.value = "token"),
-  );
+async function loadAuthMode(includeAccounts = true) {
+  const request = ++authRequest;
+  authLoading.value = true;
+  authError.value = "";
+  try {
+    const st = await api.authStatus();
+    if (request !== authRequest) return;
+    // A pending permission check must not present the non-admin empty state.
+    if (st.mode === "token" || st.mode === "password") authMode.value = st.mode;
+    meAdmin.value = st.admin;
+    authReady.value = true;
+    if (st.admin && includeAccounts) await loadAccounts();
+  } catch (err) {
+    if (request === authRequest) authError.value = err instanceof Error ? err.message : String(err);
+  } finally {
+    if (request === authRequest) authLoading.value = false;
+  }
 }
 
 async function loadAccounts() {
+  const request = ++accountsRequest;
+  accountsLoading.value = true;
   accountsError.value = "";
   try {
-    accounts.value = (await api.accounts()).accounts;
+    const result = await api.accounts();
+    if (request !== accountsRequest) return;
+    accounts.value = result.accounts;
+    accountsReady.value = true;
   } catch (err) {
-    accountsError.value = err instanceof Error ? err.message : String(err);
+    if (request === accountsRequest) accountsError.value = err instanceof Error ? err.message : String(err);
+  } finally {
+    if (request === accountsRequest) accountsLoading.value = false;
   }
 }
 
@@ -530,18 +581,21 @@ async function removeAccount(a: { username: string; admin?: boolean }) {
 
 const sandbox = ref<SandboxInfo | null>(null);
 const sandboxError = ref("");
+const sandboxLoading = ref(false);
 const sandboxSaving = ref(false);
 const sandboxChoice = ref<"" | "enforce" | "degrade" | "off">("");
 
 async function loadSandbox() {
+  sandboxLoading.value = true;
   sandboxError.value = "";
   try {
     const info = await api.getSandbox();
     sandbox.value = info;
     sandboxChoice.value = info.override;
   } catch (err) {
-    sandbox.value = null;
     sandboxError.value = err instanceof Error ? err.message : String(err);
+  } finally {
+    sandboxLoading.value = false;
   }
 }
 
@@ -603,6 +657,7 @@ const sandboxStatusText = computed(() => {
 // a reload.
 const attachPolicy = ref<AttachmentPolicy | null>(null);
 const attachError = ref("");
+const attachLoading = ref(false);
 const attachSaving = ref(false);
 // A local copy while editing; saved as a whole, like every other section.
 const attachPick = ref(new Set<string>());
@@ -666,6 +721,7 @@ function snapCapIdx(mb: number): number {
 }
 
 async function loadAttach() {
+  attachLoading.value = true;
   attachError.value = "";
   try {
     const p = await api.getAttachmentPolicy();
@@ -673,8 +729,9 @@ async function loadAttach() {
     attachPick.value = new Set(p.allowed_exts);
     capIdx.value = snapCapIdx(p.max_mb);
   } catch (err) {
-    attachPolicy.value = null;
     attachError.value = err instanceof Error ? err.message : String(err);
+  } finally {
+    attachLoading.value = false;
   }
 }
 
@@ -783,6 +840,8 @@ interface MCPRow {
 const mcpPath = ref("");
 const mcpLoadError = ref("");
 const mcpError = ref("");
+const mcpLoading = ref(false);
+const mcpReady = ref(false);
 const mcpSaving = ref(false);
 const mcpServers = ref<MCPRow[]>([]);
 const mcpStatusList = ref<MCPServerStatus[]>([]);
@@ -989,9 +1048,7 @@ function serveGroupStateText(g: ServePickerGroup): string {
 }
 
 function serveGroupDownHint(g: ServePickerGroup): string {
-  // Runtime states are stable slugs (revoked, needs_configuration …) and
-  // read fine raw in both locales.
-  if (g.kind === "runtime") return t("settingsDialog.mcpSrvPickRuntimeDown", { state: g.serverState });
+  if (g.kind === "runtime") return t("settingsDialog.mcpSrvPickRuntimeDown", { state: skillStateLabel(g.serverState) || g.serverState });
   return t("settingsDialog.mcpSrvPickServerDown", { state: serveGroupStateText(g) });
 }
 
@@ -1078,14 +1135,18 @@ async function saveMCPServe() {
 }
 
 async function loadMCP() {
+  mcpLoading.value = true;
   mcpError.value = "";
   try {
     applyMCPView(await api.getMCP());
+    mcpReady.value = true;
   } catch (err) {
     // A failed refresh keeps the cards already on screen — clearing them was
     // a destructive flash of the same family the models module had. The
     // first load starts empty anyway, so nothing is lost by keeping stale.
     mcpError.value = err instanceof Error ? err.message : String(err);
+  } finally {
+    mcpLoading.value = false;
   }
 }
 
@@ -1477,34 +1538,16 @@ const snapshotTurns = ref(0);
 const snapshotTurnsLimited = ref(false);
 const turnsEffectiveText = computed(() => storage.value?.turnsLimited ? t("settingsDialog.turnsEffective", { n: storage.value.turnsEffective }) : t("settingsDialog.turnsUnlimited"));
 const storageError = ref("");
+const storageLoading = ref(false);
 const storageSaving = ref(false);
 const pruning = ref(false);
 const spillBrowserVisible = ref(false);
-// The memory-distillation toggle saves itself on flip — a switch is its own
-// commit button, unlike the numeric fields above.
-const memoryAuto = ref(false);
-const memoryAutoSaving = ref(false);
-
-async function saveMemoryAuto(on: boolean) {
-  memoryAutoSaving.value = true;
-  try {
-    await api.setMemoryAuto(on);
-    if (prefsLoaded.value) prefsLoaded.value.memory_auto = on;
-    ElMessage.success(t("settingsDialog.memorySaved"));
-  } catch (err) {
-    memoryAuto.value = !on; // the server kept the old value; the switch must say so
-    ElMessage.error(t("settingsDialog.saveFailed", { msg: err instanceof Error ? err.message : String(err) }));
-  } finally {
-    memoryAutoSaving.value = false;
-  }
-}
-
 async function loadStorage() {
+  storageLoading.value = true;
   storageError.value = "";
   try {
     const info = await api.getPrefs();
     prefsLoaded.value = info.prefs;
-    memoryAuto.value = !!info.prefs.memory_auto;
     const turnOverride = info.turns?.max_turns ?? 0;
     storage.value = {
       days: info.prefs.spill_retention_days,
@@ -1525,20 +1568,21 @@ async function loadStorage() {
     // saving from here.
     if (info.load_error) storageError.value = info.load_error;
   } catch (err) {
-    storage.value = null;
     storageError.value = err instanceof Error ? err.message : String(err);
+  } finally {
+    storageLoading.value = false;
   }
 }
 
 function formatMB(bytes: number): string {
-  return (bytes / 1048576).toFixed(1) + " MB";
+  return (bytes / 1048576).toLocaleString(locale.value, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + " MB";
 }
 
 const lastSweepText = computed(() => {
   const sw = storage.value?.lastSweep;
   if (!sw) return t("settingsDialog.storageNoSweep");
   return t("settingsDialog.storageLastSweep", {
-    time: new Date(sw.time).toLocaleString(),
+    time: new Date(sw.time).toLocaleString(locale.value),
     n: sw.removed,
     size: formatMB(sw.bytes),
   });
@@ -1558,11 +1602,12 @@ async function saveStorage() {
   }
   storageSaving.value = true;
   try {
-    // The wholesale prefs save carries the loaded object plus this sheet's
-    // days edit, so fields other sheets own survive it; the turn cap then
+    // Refresh preferences before changing this sheet's days field: the memory
+    // manager (including another tab) may have changed them since page load.
+    // The turn cap then
     // goes through its dedicated endpoint, which persists it server-side and
     // pushes it into already-open conversations.
-    const info = await api.savePrefs({ ...(prefsLoaded.value ?? {}), spill_retention_days: days });
+    const info = await api.saveSpillRetentionDays(days);
     storage.value.days = info.prefs.spill_retention_days;
     snapshotDays.value = storage.value.days;
     prefsLoaded.value = info.prefs;
@@ -1862,7 +1907,7 @@ function buildCurl(p: ProviderRow): string {
           {
             role: "user",
             content: [
-              { type: "text", text: visionPreview.value[0]?.ask ?? "（探测题加载中）" },
+              { type: "text", text: visionPreview.value[0]?.ask ?? t("settingsCoverage.probeLoading") },
               { type: "image_url", image_url: { url: visionPreview.value[0]?.image_url ?? "" } },
             ],
           },
@@ -2077,13 +2122,14 @@ async function onImportFile(e: Event) {
 // ── 打开与模块路由 / Open & module routing ────────────────────────────────────
 function hasUnsavedChanges(): boolean {
   const models = snapshotFormJSON.value !== "" && configDirty.value;
-  const general = storageDirty.value || attachDirty.value || sandboxDirty.value || iconLibraryDirty.value;
+  const general = storageDirty.value || attachDirty.value || sandboxDirty.value || iconLibraryDirty.value || websiteSettingsDirty.value;
   const mcp = mcpDirty.value || (mcpSrvRowSnapshot.value !== "" && mcpSrvDirty.value);
   if (activeSection.value === "models") return models;
   if (activeSection.value === "general") return general;
   if (activeSection.value === "mcp") return mcp;
   if (activeSection.value === "account") return false;
-  return models || general || mcp;
+  if (activeSection.value === "memory") return memoryDirty.value;
+  return models || general || mcp || memoryDirty.value;
 }
 
 async function confirmLeave(): Promise<boolean> {
@@ -2134,12 +2180,40 @@ function loadSection(s: SettingsSection) {
   if (s === "models") void load();
   else if (s === "mcp") void loadMCP();
   else if (s === "account") loadAuthMode();
+  else if (s === "memory") return; // The owner-scoped catalog needs no privileged config or live chat.
   else {
     loadAuthMode(false);
     void loadStorage();
     void loadSandbox();
     void loadAttach();
   }
+}
+
+// Keep the navigation mounted while each sheet resolves its first real
+// snapshot. A later refresh leaves the populated form in place.
+const initialPaneLoading = computed(() => {
+  if (sheet.value === "account") return (!authReady.value && authLoading.value)
+    || (meAdmin.value && !accountsReady.value && (authLoading.value || accountsLoading.value));
+  if (sheet.value === "mcp" || sheet.value === "mcpServe") return !mcpReady.value && mcpLoading.value;
+  if (sheet.value === "storage") return !storage.value && storageLoading.value;
+  if (sheet.value === "sandbox") return !sandbox.value && sandboxLoading.value;
+  if (sheet.value === "attach") return !attachPolicy.value && attachLoading.value;
+  return false;
+});
+const initialPaneError = computed(() => {
+  if (sheet.value === "account") return !authReady.value ? authError.value : meAdmin.value && !accountsReady.value ? authError.value || accountsError.value : "";
+  if (sheet.value === "mcp" || sheet.value === "mcpServe") return !mcpReady.value ? mcpError.value : "";
+  if (sheet.value === "storage") return !storage.value ? storageError.value : "";
+  if (sheet.value === "sandbox") return !sandbox.value ? sandboxError.value : "";
+  if (sheet.value === "attach") return !attachPolicy.value ? attachError.value : "";
+  return "";
+});
+function retryPane() {
+  if (sheet.value === "account") void loadAuthMode();
+  else if (sheet.value === "mcp" || sheet.value === "mcpServe") void loadMCP();
+  else if (sheet.value === "storage") void loadStorage();
+  else if (sheet.value === "sandbox") void loadSandbox();
+  else if (sheet.value === "attach") void loadAttach();
 }
 
 // Lives at the end of setup on purpose: immediate: true runs this during
@@ -2188,12 +2262,13 @@ watch(activeSection, (s, prev) => {
     :title="t('settingsDialog.title')"
     :before-close="tryClose"
   >
-    <!-- The blank loading/error states are for a pane with nothing on it yet.
-         Once a file is on screen, re-loads (module re-entry, the post-save
-         re-sync) refresh in place — swapping the whole pane for one note is
-         the flash this gate used to cause. -->
-    <div v-if="(!embedded || activeSection === 'models') && !configReady && loading" class="note">{{ t("common.loading") }}</div>
-    <div v-else-if="(!embedded || activeSection === 'models') && !configReady && loadError" class="note bad">{{ t("settingsDialog.loadFailed") }}{{ loadError }}</div>
+    <!-- Loading replaces only a pane with nothing on it yet. Once a file is
+         on screen, re-loads refresh in place rather than tearing it down. -->
+    <div v-if="(!embedded || activeSection === 'models') && !configReady && loading" role="status" :aria-label="t('common.loading')" aria-busy="true"><StudioEntrySkeleton area="settings" /></div>
+    <div v-else-if="(!embedded || activeSection === 'models') && !configReady && loadError">
+      <p class="note bad" role="alert">{{ t("settingsDialog.loadFailed") }}{{ loadError }}</p>
+      <button class="mini" @click="load">{{ t('common.retry') }}</button>
+    </div>
     <template v-else>
       <!-- A re-load failed with the previous file still showing: say so above
            the pane instead of replacing it. -->
@@ -2201,7 +2276,7 @@ watch(activeSection, (s, prev) => {
       <!-- GitHub-settings shaped: the nav is an index of pages grouped by
            concern; the pane is one page at a time with its own header. -->
       <div class="settings-split">
-        <nav v-if="activeSection !== 'account'" class="settings-nav" aria-label="设置子模块">
+        <nav v-if="activeSection !== 'account' && activeSection !== 'memory'" class="settings-nav" :aria-label="t('settingsCoverage.settingsNavigation')">
           <!-- The service group's entries are anchors into its one sheet; the
                storage entry is a sheet of its own. Visually one list. -->
           <!-- Embedded in Studio, the shell's sidebar owns the module level,
@@ -2242,7 +2317,7 @@ watch(activeSection, (s, prev) => {
               class="nav-item"
               :class="{ on: sheet === 'storage' }"
               :aria-current="sheet === 'storage'"
-              @click="sheet = 'storage'"
+              @click="changeSheet('storage')"
             >
               <span>{{ t("settingsDialog.storage") }}</span>
               <span v-if="storageDirty" class="dirty-dot" :title="t('settingsDialog.unsavedDot')" />
@@ -2251,7 +2326,7 @@ watch(activeSection, (s, prev) => {
               class="nav-item"
               :class="{ on: sheet === 'sandbox' }"
               :aria-current="sheet === 'sandbox'"
-              @click="sheet = 'sandbox'"
+              @click="changeSheet('sandbox')"
             >
               <span>{{ t("settingsDialog.sandbox") }}</span>
               <span v-if="sandboxDirty" class="dirty-dot" :title="t('settingsDialog.unsavedDot')" />
@@ -2260,13 +2335,25 @@ watch(activeSection, (s, prev) => {
               class="nav-item"
               :class="{ on: sheet === 'attach' }"
               :aria-current="sheet === 'attach'"
-              @click="sheet = 'attach'"
+              @click="changeSheet('attach')"
             >
               <span>{{ t("settingsDialog.attach") }}</span>
               <span v-if="attachDirty" class="dirty-dot" :title="t('settingsDialog.unsavedDot')" />
             </button>
-            <button class="nav-item" :class="{ on: sheet === 'icons' }" :aria-current="sheet === 'icons'" @click="sheet = 'icons'">
+            <button class="nav-item" :class="{ on: sheet === 'icons' }" :aria-current="sheet === 'icons'" @click="changeSheet('icons')">
               <span>{{ t('iconLibrary.title') }}</span><span v-if="iconLibraryDirty" class="dirty-dot" :title="t('settingsDialog.unsavedDot')" />
+            </button>
+          </template>
+          <template v-if="navShows('websites')">
+            <button class="nav-item" :class="{ on: sheet === 'websites' }" :aria-current="sheet === 'websites'" @click="changeSheet('websites')" data-testid="website-settings-open">
+              {{ t('websiteSettings.title') }}<span v-if="websiteSettingsDirty" class="dirty-dot" :title="t('settingsDialog.unsavedDot')" />
+            </button>
+          </template>
+          <template v-if="navShows('memory')">
+            <div class="nav-group">{{ t('memoryPanel.preferencesTitle') }}</div>
+            <button class="nav-item" :class="{ on: sheet === 'memory' }" :aria-current="sheet === 'memory'" @click="changeSheet('memory')" data-testid="memory-settings-open">
+              <span>{{ t('memoryPanel.preferencesTitle') }}</span>
+              <span v-if="memoryDirty" class="dirty-dot" :title="t('settingsDialog.unsavedDot')" />
             </button>
           </template>
           <template v-if="navShows('account')">
@@ -2275,7 +2362,7 @@ watch(activeSection, (s, prev) => {
               class="nav-item"
               :class="{ on: sheet === 'account' }"
               :aria-current="sheet === 'account'"
-              @click="sheet = 'account'"
+              @click="changeSheet('account')"
             >
               <span>{{ t("settingsDialog.accountSecurity") }}</span>
             </button>
@@ -2288,7 +2375,7 @@ watch(activeSection, (s, prev) => {
               class="nav-item"
               :class="{ on: sheet === 'mcp' }"
               :aria-current="sheet === 'mcp'"
-              @click="sheet = 'mcp'"
+              @click="changeSheet('mcp')"
             >
               <span>{{ t("settingsDialog.mcpNavClient") }}</span>
               <span v-if="mcpDirty" class="dirty-dot" :title="t('settingsDialog.unsavedDot')" />
@@ -2297,7 +2384,7 @@ watch(activeSection, (s, prev) => {
               class="nav-item"
               :class="{ on: sheet === 'mcpServe' }"
               :aria-current="sheet === 'mcpServe'"
-              @click="sheet = 'mcpServe'"
+              @click="changeSheet('mcpServe')"
             >
               <span>{{ t("settingsDialog.mcpNavServe") }}</span>
               <span v-if="mcpSrvDirty" class="dirty-dot" :title="t('settingsDialog.unsavedDot')" />
@@ -2306,7 +2393,7 @@ watch(activeSection, (s, prev) => {
               class="nav-item"
               :class="{ on: sheet === 'mcpMonitor' }"
               :aria-current="sheet === 'mcpMonitor'"
-              @click="mcpMonitorTrace = ''; sheet = 'mcpMonitor'"
+              @click="mcpMonitorTrace = ''; changeSheet('mcpMonitor')"
             >
               <span>{{ t("mcpMonitor.title") }}</span>
             </button>
@@ -2315,16 +2402,23 @@ watch(activeSection, (s, prev) => {
                end, so they stay put while the pane scrolls; the fullscreen
                dialog keeps them in the section head below. -->
           <div v-if="embedded && sheet === 'mcpServe'" class="nav-actions">
-            <button class="mini" @click="openMCPExport('serve')">{{ t("settingsDialog.mcpExportServe") }}</button>
-            <button class="mini" :disabled="mcpSaving || mcpSrvEnvTaken || !mcpSrvDirty" @click="saveMCPServe">
+            <button class="mini" :disabled="!mcpReady" @click="openMCPExport('serve')">{{ t("settingsDialog.mcpExportServe") }}</button>
+            <button class="mini" :disabled="!mcpReady || mcpSaving || mcpSrvEnvTaken || !mcpSrvDirty" @click="saveMCPServe">
               {{ t("common.save") }}
             </button>
           </div>
         </nav>
 
         <div ref="paneEl" class="settings-pane form-body" @scroll.passive="onPaneScroll">
+          <div v-if="initialPaneLoading" class="pane-page" role="status" :aria-label="t('common.loading')" aria-busy="true">
+            <StudioEntrySkeleton area="form" style="padding: 0" />
+          </div>
+          <div v-else-if="initialPaneError" class="pane-page">
+            <p class="note bad" role="alert">{{ initialPaneError }}</p>
+            <button class="mini" @click="retryPane">{{ t('common.retry') }}</button>
+          </div>
           <!-- ── 模型服务:接口 / 模型 / 配置文件,一份 providers.json 的三个视图 ── -->
-          <template v-if="sheet === 'service'">
+          <template v-else-if="sheet === 'service'">
             <section data-anchor="providers" class="pane-page">
               <header class="pane-head">
                 <h3>{{ t("settingsDialog.providers") }}</h3>
@@ -2551,6 +2645,18 @@ watch(activeSection, (s, prev) => {
               <h3>{{ t("settingsDialog.storage") }}</h3>
               <p>{{ t("settingsDialog.descStorage") }}</p>
             </header>
+            <div class="sect">
+              <div class="prow-line">
+                <label class="fld">
+                  <span>{{ t("activityRun.setting") }}</span>
+                  <select v-model="executionDetail" data-testid="execution-detail-mode">
+                    <option value="summary">{{ t("activityRun.summaryMode") }}</option>
+                    <option value="full">{{ t("activityRun.fullMode") }}</option>
+                  </select>
+                </label>
+              </div>
+              <p class="hint">{{ t("activityRun.settingHint") }}</p>
+            </div>
             <div v-if="storage" class="sect">
               <div class="sect-head">
                 <span>{{ t("settingsDialog.spill") }}</span>
@@ -2591,18 +2697,6 @@ watch(activeSection, (s, prev) => {
               </div>
               <p class="hint">{{ t("settingsDialog.turnsHint", { flag: storage.turnsFlag }) }}</p>
             </div>
-            <div v-if="storage" class="sect">
-              <div class="sect-head">
-                <span>{{ t("settingsDialog.memoryTitle") }}</span>
-                <el-switch
-                  :model-value="memoryAuto"
-                  :disabled="memoryAutoSaving"
-                  data-testid="memory-auto"
-                  @change="saveMemoryAuto"
-                />
-              </div>
-              <p class="hint">{{ t("settingsDialog.memoryAutoHint") }}</p>
-            </div>
             <div v-else-if="storageError" class="sect">
               <div class="sect-head">
                 <span>{{ t("settingsDialog.storage") }}</span>
@@ -2612,18 +2706,27 @@ watch(activeSection, (s, prev) => {
           </section>
 
           <!-- ── 账户：修改登录密码（模式感知：token 部署显示说明而非表单） ── -->
+          <MemoryManager
+            v-else-if="sheet === 'memory'"
+            ref="memoryManager"
+            :active="visible && sheet === 'memory'"
+            :initial-agent-id="memoryAgentId"
+            @dirty-change="memoryDirty = $event"
+            @auto-change="onMemoryAutoChanged"
+          />
           <section v-else-if="sheet === 'account'" class="pane-page">
             <header class="pane-head">
               <h3>{{ t("settingsDialog.accountSecurity") }}</h3>
               <p>{{ t("settingsDialog.descAccount") }}</p>
             </header>
+            <p v-if="authError" class="note bad" role="alert">{{ authError }}</p>
             <div v-if="meAdmin" class="sect">
               <div class="sect-title-row">
                 <h4>{{ t("settingsDialog.accountsTitle") }}</h4>
                 <button class="mini" @click="loadAccounts">{{ t("settingsDialog.accountsRefresh") }}</button>
               </div>
               <p v-if="accountsError" class="hint rejected">{{ accountsError }}</p>
-              <table v-else class="acct-table">
+              <table v-if="accountsReady" class="acct-table">
                 <thead>
                   <tr>
                     <th>{{ t("settingsDialog.acctUser") }}</th>
@@ -3364,6 +3467,7 @@ watch(activeSection, (s, prev) => {
           </section>
 
           <IconLibrarySettings v-show="sheet === 'icons'" :active="visible && sheet === 'icons'" @dirty="iconLibraryDirty = $event" />
+          <WebsiteSettings ref="websiteSettings" v-show="sheet === 'websites'" :active="visible && sheet === 'websites'" @dirty="websiteSettingsDirty = $event" />
 
           <ul v-if="warnings.length" class="warnings">
             <li v-for="(wn, i) in warnings" :key="i">{{ wn }}</li>

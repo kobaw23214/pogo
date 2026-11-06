@@ -13,7 +13,8 @@ import (
 	"strings"
 )
 
-// Skill policy updates leave identity, instructions, native tools and MCP fixed.
+// Skill policy updates leave identity and instructions fixed. Native tools and
+// MCP have their own effective policies at the same idle boundaries.
 type studioSkillPolicy struct {
 	Skills   *[]string       `json:"skills"`
 	Binding  json.RawMessage `json:"binding,omitempty"`
@@ -98,6 +99,9 @@ func (s *Session) syncStudioSkillPolicy(startingInput string) (studioSkillSync, 
 		known[skillIDOf(sk)] = sk
 	}
 	memoryRoots := s.mgr.workspaceFor(s.root).memory.Roots()
+	// Pool ownership is resolved before Session.mu; projection below uses the
+	// future Skill set while retaining this session's effective MCP selection.
+	pool := s.mgr.poolFor(s.owner)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.closing || s.studioID == "" {
@@ -219,14 +223,25 @@ func (s *Session) syncStudioSkillPolicy(startingInput string) (studioSkillSync, 
 	}
 	roots := append(append([]string(nil), v.readRoots...), memoryRoots...)
 	update := tools.SkillContextUpdate{Previous: s.mcpReserved, Tools: projected, ReadRoots: roots, ChildReadRoots: v.readRoots, SkillReads: skillReadTargets(v.snapshot), SkillPaths: v.pathFlags, ExplicitSkills: nextBinding.Agent.Skills != nil, ReadOnlySkillTools: tools.ReadOnlySynthNames(v.synthTools), Cwd: s.cwd, ProtectionManifest: s.skillProtectionManifest}
+	var mcpProjected []tools.Tool
+	var mcpTrusted []string
+	if pool != nil {
+		all, grants, _ := pool.SnapshotServers(s.mcpOnly)
+		mcpProjected, mcpTrusted = dedupeMCP(all, grants, projected)
+		update.MCP = &mcpProjected
+	}
 	prompt, promptParts := s.buildSkillPrompt(v, runtimePrompt)
 	if err := s.agent.ReplaceSkillContext(prompt, update, func() error { return s.mgr.studio.commitSkillPolicy(s.ID, desired.Revision, p) }, promptParts...); err != nil {
 		return result, err
 	}
 	s.policy.replaceSkillReadOnly(s.mcpReserved, projected, v.synthRO)
+	if update.MCP != nil {
+		s.policy.ReplaceMCP(mcpProjected, mcpTrusted)
+	}
 	s.invocationSkills, s.runtimeSkill, s.mcpReserved = available, bound, projected
 	s.skillSnapshot = append([]skillSnapshotEntry(nil), v.snapshot...)
 	s.hub.SetOverhead(s.agent.OverheadBreakdown())
+	s.hub.Publish(Event{Type: EvCapabilitiesChanged})
 	return studioSkillSync{Changed: true, Revision: desired.Revision, DesiredRevision: desired.Revision}, nil
 }
 func (m *Manager) syncStudioSkills(agentID string) {
@@ -239,7 +254,12 @@ func (m *Manager) syncStudioSkills(agentID string) {
 	}
 	m.mu.Unlock()
 	for _, s := range sessions {
-		_, _ = s.SyncStudioSkillPolicy()
+		result, err := s.SyncStudioSkillPolicy()
+		if err != nil {
+			s.hub.Publish(Event{Type: EvError, Error: "Skill 配置尚未同步：" + err.Error()})
+		} else if result.Deferred {
+			s.hub.Publish(Event{Type: EvCapabilitiesChanged})
+		}
 	}
 }
 func (s *Server) handleStudioSkillSync(w http.ResponseWriter, r *http.Request) {

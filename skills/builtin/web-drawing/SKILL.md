@@ -106,6 +106,29 @@ is only for when they did not.
   then use a `html-preview` fence containing only JSON with `path` and an optional
   `title`. Never paste executable HTML into the answer; ordinary `html` fences
   remain source code.
+- For a static website or interactive page using project-local HTML, CSS,
+  JavaScript, modules, JSON and media, use that built-in preview instead of
+  starting a Python or Node HTTP server. Keep referenced assets inside the
+  preview project root. Completed edits refresh the preview automatically.
+  The URL is temporary and does not constitute permanent website deployment.
+- The static preview blocks external dependencies and APIs, form submissions,
+  subframes and workers. A backend, SSR, server-side API or WebSocket server
+  needs a managed Web service capability; use one only if it is actually in
+  the available tools and follow its declared contract. If unavailable or the
+  project exceeds its supported scope, explain the limitation. Do not replace
+  missing hosting with `nohup`, an unmanaged background server, guessed
+  `localhost` URLs or container port changes.
+- When the available skills include `web-development`, use its managed-service
+  workflow for backend applications. Its current profile supports standard-library
+  Python without dependency installation/build; loading the skill grants no tool
+  or deployment permission. Keep static HTML on the existing preview path.
+- Managed IP path previews use the returned `/_pogo/web/<48hex>/` grant root.
+  Browser assets and APIs must use relative URLs such as `./assets/app.js` and
+  `./api/counter`; `/api/counter` is root-absolute and blocked by the preview CSP.
+  WebSocket URLs must retain that pathname prefix and the current host, using
+  `ws:` on HTTP or `wss:` on HTTPS. The gateway strips the prefix before proxying
+  to server routes such as `/api/counter`. Follow `web-development` for details;
+  do not remove iframe sandboxing or globally patch browser request APIs.
 - Do not use raw HTML, JavaScript, iframes or external embeds. Rich formatting
   should clarify the answer, not decorate every response.
 

@@ -120,6 +120,25 @@ func TestFDBrowserKeepsChannelAndPageFailuresApart(t *testing.T) {
 	}
 }
 
+func TestFDBrowserToolMarksFailedActionWithoutPoisoningChannel(t *testing.T) {
+	link := &recordingLink{reply: BrowserReply{OK: false, Error: "stale ref e9"}}
+	child, cleanup := pipePair(t, &Subagent{Browser: link}, "browser-failure-status")
+	defer cleanup()
+	child.backend = BrowserBackendNative
+	browser := &Browser{Link: child}
+	result, err := browser.Execute(context.Background(), json.RawMessage(`{"action":"snapshot"}`))
+	if err == nil || result.Details.(map[string]any)["ok"] != false || !strings.Contains(result.Text, "stale ref e9") || child.unusable != "" {
+		t.Fatalf("page failure was lost or poisoned the transport: %+v %v", result, err)
+	}
+	link.mu.Lock()
+	link.reply = BrowserReply{OK: true, Text: "Fresh observation"}
+	link.mu.Unlock()
+	result, err = browser.Execute(context.Background(), json.RawMessage(`{"action":"snapshot"}`))
+	if err != nil || !strings.Contains(result.Text, "Fresh observation") || len(link.seen()) != 2 {
+		t.Fatalf("a corrected action could not use the same delegated channel: %+v %v", result, err)
+	}
+}
+
 // A dead parent must fail closed and stay failed. Retrying a broken pipe once per
 // call turns one failure into one per turn for the rest of the run.
 func TestFDBrowserFailsClosedAndLatchesWhenTheParentIsGone(t *testing.T) {

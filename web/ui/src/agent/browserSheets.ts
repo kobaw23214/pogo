@@ -11,7 +11,7 @@ export function validBrowserBinding(value: unknown): value is BrowserSheetBindin
   return typeof v.sessionId === "string" && !!v.sessionId && /^ctx_[a-f0-9]{24}$/.test(v.context_ref) && /^t[1-9]\d*$/.test(v.tab_id);
 }
 export function browserSheetVisible(tab: DockTab, sessionId: string | null): boolean {
-  if (tab.kind === "html" || tab.kind === "skill") return tab.parentSession === sessionId;
+  if (tab.kind === "html" || tab.kind === "skill" || tab.kind === "website") return tab.parentSession === sessionId;
   if (tab.kind === "sentinel") return !tab.parentSession || tab.parentSession === sessionId;
   return tab.kind !== "browser" || (!tab.browserBinding ? !!sessionId : tab.browserBinding.sessionId === sessionId);
 }

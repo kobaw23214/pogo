@@ -1,10 +1,13 @@
 <script setup lang="ts">
+import { useI18n } from "vue-i18n";
+const { t: tr } = useI18n();
 import { computed, onBeforeUnmount, ref, shallowRef } from 'vue';
 import { Check, Upload } from '@element-plus/icons-vue';
 import { api } from '@/api/client';
 import type { SkillUploadResult } from '@/api/types';
 import type { SkillExecutionStatus } from '@/api/skillTypes';
 import { canConfigureUploadedSkill, skillUploadState } from '@/agent/skillExecution';
+import { knownHostReason } from '@/agent/hostStatusCopy';
 import { registerStudioNavigationGuard } from '@/agent/studioNavigation';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import SkillExecutionNotice from '@/components/SkillExecutionNotice.vue';
@@ -61,13 +64,13 @@ async function upload(candidate: File) {
     if (disposed) return;
     const uncertain = (phase.value as typeof phase.value | 'installing') === 'installing';
     phase.value = e instanceof DOMException && e.name === 'AbortError' ? 'cancelled' : 'error';
-    error.value = phase.value === 'cancelled' ? '上传已取消，可重新选择文件。' : errorText(e);
-    if (uncertain && !(e as { status?: number }).status) error.value += ' 文件可能已安装，请刷新列表确认。';
+    error.value = phase.value === 'cancelled' ? tr('studioManagement.text267') : errorText(e);
+    if (uncertain && !(e as { status?: number }).status) error.value += tr('studioManagement.text268');
   } finally { if (controller.value === current) controller.value = null; }
 }
 
 function finishInstall(installed: SkillUploadResult) {
-  if (!installed.name && installed.status !== 'kept_old') throw new Error('服务器未返回安装结果，请刷新 Skill 列表确认。');
+  if (!installed.name && installed.status !== 'kept_old') throw new Error(tr('studioManagement.text269'));
   result.value = installed; phase.value = 'done';
   if (installed.status !== 'kept_old') {
     emit('installed', installed);
@@ -104,7 +107,7 @@ function drag(event: DragEvent, delta: number) {
 function dropped(event: DragEvent) {
   event.preventDefault(); dragDepth.value = 0;
   if (busy.value) return;
-  if (event.dataTransfer?.files.length !== 1) { error.value = '一次上传一个 Skill ZIP。'; return; }
+  if (event.dataTransfer?.files.length !== 1) { error.value = tr('studioManagement.text270'); return; }
   void upload(event.dataTransfer.files[0]!);
 }
 const leaveConfirm = ref<InstanceType<typeof ConfirmDialog> | null>(null);
@@ -113,10 +116,10 @@ function confirmInterrupt(): boolean | Promise<boolean> {
   // installing/resolving are already server-side; leaving cannot undo them.
   const serverSide = phase.value === 'installing' || phase.value === 'resolving';
   return leaveConfirm.value?.ask({
-    title: '中断上传？',
-    body: serverSide ? '服务端仍在安装，离开后请刷新 Skill 列表确认结果。' : '离开将中断本次上传，已传输的进度不会保留。',
-    confirmText: '中断并离开',
-    cancelText: '继续等待',
+    title: tr('studioManagement.text271'),
+    body: serverSide ? tr('studioManagement.text272') : tr('studioManagement.text273'),
+    confirmText: tr('studioManagement.text274'),
+    cancelText: tr('studioManagement.text275'),
     danger: true,
   }) ?? false;
 }
@@ -133,51 +136,51 @@ onBeforeUnmount(() => { disposed = true; controller.value?.abort(); unregister()
 </script>
 
 <template>
-  <el-dialog :model-value="true" title="上传 Skill" width="min(660px, 94vw)" append-to-body :close-on-click-modal="false" :before-close="close">
-    <div class="upload-intro">上传 Skill 的说明和所需文件，再为 Agent 配置。工具能否执行还需检查运行环境与依赖。</div>
+  <el-dialog :model-value="true" :title="tr('studioManagement.text208')" width="min(660px, 94vw)" append-to-body :close-on-click-modal="false" :before-close="close">
+    <div class="upload-intro">{{ tr('studioManagement.text276') }}</div>
     <SkillExecutionNotice v-if="!result" :execution="execution" />
     <input ref="input" type="file" accept=".zip,application/zip" hidden @change="picked" />
     <div class="dropzone" :class="{ over: dragDepth > 0, busy, complete: phase === 'done' && !executionPending }" @dragenter="drag($event, 1)" @dragleave="drag($event, -1)" @dragover.prevent @drop="dropped">
       <span class="upload-icon"><el-icon><Check v-if="phase === 'done'" /><Upload v-else /></el-icon></span>
-      <strong>{{ file?.name ?? '拖入 Skill ZIP，或选择文件' }}</strong>
-      <span class="hint">{{ file ? bytes(file.size) : maxBytes > 0 ? `最大 ${bytes(maxBytes)}` : '支持包含工具、运行环境和数据的大文件包' }}</span>
-      <button v-if="!busy" class="button" type="button" @click="pick">{{ file ? '重新选择文件' : '选择 ZIP 文件' }}</button>
+      <strong>{{ file?.name ?? tr('studioManagement.text277') }}</strong>
+      <span class="hint">{{ file ? bytes(file.size) : maxBytes > 0 ? tr('studioManagement.text278', { value0: bytes(maxBytes) }) : tr('studioManagement.text279') }}</span>
+      <button v-if="!busy" class="button" type="button" @click="pick">{{ file ? tr('studioManagement.text280') : tr('studioManagement.text220') }}</button>
       <div v-if="busy" class="transfer" role="status" aria-live="polite">
-        <div class="transfer-label"><span>{{ phase === 'installing' ? '传输完成，正在校验并安装…' : phase === 'resolving' ? '正在安装新版本并清理旧版本…' : `正在上传 ${percent}%` }}</span><span>{{ phase === 'uploading' ? `${bytes(loaded)} / ${bytes(total)}` : '' }}</span></div>
-        <div class="progress" role="progressbar" aria-label="上传进度" :aria-valuenow="percent" aria-valuemin="0" aria-valuemax="100"><span :style="{ width: `${percent}%` }" /></div>
-        <div class="transfer-label"><span>{{ phase === 'uploading' ? `${bytes(speed)}/s` : '大型工具包解包需要一些时间，请保持页面打开。' }}</span><button v-if="phase === 'uploading'" type="button" class="text-button" @click="controller?.abort()">取消上传</button></div>
+        <div class="transfer-label"><span>{{ phase === 'installing' ? tr('studioManagement.text281') : phase === 'resolving' ? tr('studioManagement.text282') : tr('studioManagement.text283', { value0: percent }) }}</span><span>{{ phase === 'uploading' ? `${bytes(loaded)} / ${bytes(total)}` : '' }}</span></div>
+        <div class="progress" role="progressbar" :aria-label="tr('studioManagement.text284')" :aria-valuenow="percent" aria-valuemin="0" aria-valuemax="100"><span :style="{ width: `${percent}%` }" /></div>
+        <div class="transfer-label"><span>{{ phase === 'uploading' ? `${bytes(speed)}/s` : tr('studioManagement.text285') }}</span><button v-if="phase === 'uploading'" type="button" class="text-button" @click="controller?.abort()">{{ tr('studioManagement.text286') }}</button></div>
       </div>
     </div>
     <p v-if="error" class="error" role="alert">{{ error }}</p>
-    <div v-if="phase === 'confirm' && pending" class="confirm-box" role="alertdialog" aria-label="确认替换 Skill 版本">
-      <strong>检测到同一 Skill 的其他版本</strong>
-      <p>本次上传「{{ pending.incoming?.name || pending.incoming?.id }}」v{{ pending.incoming?.version }}，已安装版本：</p>
-      <ul><li v-for="v in pending.existing" :key="v.skill_id">v{{ v.version }}<span v-if="v.installed_at"> · 安装于 {{ fmtDate(v.installed_at) }}</span><span v-if="v.revoked"> · 已停用</span></li></ul>
-      <p class="hint">替换：安装新版本并删除上面列出的旧版本；仍引用旧版本的会话会保留，但不再能使用该 Skill。使用旧版本：放弃本次上传，已安装的内容保持不变。</p>
+    <div v-if="phase === 'confirm' && pending" class="confirm-box" role="alertdialog" :aria-label="tr('studioManagement.text287')">
+      <strong>{{ tr('studioManagement.text288') }}</strong>
+      <p>{{ tr('studioSentences.incomingSkillVersion', { name: pending.incoming?.name || pending.incoming?.id || '', version: pending.incoming?.version ?? '' }) }}</p>
+      <ul><li v-for="v in pending.existing" :key="v.skill_id">v{{ v.version }}<span v-if="v.installed_at"> {{ tr('studioManagement.text291') }} {{ fmtDate(v.installed_at) }}</span><span v-if="v.revoked"> {{ tr('studioManagement.text292') }}</span></li></ul>
+      <p class="hint">{{ tr('studioManagement.text293') }}</p>
     </div>
     <div v-if="result" class="installed" :class="{ pending: executionPending }" role="status">
       <template v-if="result.status === 'kept_old'">
-        <strong>已保留旧版本，本次上传未安装</strong><p>暂存在服务器上的上传文件已丢弃，Skill 列表保持不变。</p>
+        <strong>{{ tr('studioManagement.text294') }}</strong><p>{{ tr('studioManagement.text295') }}</p>
       </template>
       <template v-else>
-        <strong>{{ result.name }} 已安装<span v-if="result.version"> · v{{ result.version }}</span><span v-if="executionPending"> · 执行未就绪</span></strong>
-        <p v-if="executionPending">可先配置 Agent 并保存草稿；发布前需完成运行环境与依赖检查。</p>
-        <p v-else-if="result.ready === true">工具与依赖已就绪，可为 Agent 配置使用。</p>
-        <p v-else>Skill 内容已安装，可在创建或编辑 Agent 时选择。</p>
+        <strong>{{ tr('studioSentences.installedSkill', { name: result.name }) }}<span v-if="result.version"> · v{{ result.version }}</span><span v-if="executionPending"> {{ tr('studioManagement.text296') }}</span></strong>
+        <p v-if="executionPending">{{ tr('studioManagement.text297') }}</p>
+        <p v-else-if="result.ready === true">{{ tr('studioManagement.text298') }}</p>
+        <p v-else>{{ tr('studioManagement.text299') }}</p>
         <SkillExecutionNotice :execution="result.execution" :issues="result.issues" />
       </template>
-      <ul v-if="result.warnings?.length"><li v-for="warning in result.warnings" :key="warning">{{ warning }}</li></ul>
+      <ul v-if="result.warnings?.length"><li v-for="warning in result.warnings" :key="warning">{{ knownHostReason(warning) }}</li></ul>
     </div>
-    <details class="format-help"><summary>如何组织 Skill 包</summary><p>普通 Skill 包含 <code>SKILL.md</code> 和可选的参考资料、脚本。需要携带独立工具环境时，增加 <code>pogo-skill.json</code> 描述工具、运行时和数据；系统自动完成安装。均可包在单个文件夹内，文件夹名须与 SKILL.md 的 name 一致。</p><p>仅接受标准 Skill ZIP，根目录必须包含带有 name 和 description 的 SKILL.md。同一版本的工具包不能被不同内容覆盖，请更新版本号。</p></details>
+    <details class="format-help"><summary>{{ tr('studioManagement.text300') }}</summary><p>{{ tr('studioManagement.text301') }} <code>SKILL.md</code> {{ tr('studioManagement.text302') }} <code>pogo-skill.json</code> {{ tr('studioManagement.text303') }}</p><p>{{ tr('studioManagement.text304') }}</p></details>
     <template #footer>
       <div class="dialog-actions">
         <template v-if="phase === 'confirm'">
-          <button class="button" type="button" :disabled="busy" @click="resolve('keep-old')">使用旧版本</button>
-          <button class="button primary" type="button" :disabled="busy" @click="resolve('replace')">替换为新版本</button>
+          <button class="button" type="button" :disabled="busy" @click="resolve('keep-old')">{{ tr('studioManagement.text305') }}</button>
+          <button class="button primary" type="button" :disabled="busy" @click="resolve('replace')">{{ tr('studioManagement.text306') }}</button>
         </template>
         <template v-else>
-          <button class="button" type="button" @click="close">{{ result ? '完成' : '关闭' }}</button>
-          <button v-if="result && canConfigureUploadedSkill(result)" class="button primary" type="button" @click="emit('create', result.skill_ids!, result.name)">{{ executionPending ? '用此 Skill 创建草稿' : '用此 Skill 创建 Agent' }}</button>
+          <button class="button" type="button" @click="close">{{ result ? tr('studioManagement.text307') : tr('studioManagement.text054') }}</button>
+          <button v-if="result && canConfigureUploadedSkill(result)" class="button primary" type="button" @click="emit('create', result.skill_ids!, result.name)">{{ executionPending ? tr('studioManagement.text308') : tr('studioManagement.text232') }}</button>
         </template>
       </div>
     </template>

@@ -7,11 +7,15 @@ import type { ToolPresentation } from "@/agent/toolPresentation";
 import StreamTailWindow from "./StreamTailWindow.vue";
 import ToolCallHeader from "./ToolCallHeader.vue";
 
-const props = defineProps<{ id: string; text: string; streaming: boolean; durationMs?: number; compact?: boolean }>();
+const props = defineProps<{ id: string; text: string; streaming: boolean; durationMs?: number; compact?: boolean; fullDetails?: boolean; reveal?: boolean; revealVersion?: number }>();
 const { t } = useI18n();
 const bodyId = useId();
 const expanded = useCardDisclosure(() => props.id && props.id !== "live" ? `${props.id}:thinking` : undefined, false);
-const fullOpen = computed(() => expanded.value && !props.compact);
+const revealDismissed = ref(false);
+watch(() => [props.reveal, props.revealVersion] as const, () => { revealDismissed.value = false; });
+const fullOpen = computed(() => !!props.fullDetails || !!props.reveal && !revealDismissed.value || expanded.value && !props.compact);
+const mounted = ref(fullOpen.value);
+watch(fullOpen, value => { if (value) mounted.value = true; }, { flush: "sync" });
 const presentation = computed<ToolPresentation>(() => ({
   glyph: "thinking",
   name: t("thinkingBlock.title"),
@@ -41,7 +45,12 @@ function onWheel(event: WheelEvent) {
 function onKeydown(event: KeyboardEvent) {
   if (["ArrowUp", "PageUp", "Home"].includes(event.key)) { followTail = false; interactionVersion++; }
 }
-function toggle() { if (!props.compact) expanded.value = !expanded.value; }
+function toggle() {
+  if (props.compact || props.fullDetails) return;
+  const next = !fullOpen.value;
+  revealDismissed.value = true;
+  expanded.value = next;
+}
 
 watch(fullOpen, async value => {
   if (!value) {
@@ -84,10 +93,10 @@ watch(() => props.text, async (value, previous) => {
 
 <template>
   <section v-if="text" class="thinking-block" :class="{ compact }">
-    <ToolCallHeader :presentation="presentation" :expandable="!compact" :open="fullOpen" :controls="bodyId" @toggle="toggle" />
-    <div v-if="fullOpen" :id="bodyId" ref="body" class="thinking-full" tabindex="0" role="region" :aria-label="t('thinkingBlock.full')"
+    <ToolCallHeader :presentation="presentation" :expandable="!compact && !fullDetails" :open="fullOpen" :controls="bodyId" @toggle="toggle" />
+    <div v-if="mounted" v-show="fullOpen" :id="bodyId" ref="body" class="thinking-full" tabindex="0" role="region" :aria-label="t('thinkingBlock.full')"
       @scroll.passive="onScroll" @wheel.passive="onWheel" @keydown="onKeydown">{{ text }}</div>
-    <StreamTailWindow v-else-if="streaming" class="thinking-recent" :text="text" :streaming="streaming" :lines="3" />
+    <StreamTailWindow v-if="!fullOpen && streaming" class="thinking-recent" :text="text" :streaming="streaming" :lines="1" />
   </section>
 </template>
 

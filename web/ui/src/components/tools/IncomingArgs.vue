@@ -3,13 +3,17 @@ import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { incomingPath, previewLines } from "@/agent/argsPreview";
 import { createIncomingSampler } from "@/agent/incomingSampler";
+import { resolveToolIdentity, useToolIdentityCatalog } from "@/agent/toolIdentity";
+import type { ToolPresentation } from "@/agent/toolPresentation";
 import type { IncomingArgs } from "@/api/types";
 import type { OpenFileTarget } from "../dockSheets";
+import ToolCallHeader from "../ToolCallHeader.vue";
 
-const props = defineProps<{ incoming: IncomingArgs }>();
+const props = defineProps<{ incoming: IncomingArgs; compact?: boolean }>();
 const emit = defineEmits<{ "open-file": [OpenFileTarget] }>();
 
 const { t } = useI18n();
+const catalog = useToolIdentityCatalog();
 const sampled = ref({ ...props.incoming });
 const sampler = createIncomingSampler<IncomingArgs>(value => { sampled.value = value; });
 watch(
@@ -32,11 +36,27 @@ const removed = computed(() => sampled.value.preview_removed ?? 0);
 // Plain text on purpose: syntax-highlighting a partial document on every
 // fragment is the O(n²) trap the raw tail window exists to avoid.
 const preview = computed(() => previewLines(sampled.value.tail ?? "", 10).join("\n"));
+const presentation = computed<ToolPresentation>(() => {
+  const identity = resolveToolIdentity(props.incoming.name, path.value ? { path: path.value } : undefined, undefined, catalog.value);
+  return {
+    ...identity,
+    name: t("toolDisclosure.generatingArguments"),
+    secondary: identity.name,
+    target: path.value || identity.target || t("toolDisclosure.objectPending"),
+    protocolName: props.incoming.name,
+    state: "done",
+    statusLabel: t("toolDisclosure.notExecuted"),
+  };
+});
+const fileTarget = computed<OpenFileTarget | undefined>(() => path.value ? { path: path.value, name: path.value.split(/[\\/]/).pop() || path.value } : undefined);
 </script>
 
 <template>
-  <div class="incoming" :class="{ file: fileTool }">
-    <div class="line">
+  <div class="incoming" :class="{ file: fileTool, compact }">
+    <ToolCallHeader v-if="compact && !fileTool" layered :presentation="presentation" :file-target="fileTarget" @open-file="emit('open-file', $event)" />
+    <!-- Active file generation keeps the original live row, diff counts and
+         tail preview. Result disclosure must not hide work still streaming. -->
+    <div v-else class="line">
       <span class="dot" />
       <span class="name">{{ incoming.name || t("incomingArgs.toolFallback") }}</span>
       <button v-if="path" type="button" class="path file-link" :title="t('toolCall.openFile', { path })" :data-open-file="path" @click="openPath">{{ path }}</button>
@@ -50,7 +70,7 @@ const preview = computed(() => previewLines(sampled.value.tail ?? "", 10).join("
         <span v-if="fileTool" class="badge pending">{{ t("incomingArgs.notWritten") }}</span>
       </span>
     </div>
-    <pre v-if="preview" class="preview">{{ preview }}</pre>
+    <pre v-if="(fileTool || !compact) && preview" class="preview">{{ preview }}</pre>
   </div>
 </template>
 
@@ -60,6 +80,7 @@ const preview = computed(() => previewLines(sampled.value.tail ?? "", 10).join("
 .incoming {
   margin: 6px 0;
 }
+.incoming.compact:not(.file) { margin: 0; }
 
 .line {
   display: flex;

@@ -1,106 +1,55 @@
 import { createI18n } from "vue-i18n";
 import type { Composer } from "vue-i18n";
+import { watch } from "vue";
+import { SUPPORTED_LOCALES, preferredLocale, resolveLocale, type Locale } from "./locales";
+export { SUPPORTED_LOCALES, LOCALE_LABELS, preferredLocale, resolveLocale, type Locale } from "./locales";
 
-// Locales the UI ships. zh-CN is the fallback because the codebase's source
-// strings were originally written in Chinese; everything else reads English
-// rather than a translation nobody maintains.
-export const SUPPORTED_LOCALES = ["zh-CN", "en"] as const;
-export type Locale = (typeof SUPPORTED_LOCALES)[number];
-
-export const LOCALE_LABELS: Record<Locale, string> = {
-  "zh-CN": "中文",
-  en: "English",
-};
-
-interface MessageModule {
-  namespace: string;
-  // Message tables are nested key/text maps; vue-i18n validates them at
-  // runtime, so keeping the value type loose here avoids fighting generics.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  messages: Partial<Record<Locale, Record<string, any>>>;
-}
-
-// Each file under ./messages owns one namespace and carries both locales,
-// so per-component copy lives in a single file and namespaces never collide.
-const modules = import.meta.glob<{ default: MessageModule }>("./messages/*.ts", {
-  eager: true,
-});
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const messages: Record<Locale, Record<string, any>> = {
-  "zh-CN": {},
-  en: {},
-};
-for (const mod of Object.values(modules)) {
-  const { namespace, messages: nsMessages } = mod.default;
+export interface MessageTree { [key: string]: string | MessageTree }
+interface MessageModule { namespace: string; messages: Partial<Record<Locale, MessageTree>> }
+const modules = import.meta.glob<{ default: MessageModule }>("./messages/*.ts", { eager: true });
+// Language packs are bundled locally: changing a preference never sends user
+// content to a translation service and works without an external network.
+const packs = import.meta.glob<{ default: MessageTree }>("./locales/*.json", { eager: true });
+export const messageCatalogs = Object.fromEntries(SUPPORTED_LOCALES.map(locale => [locale, {}])) as Record<Locale, MessageTree>;
+for (const { default: mod } of Object.values(modules)) {
   for (const locale of SUPPORTED_LOCALES) {
-    const table = nsMessages[locale];
-    if (table) messages[locale][namespace] = table;
+    const table = mod.messages[locale];
+    if (table) messageCatalogs[locale][mod.namespace] = table;
   }
+}
+for (const [path, mod] of Object.entries(packs)) {
+  const locale = path.slice(path.lastIndexOf("/") + 1, -5);
+  if ((SUPPORTED_LOCALES as readonly string[]).includes(locale)) Object.assign(messageCatalogs[locale as Locale], mod.default);
 }
 
 const STORAGE_KEY = "pogo-locale";
-
 function detectLocale(): Locale {
-  try {
-    const saved =
-      typeof localStorage !== "undefined" ? localStorage.getItem(STORAGE_KEY) : null;
-    if (saved && (SUPPORTED_LOCALES as readonly string[]).includes(saved)) {
-      return saved as Locale;
-    }
-  } catch {
-    // private mode etc. — fall through to navigator
-  }
-  const nav = typeof navigator !== "undefined" ? navigator.language : "";
-  if (nav.startsWith("zh")) return "zh-CN";
-  return "en";
+  let saved: string | null = null;
+  try { saved = typeof localStorage !== "undefined" ? localStorage.getItem(STORAGE_KEY) : null; } catch { /* Private mode. */ }
+  const languages = typeof navigator === "undefined" ? [] : navigator.languages?.length ? navigator.languages : [navigator.language];
+  return preferredLocale(saved, languages);
 }
-
-const shortDateTime: Intl.DateTimeFormatOptions = {
-  year: "numeric",
-  month: "numeric",
-  day: "numeric",
-  hour: "2-digit",
-  minute: "2-digit",
-  hour12: false,
-};
-const datetimeFormats = {
-  "zh-CN": { short: shortDateTime },
-  en: {
-    short: {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-    } satisfies Intl.DateTimeFormatOptions,
-  },
-};
-
-export const i18n = createI18n({
-  legacy: false,
-  locale: detectLocale(),
-  fallbackLocale: "zh-CN",
-  messages,
-  datetimeFormats,
+const short: Intl.DateTimeFormatOptions = { year: "numeric", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false };
+const datetimeFormats = Object.fromEntries(SUPPORTED_LOCALES.map(locale => [locale, { short: locale === "en" ? { ...short, month: "short" as const } : short }]));
+export const i18n = createI18n({ legacy: false, locale: detectLocale(), fallbackLocale: "en", messages: messageCatalogs, datetimeFormats });
+const globalComposer = () => i18n.global as unknown as Composer;
+export function getLocale(): Locale { return resolveLocale(globalComposer().locale.value) ?? "en"; }
+export function setLocale(locale: Locale | string): void {
+  const resolved = resolveLocale(locale);
+  if (!resolved) return;
+  globalComposer().locale.value = resolved;
+  try { localStorage.setItem(STORAGE_KEY, resolved); } catch { /* Session-only preference. */ }
+}
+watch(() => globalComposer().locale.value, locale => {
+  if (typeof document !== "undefined" && document.documentElement) document.documentElement.lang = resolveLocale(locale) ?? "en";
+}, { immediate: true, flush: "sync" });
+if (typeof window !== "undefined" && typeof window.addEventListener === "function") window.addEventListener("storage", event => {
+  if (event.key !== STORAGE_KEY) return;
+  const locale = resolveLocale(event.newValue);
+  if (locale) globalComposer().locale.value = locale;
 });
 
-// createI18n's generics type `global` loosely; with legacy:false it is always
-// a Composer at runtime, whose locale is a writable ref.
-const globalComposer = () => i18n.global as unknown as Composer;
-
-export function setLocale(locale: Locale) {
-  globalComposer().locale.value = locale;
-  try {
-    localStorage.setItem(STORAGE_KEY, locale);
-  } catch {
-    // private mode — session-only locale is fine
-  }
-}
-
-// For non-component modules (agent/timeline.ts, agent/useAgentStream.ts, ...)
-// that can't call useI18n(). Components should prefer useI18n() instead.
+/** Shared translation entry for presenters outside Vue component setup. */
 export function gt(key: string, params?: Record<string, unknown>): string {
   const t = globalComposer().t;
   return params ? t(key, params) : t(key);

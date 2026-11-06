@@ -19,7 +19,8 @@ type Edit struct {
 	Cwd string
 	// Roots are additional directories this tool may modify, for the agent's memory
 	// notes. Empty for every other caller. See Options.WriteRoots.
-	Roots []string
+	Roots      []string
+	FileAccess *FileAccess
 	// Journal, when non-nil, snapshots each file's pre-image on first change.
 	Journal            Journal
 	ProtectionManifest string
@@ -120,7 +121,11 @@ func (t *Edit) Execute(ctx context.Context, raw json.RawMessage) (Result, error)
 	if len(a.Edits) == 0 {
 		return Result{}, fmt.Errorf("edits must contain at least one replacement")
 	}
-	path, err := resolve(t.Cwd, a.Path, t.Roots...)
+	roots, err := fileAccessRoots(t.Cwd, t.Roots, t.FileAccess)
+	if err != nil {
+		return Result{}, err
+	}
+	path, err := resolve(t.Cwd, a.Path, roots...)
 	if err != nil {
 		return Result{}, err
 	}

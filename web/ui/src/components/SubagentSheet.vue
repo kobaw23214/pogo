@@ -11,6 +11,7 @@ import { normalizeMessages } from "@/api/messageContent";
 import { buildTimeline, transcriptAction, transcriptSettled } from "@/agent/timeline";
 import { buildExchanges } from "@/agent/exchanges";
 import { provideCardDisclosure } from "@/agent/cardDisclosure";
+import { provideToolIdentityCatalog } from "@/agent/toolIdentity";
 import { emptyLive, type Message, type ToolResult } from "@/api/types";
 
 /**
@@ -53,6 +54,7 @@ const displaySessionId = ref<string | undefined>();
 // This dock lives inside the parent AgentView, but reads another transcript.
 // Shadow its provider even before the authenticated response gives us an id.
 provideCardDisclosure(() => displaySessionId.value ? `subagent:${displaySessionId.value}` : undefined);
+provideToolIdentityCatalog(() => displaySessionId.value);
 const results = ref<Record<string, ToolResult>>({});
 /** missing distinguishes "never answered" (404: gone or not yet created) from
  * an empty transcript. */

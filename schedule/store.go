@@ -79,9 +79,9 @@ type Job struct {
 	ID           string          `json:"id"`
 	Prompt       string          `json:"prompt"`
 	Workdir      string          `json:"workdir"`
-	// WorkflowID names a published workflow the in-process runner fires
-	// instead of a prompt child (web's workflow schedules). Empty is an
-	// ordinary prompt job.
+	// WorkflowID only identifies a retired platform-workflow job on disk.
+	// Keep the marker and its hash representation so an old entry can never
+	// become an ordinary prompt job. These entries are not exposed or executed.
 	WorkflowID string `json:"workflow_id,omitempty"`
 	Kind       string `json:"kind"` // KindCron, KindEvery, KindAt
 	// Cron is the expression as the user wrote it, macros included. Parsed
@@ -242,7 +242,17 @@ func (s *Store) ErrLogPath(id string) string {
 func (s *Store) Load() ([]Job, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.loadLocked()
+	jobs, err := s.loadLocked()
+	if err != nil {
+		return nil, err
+	}
+	supported := jobs[:0]
+	for _, job := range jobs {
+		if job.WorkflowID == "" {
+			supported = append(supported, job)
+		}
+	}
+	return supported, nil
 }
 
 func (s *Store) loadLocked() ([]Job, error) {
@@ -428,7 +438,13 @@ func (s *Store) Update(id string, fn func(*Job)) error {
 	}
 	for i := range jobs {
 		if jobs[i].ID == id {
+			if jobs[i].WorkflowID != "" {
+				return ErrRetiredWorkflow
+			}
 			fn(&jobs[i])
+			if jobs[i].WorkflowID != "" {
+				return ErrRetiredWorkflow
+			}
 			return s.saveLocked(jobs)
 		}
 	}

@@ -20,7 +20,8 @@ type BrowserLink interface {
 	// channel failures — no browser connected, no browser task armed, timeout,
 	// cancelled — while page-level failures (a stale ref, a refused navigation)
 	// come back inside the reply with OK=false, because those are information
-	// the model can act on, not infrastructure faults.
+	// the model can act on, not infrastructure faults. The Browser tool converts
+	// that flag to a failed tool result while retaining those observations.
 	Execute(ctx context.Context, op json.RawMessage) (BrowserReply, error)
 }
 
@@ -641,7 +642,10 @@ func (b *Browser) Execute(ctx context.Context, args json.RawMessage) (Result, er
 	}
 	reply, err := b.Link.Execute(ctx, raw)
 	if err != nil {
-		return Result{}, fmt.Errorf("browser %s: %v", action, err)
+		if guidance := browserFailureRecovery(action, err.Error()); guidance != "" {
+			return Result{}, fmt.Errorf("browser %s: %w\n%s", action, err, guidance)
+		}
+		return Result{}, fmt.Errorf("browser %s: %w", action, err)
 	}
 	if action == BrowserActionDownloads {
 		// A metadata read cannot carry a stale page screenshot or qualify as a
@@ -649,7 +653,10 @@ func (b *Browser) Execute(ctx context.Context, args json.RawMessage) (Result, er
 		reply = BrowserReply{OK: reply.OK, Error: reply.Error, Data: reply.Data, Backend: reply.Backend}
 	}
 	if !reply.OK {
-		return b.browserResult(op, reply, formatBrowserFailure(action, reply)), nil
+		// A response from the executor is not evidence that its action worked.
+		// Keep partial observations and completed batch steps, while the normal
+		// error channel marks model history, UI and retained results consistently.
+		return b.browserResult(op, reply, formatBrowserFailure(action, reply)), fmt.Errorf("browser %s execution failed; inspect the preserved result before continuing", action)
 	}
 	view := reply
 	if action == BrowserActionDevTools && BrowserBackendOf(b.Link) == BrowserBackendNative {
@@ -734,6 +741,18 @@ func formatBrowserFailure(action string, r BrowserReply) string {
 	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "browser %s failed: %s", action, r.Error)
+	if guidance := browserFailureRecovery(action, r.Error); guidance != "" {
+		fmt.Fprintf(&b, "\n%s", guidance)
+	}
+	if r.Backend != "" || r.ActiveTab != "" {
+		fmt.Fprintf(&b, "\nreported runtime: %s; tab: %s; version: %s", orUnknown(r.Backend), orUnknown(r.ActiveTab), orUnknown(r.Version))
+	}
+	if r.URL != "" {
+		fmt.Fprintf(&b, "\nlast reported page: %s", r.URL)
+		if r.Title != "" {
+			fmt.Fprintf(&b, " · %s", r.Title)
+		}
+	}
 	// A dialog is often the explanation for the failure above it, so it travels
 	// with the failure rather than being dropped on the floor.
 	for _, d := range r.Dialogs {
@@ -748,10 +767,16 @@ func formatBrowserFailure(action string, r BrowserReply) string {
 	if evidence := formatBrowserEvidence(r.Evidence); evidence != "" {
 		fmt.Fprintf(&b, "\n%s", evidence)
 	}
+	if r.Text != "" {
+		fmt.Fprintf(&b, "\npartial page observation (does not confirm action completion):\n%s", r.Text)
+	}
 	// A failed protocol call can still carry exception details, observed events
 	// or an unavailable-data explanation. Preserve it without retrying the call.
 	if len(r.Data) > 0 {
 		fmt.Fprintf(&b, "\ndata: %s", r.Data)
+	}
+	if im := r.Screenshot; im != nil && im.ImageRef != "" {
+		fmt.Fprintf(&b, "\nviewport screenshot: %s (%dx%d pixels)", im.ImageRef, im.Width, im.Height)
 	}
 	return b.String()
 }

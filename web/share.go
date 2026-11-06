@@ -20,6 +20,7 @@ package web
 // removing the entry from shares.json, not another API surface.
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -214,6 +215,10 @@ func (s *Server) handleShareCreate(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, errors.New("that exchange has no answer text to share"))
 		return
 	}
+	// The nil-safe redactor still removes path capabilities when the optional
+	// runtime is disabled; a public share must not depend on its current flag.
+	question = s.mgr.cfg.WebServices.RedactPreviewURLs(question)
+	answer = s.mgr.cfg.WebServices.RedactPreviewURLs(answer)
 	if len(answer) > shareMaxText || len(question) > shareMaxText {
 		writeErr(w, http.StatusRequestEntityTooLarge,
 			errors.New("answer or question exceeds the share size cap"))
@@ -250,6 +255,31 @@ func (s *Server) handleShareCreate(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
+	// Keep the existing input bound before decoding the snapshot for redaction.
+	if len(packed) > shareMaxSnap {
+		writeErr(w, http.StatusRequestEntityTooLarge, errors.New("the exchange's timeline exceeds the share size cap"))
+		return
+	}
+	{
+		clean, err := redactSharedServiceSnapshot(packed, s.mgr.cfg.WebServices.RedactPreviewURLs)
+		if err != nil {
+			writeErr(w, http.StatusInternalServerError, err)
+			return
+		}
+		if !bytes.Equal(clean, packed) {
+			var restored struct {
+				M []Message             `json:"m"`
+				R map[string]ToolResult `json:"r"`
+			}
+			decoder := json.NewDecoder(bytes.NewReader(clean))
+			decoder.UseNumber()
+			if err := decoder.Decode(&restored); err != nil {
+				writeErr(w, http.StatusInternalServerError, err)
+				return
+			}
+			packed, snap.Messages, snap.Results = clean, restored.M, restored.R
+		}
+	}
 	if len(packed) > shareMaxSnap {
 		writeErr(w, http.StatusRequestEntityTooLarge,
 			errors.New("the exchange's timeline exceeds the share size cap"))
@@ -278,6 +308,7 @@ func (s *Server) handleShareCreate(w http.ResponseWriter, r *http.Request) {
 		Messages:  snap.Messages,
 		Results:   snap.Results,
 	}
+	entry.Title = s.mgr.cfg.WebServices.RedactPreviewURLs(entry.Title)
 	if err := s.shares.put(entry); err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
 		return

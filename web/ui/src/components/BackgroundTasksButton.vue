@@ -27,7 +27,7 @@ const context = () => JSON.stringify([props.agentId, props.enabled]);
 const pageVisible = () => typeof document === "undefined" || !document.hidden;
 function scoped(item: { source: BackgroundTaskSource; source_id: string; agent_id: string; workflow_id?: string }, taskId: string) {
   const sourceValid = item.source === "schedule" ? typeof item.source_id === "string" && /^[A-Za-z0-9][A-Za-z0-9._-]{0,39}$/.test(item.source_id) : item.source === "sentinel" && validId(item.source_id);
-  return item.agent_id === props.agentId && sourceValid && taskId === `${item.source}:${item.source_id}`;
+  return item.agent_id === props.agentId && !item.workflow_id && sourceValid && taskId === `${item.source}:${item.source_id}`;
 }
 const entries = computed(() => {
   const by = new Map<string, Entry>();

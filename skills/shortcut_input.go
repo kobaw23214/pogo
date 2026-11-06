@@ -27,7 +27,7 @@ func ValidShortcutLanguage(value string) bool {
 // Newlines and tabs in the body are meaningful (for example connection data).
 func ValidInputShortcut(part StarterInputPart) bool {
 	if part.Type != "shortcut" || !inputShortcutID.MatchString(part.ShortcutID) ||
-		part.Path != "" || part.Name != "" || part.AsFile || part.Favicon != "" ||
+		part.Path != "" || part.Name != "" || part.Server != "" || part.AsFile || part.Favicon != "" ||
 		!utf8.ValidString(part.Title) || strings.TrimSpace(part.Title) == "" || utf8.RuneCountInString(part.Title) > 120 ||
 		!utf8.ValidString(part.Text) || (part.Parts == nil && strings.TrimSpace(part.Text) == "") || (part.Parts == nil && len(part.Text) > MaxInputShortcutTextBytes) ||
 		part.Office != nil ||

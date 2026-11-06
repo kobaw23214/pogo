@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -255,23 +254,6 @@ func TestAgentScheduleInternalCronActuallyFiresOnceAndResynchronizes(t *testing.
 	}
 }
 
-func TestAgentScheduleWorkflowTimezoneRoundTripAndOldClientPreservation(t *testing.T) {
-	scheduleEnv(t)
-	h := newHarness(t, scriptedTurns(textTurn("done")))
-	a := createStudioAgent(t, h, "Workflow", "context", "ready")
-	wf := createWorkflow(t, h, soloBody(a.ID, "scheduled"))
-	endpoint := "/api/manage/workflows/" + wf.ID + "/schedule"
-	initial := agentScheduleResponse(t, h.do("POST", endpoint, `{"kind":"cron","cron":"0 9 * * *","timezone":"Asia/Shanghai"}`), 200)
-	if initial["timezone"] != "Asia/Shanghai" || initial["effective_timezone"] != "Asia/Shanghai" {
-		t.Fatalf("zone summary lost: %v", initial)
-	}
-	older := agentScheduleResponse(t, h.do("POST", endpoint, `{"kind":"cron","cron":"0 10 * * *"}`), 200)
-	if older["timezone"] != "Asia/Shanghai" {
-		t.Fatalf("old client reset server-side zone: %v", older)
-	}
-	agentScheduleResponse(t, h.do("POST", endpoint, `{"kind":"cron","cron":"0 9 * * *","timezone":"Invalid/Zone"}`), 400)
-}
-
 func TestAgentScheduleCapabilityRemovalAndPausedAgentNeverFallback(t *testing.T) {
 	dir := scheduleEnv(t)
 	sk := writeTestSkill(t, t.TempDir(), "plan-skill", "scheduled skill", "# Selected only")
@@ -312,75 +294,6 @@ func TestAgentScheduleMissingDefaultWorkspaceCannotFollowSymlinkAncestor(t *test
 	if err != nil || len(entries) != 0 {
 		t.Fatal("default workspace followed alias outside owner root")
 	}
-}
-
-func TestAgentScheduleWorkflowEditAndConcurrentRecreateKeepHistoryNamespaces(t *testing.T) {
-	dir := scheduleEnv(t)
-	h := newHarness(t, scriptedTurns(textTurn("unused")))
-	a := createStudioAgent(t, h, "Workflow history", "context", "ready")
-	wf := createWorkflow(t, h, soloBody(a.ID, "task"))
-	endpoint := "/api/manage/workflows/" + wf.ID + "/schedule"
-	first := agentScheduleResponse(t, h.do("POST", endpoint, `{"kind":"every","every_sec":3600,"timezone":"UTC"}`), 200)
-	originalID := first["job_id"].(string)
-	if originalID != wf.ID {
-		t.Fatal("initial legacy Workflow ID changed")
-	}
-	st := schedule.NewStore(dir)
-	if err := st.AppendRun(originalID, schedule.RunRecord{Status: "ok", Summary: "prior workflow result"}); err != nil {
-		t.Fatal(err)
-	}
-	edited := agentScheduleResponse(t, h.do("POST", endpoint, `{"kind":"every","every_sec":7200,"timezone":"UTC"}`), 200)
-	if edited["job_id"] != originalID {
-		t.Fatal("edit changed existing history namespace")
-	}
-	if runs, _ := st.Runs(originalID, 0); len(runs) != 1 {
-		t.Fatal("edit lost retained history")
-	}
-	response := h.do("DELETE", endpoint, "")
-	response.Body.Close()
-	if response.StatusCode != 204 {
-		t.Fatal(response.StatusCode)
-	}
-	var wg sync.WaitGroup
-	results := make(chan *http.Response, 2)
-	for i := 0; i < 2; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			results <- h.do("POST", endpoint, `{"kind":"every","every_sec":3600,"timezone":"UTC"}`)
-		}()
-	}
-	wg.Wait()
-	close(results)
-	newID := ""
-	for response := range results {
-		row := agentScheduleResponse(t, response, 200)
-		id := row["job_id"].(string)
-		if id == originalID {
-			t.Fatal("recreated Workflow borrowed deleted history")
-		}
-		if newID != "" && id != newID {
-			t.Fatal("concurrent updates created duplicate jobs")
-		}
-		newID = id
-	}
-	jobs, err := st.Load()
-	if err != nil {
-		t.Fatal(err)
-	}
-	count := 0
-	for _, j := range jobs {
-		if j.WorkflowID == wf.ID {
-			count++
-		}
-	}
-	if count != 1 {
-		t.Fatalf("workflow has %d active schedule definitions", count)
-	}
-	if runs, _ := st.Runs(newID, 0); len(runs) != 0 {
-		t.Fatal("new job exposed predecessor history")
-	}
-	agentScheduleResponse(t, h.do("GET", "/api/schedule/jobs/"+originalID+"/runs", ""), 404)
 }
 
 func TestAgentSchedulePausedManualRunDoesNotEnableAndExpiredRequestIsSynchronous(t *testing.T) {

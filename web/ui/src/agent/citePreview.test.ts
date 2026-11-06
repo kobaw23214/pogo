@@ -1,3 +1,6 @@
+import { setLocale } from "@/i18n";
+import { beforeEach } from "vitest";
+beforeEach(() => setLocale("zh-CN"));
 import { describe, expect, it } from "vitest";
 import type { CiteSource } from "@/api/types";
 import { safeSourceURL, sourceIdentity, sourcePreview } from "./citePreview";

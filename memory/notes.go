@@ -270,7 +270,7 @@ func parseNote(path, raw string) (Note, error) {
 
 func formatNote(note Note) string {
 	return fmt.Sprintf("---\ntype: %s\nmodified: %s\ncreated: %s\nsource_session: %s\norigin: %s\n---\n\n%s",
-		note.Type, note.Modified.UTC().Format(time.RFC3339), note.Created.UTC().Format(time.RFC3339), note.SourceSession, note.Origin, note.Content)
+		note.Type, note.Modified.UTC().Format(time.RFC3339Nano), note.Created.UTC().Format(time.RFC3339), note.SourceSession, note.Origin, note.Content)
 }
 
 func splitNoteFrontmatter(raw string) (metadata, body string) {

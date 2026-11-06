@@ -40,6 +40,36 @@ If its owned Chromium process disconnects unexpectedly, the command-line worker
 exits with status 1 so the container restart policy can replace it. That resets
 all in-memory browsing sessions; normal worker shutdown does not report a crash.
 
+### Optional LAN gateway connection route
+
+When Docker Desktop cannot connect from the worker to the host's LAN address,
+these two administrator-owned worker environment settings route only the exact
+canonical gateway host and port through Docker Desktop's host connector:
+
+```text
+POGO_BROWSER_GATEWAY_ORIGIN=http://172.20.10.5:19770
+POGO_BROWSER_GATEWAY_CONNECT_HOST=host.docker.internal
+```
+
+Both settings must be present together; leave both empty to retain normal
+browser routing. This opt-in currently accepts only a canonical RFC1918 IPv4
+`http://IP:19770` origin, with no trailing slash, path, credentials, query or
+fragment. The connection host is restricted to `host.docker.internal`. Other
+ports, HTTPS, DNS origins, loopback and IPv6 are not supported by this route.
+The canonical URL, HTTP Host, port, resource paths and WebSocket URLs stay
+unchanged; only Chromium's connection address is mapped. Grant checks and CSP
+continue to apply at the gateway. The worker does not join application networks,
+and no additional port is published.
+
+The settings are read at worker startup and cannot be supplied by a browser
+session or action. Recreate the worker to apply them; existing Chromium profiles
+do not acquire a newly configured route. If any case-insensitive
+`HTTP_PROXY`, `HTTPS_PROXY` or `ALL_PROXY` variable is nonempty, gateway routing
+is rejected at startup. It does not select global direct connections or replace
+an existing proxy policy. `NO_PROXY` alone does not enable a proxy. Verify the
+host connector reaches the gateway before opting in, then verify an actual
+browser page, its relative HTTP API calls and WebSocket connection.
+
 ## Optional Docker deployment
 
 The Dockerfile pins the official Playwright base image and compiles the native

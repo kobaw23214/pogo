@@ -1,11 +1,8 @@
+import { gt } from "@/i18n";
+
 export class ScheduleDateTimeError extends Error {
   constructor(public readonly code: "invalid_timezone" | "invalid_date" | "nonexistent_time" | "ambiguous_time") {
-    super({
-      invalid_timezone: "请选择有效的 IANA 时区，例如 Asia/Shanghai。",
-      invalid_date: "请选择有效的日期和时间。",
-      nonexistent_time: "该当地时间因夏令时调整而不存在，请重新选择。",
-      ambiguous_time: "该当地时间因夏令时调整会出现两次，请选择其他时间。",
-    }[code]);
+    super(gt(`uiCoverage.schedule.${code}`));
     this.name = "ScheduleDateTimeError";
   }
 }

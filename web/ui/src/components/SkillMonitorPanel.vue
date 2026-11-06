@@ -37,6 +37,7 @@ import {
   snapshotSkillFilter,
 } from "@/components/skillMonitor";
 import ObserveStatusCard from "@/components/ObserveStatusCard.vue";
+import StudioEntrySkeleton from "@/components/studio/StudioEntrySkeleton.vue";
 import type {
   SkillEvent,
   SkillEventsPage,
@@ -153,11 +154,16 @@ async function reload(snapshot: SkillMonitorFilter) {
 }
 
 function refresh() {
+  const snapshot = snapshotSkillFilter(filter.value);
   pagedHistory.value = false;
   closeDetail();
-  events.value = [];
-  stats.value = null;
-  return reload(snapshotSkillFilter(filter.value));
+  // Keep a resolved result (including an empty result) in place when the
+  // query is unchanged. New filters get their own loading placeholders.
+  if (JSON.stringify(snapshot) !== JSON.stringify(committedFilter)) {
+    events.value = [];
+    stats.value = null;
+  }
+  return reload(snapshot);
 }
 
 // Auto-refresh reuses the committed filter snapshot — uncommitted input box
@@ -371,7 +377,7 @@ onBeforeUnmount(() => {
 
     <ObserveStatusCard :active="active" />
 
-    <div class="sm-stats" aria-label="statistics">
+    <div class="sm-stats" :aria-label="t('uiCoverage.statistics')">
       <div class="sm-stat"><span class="sm-stat-label">{{ t("skillMonitor.statTotal") }}</span><span class="sm-stat-value">{{ statText(stats?.total) }}</span></div>
       <div class="sm-stat"><span class="sm-stat-label">{{ t("skillMonitor.statDiscovery") }}</span><span class="sm-stat-value">{{ statText(stats?.discoveries) }}</span></div>
       <div class="sm-stat"><span class="sm-stat-label">{{ t("skillMonitor.statLoad") }}</span><span class="sm-stat-value">{{ statText(stats?.loads) }}</span></div>
@@ -465,7 +471,7 @@ onBeforeUnmount(() => {
         @keyup.enter="refresh"
       />
       <el-input v-model="filter.q" size="small" style="width: 185px" clearable :placeholder="t('skillMonitor.searchPlaceholder')" :aria-label="t('skillMonitor.searchPlaceholder')" @keyup.enter="refresh" @clear="refresh" />
-      <el-button size="small" :icon="Refresh" :loading="loading" @click="refresh">
+      <el-button size="small" :icon="Refresh" :loading="loading && !!stats" :disabled="loading" @click="refresh">
         {{ t("skillMonitor.refresh") }}
       </el-button>
       <span class="sm-spacer" />
@@ -510,7 +516,7 @@ onBeforeUnmount(() => {
 
     <div class="sm-body">
       <div class="sm-list" role="list" :aria-busy="loading">
-        <div v-if="loading && !events.length" class="sm-empty">{{ t("skillMonitor.loading") }}</div>
+        <div v-if="loading && !stats" role="status" :aria-label="t('skillMonitor.loading')"><StudioEntrySkeleton area="sessions" /></div>
         <div v-else-if="!events.length && !errorKey" class="sm-empty">
           <el-empty :description="t('skillMonitor.empty')" :image-size="56" />
           <div class="sm-empty-hint">{{ t("skillMonitor.emptyHint") }}</div>
@@ -553,51 +559,53 @@ onBeforeUnmount(() => {
         </div>
       </div>
 
-      <div v-if="selected" class="sm-detail">
+      <div v-if="selected" class="sm-detail" :aria-busy="detailLoading">
         <div class="sm-detail-head">
           <span class="sm-detail-title">{{ t("skillMonitor.detailTitle") }}</span>
           <el-button size="small" text :aria-label="t('skillMonitor.closeDetail')" @click="closeDetail">×</el-button>
         </div>
-        <div v-if="detailLoading" class="sm-detail-loading">{{ t("skillMonitor.loading") }}</div>
-        <div v-else-if="detailError" class="sm-error" role="alert">{{ t("skillMonitor.detailError") }}</div>
-        <dl class="sm-fields">
-          <div class="sm-field"><dt>{{ t("skillMonitor.fId") }}</dt><dd class="mono">{{ selected.id }}</dd></div>
-          <div class="sm-field"><dt>{{ t("skillMonitor.fStatus") }}</dt><dd><span class="sm-status" :class="statusClass(selected.status)">{{ statusLabel(selected.status) }}</span></dd></div>
-          <div class="sm-field"><dt>{{ t("skillMonitor.fStage") }}</dt><dd><span class="sm-stage" :class="stageClass(selected.stage)">{{ stageLabel(selected.stage) }}</span></dd></div>
-          <div class="sm-field"><dt>{{ t("skillMonitor.fMechanism") }}</dt><dd>{{ mechanismLabel(selected.mechanism) }}</dd></div>
-          <div class="sm-field"><dt>{{ t("skillMonitor.fSkill") }}</dt><dd>{{ field(selected.skill_name) }}</dd></div>
-          <div class="sm-field"><dt>{{ t("skillMonitor.fSkillSource") }}</dt><dd>{{ skillSourceLabel(selected.skill_source) }}</dd></div>
-          <div class="sm-field"><dt>{{ t("skillMonitor.fTool") }}</dt><dd>{{ field(selected.tool) }}</dd></div>
-          <div class="sm-field"><dt>{{ t("skillMonitor.fWireTool") }}</dt><dd>{{ field(selected.wire_tool) }}</dd></div>
-          <div class="sm-field"><dt>{{ t("skillMonitor.fCaller") }}</dt><dd>{{ callerLabel(selected.caller) }}</dd></div>
-          <div class="sm-field"><dt>{{ t("skillMonitor.fEntrypoint") }}</dt><dd>{{ entrypointLabel(selected.entrypoint) }}</dd></div>
-          <div v-if="selected.client_id" class="sm-field"><dt>{{ t("skillMonitor.fClientId") }}</dt><dd class="mono">{{ selected.client_id }}</dd></div>
-          <div class="sm-field"><dt>{{ t("skillMonitor.fStarted") }}</dt><dd>{{ fmtTime(selected.started_at) }}</dd></div>
-          <div class="sm-field"><dt>{{ t("skillMonitor.fFinished") }}</dt><dd>{{ selected.finished_at ? fmtTime(selected.finished_at) : t("skillMonitor.dash") }}</dd></div>
-          <div class="sm-field"><dt>{{ t("skillMonitor.fDuration") }}</dt><dd>{{ durationText(selected) }}</dd></div>
-          <div class="sm-field"><dt>{{ t("skillMonitor.fErrorKind") }}</dt><dd>{{ field(selected.error_kind) }}</dd></div>
-          <div class="sm-field"><dt>{{ t("skillMonitor.fTrace") }}</dt><dd class="mono">{{ field(selected.trace_id) }}</dd></div>
-          <div class="sm-field"><dt>{{ t("skillMonitor.fParent") }}</dt><dd class="mono">{{ field(selected.parent_id) }}</dd></div>
-          <div class="sm-field"><dt>{{ t("skillMonitor.fSpanId") }}</dt><dd class="mono">{{ field(selected.span_id) }}</dd></div>
-          <div class="sm-field"><dt>{{ t("skillMonitor.fParentSpanId") }}</dt><dd class="mono">{{ field(selected.parent_span_id) }}</dd></div>
-          <div class="sm-field"><dt>{{ t("skillMonitor.fTraceFlags") }}</dt><dd class="mono">{{ field(selected.trace_flags) }}</dd></div>
-          <div class="sm-field"><dt>{{ t("skillMonitor.fSkillId") }}</dt><dd class="mono">{{ field(selected.skill_id) }}</dd></div>
-          <div class="sm-field"><dt>{{ t("skillMonitor.fSession") }}</dt><dd class="mono">{{ field(selected.session_id) }}</dd></div>
-          <div class="sm-field"><dt>{{ t("skillMonitor.fRun") }}</dt><dd class="mono">{{ field(selected.run_id) }}</dd></div>
-          <div class="sm-field"><dt>{{ t("skillMonitor.fTask") }}</dt><dd class="mono">{{ field(selected.task_id) }}</dd></div>
-          <div class="sm-field"><dt>{{ t("skillMonitor.fToolCall") }}</dt><dd class="mono">{{ field(selected.tool_call_id) }}</dd></div>
-        </dl>
-        <div class="sm-detail-actions">
-          <el-button size="small" :disabled="!selected.trace_id" @click="filterSameTrace">
-            {{ t("skillMonitor.filterSameTrace") }}
-          </el-button>
-          <el-button size="small" :disabled="!selected.session_id" @click="filterSameSession">
-            {{ t("skillMonitor.filterSameSession") }}
-          </el-button>
-          <el-button size="small" :disabled="!selected.trace_id" @click="jumpToMcpTrace">
-            {{ t("skillMonitor.showMCPTrace") }}
-          </el-button>
-        </div>
+        <div v-if="detailLoading" class="sm-detail-loading" role="status" :aria-label="t('skillMonitor.loading')"><StudioEntrySkeleton area="form" /></div>
+        <template v-else>
+          <div v-if="detailError" class="sm-error" role="alert">{{ t("skillMonitor.detailError") }}</div>
+          <dl class="sm-fields">
+            <div class="sm-field"><dt>{{ t("skillMonitor.fId") }}</dt><dd class="mono">{{ selected.id }}</dd></div>
+            <div class="sm-field"><dt>{{ t("skillMonitor.fStatus") }}</dt><dd><span class="sm-status" :class="statusClass(selected.status)">{{ statusLabel(selected.status) }}</span></dd></div>
+            <div class="sm-field"><dt>{{ t("skillMonitor.fStage") }}</dt><dd><span class="sm-stage" :class="stageClass(selected.stage)">{{ stageLabel(selected.stage) }}</span></dd></div>
+            <div class="sm-field"><dt>{{ t("skillMonitor.fMechanism") }}</dt><dd>{{ mechanismLabel(selected.mechanism) }}</dd></div>
+            <div class="sm-field"><dt>{{ t("skillMonitor.fSkill") }}</dt><dd>{{ field(selected.skill_name) }}</dd></div>
+            <div class="sm-field"><dt>{{ t("skillMonitor.fSkillSource") }}</dt><dd>{{ skillSourceLabel(selected.skill_source) }}</dd></div>
+            <div class="sm-field"><dt>{{ t("skillMonitor.fTool") }}</dt><dd>{{ field(selected.tool) }}</dd></div>
+            <div class="sm-field"><dt>{{ t("skillMonitor.fWireTool") }}</dt><dd>{{ field(selected.wire_tool) }}</dd></div>
+            <div class="sm-field"><dt>{{ t("skillMonitor.fCaller") }}</dt><dd>{{ callerLabel(selected.caller) }}</dd></div>
+            <div class="sm-field"><dt>{{ t("skillMonitor.fEntrypoint") }}</dt><dd>{{ entrypointLabel(selected.entrypoint) }}</dd></div>
+            <div v-if="selected.client_id" class="sm-field"><dt>{{ t("skillMonitor.fClientId") }}</dt><dd class="mono">{{ selected.client_id }}</dd></div>
+            <div class="sm-field"><dt>{{ t("skillMonitor.fStarted") }}</dt><dd>{{ fmtTime(selected.started_at) }}</dd></div>
+            <div class="sm-field"><dt>{{ t("skillMonitor.fFinished") }}</dt><dd>{{ selected.finished_at ? fmtTime(selected.finished_at) : t("skillMonitor.dash") }}</dd></div>
+            <div class="sm-field"><dt>{{ t("skillMonitor.fDuration") }}</dt><dd>{{ durationText(selected) }}</dd></div>
+            <div class="sm-field"><dt>{{ t("skillMonitor.fErrorKind") }}</dt><dd>{{ field(selected.error_kind) }}</dd></div>
+            <div class="sm-field"><dt>{{ t("skillMonitor.fTrace") }}</dt><dd class="mono">{{ field(selected.trace_id) }}</dd></div>
+            <div class="sm-field"><dt>{{ t("skillMonitor.fParent") }}</dt><dd class="mono">{{ field(selected.parent_id) }}</dd></div>
+            <div class="sm-field"><dt>{{ t("skillMonitor.fSpanId") }}</dt><dd class="mono">{{ field(selected.span_id) }}</dd></div>
+            <div class="sm-field"><dt>{{ t("skillMonitor.fParentSpanId") }}</dt><dd class="mono">{{ field(selected.parent_span_id) }}</dd></div>
+            <div class="sm-field"><dt>{{ t("skillMonitor.fTraceFlags") }}</dt><dd class="mono">{{ field(selected.trace_flags) }}</dd></div>
+            <div class="sm-field"><dt>{{ t("skillMonitor.fSkillId") }}</dt><dd class="mono">{{ field(selected.skill_id) }}</dd></div>
+            <div class="sm-field"><dt>{{ t("skillMonitor.fSession") }}</dt><dd class="mono">{{ field(selected.session_id) }}</dd></div>
+            <div class="sm-field"><dt>{{ t("skillMonitor.fRun") }}</dt><dd class="mono">{{ field(selected.run_id) }}</dd></div>
+            <div class="sm-field"><dt>{{ t("skillMonitor.fTask") }}</dt><dd class="mono">{{ field(selected.task_id) }}</dd></div>
+            <div class="sm-field"><dt>{{ t("skillMonitor.fToolCall") }}</dt><dd class="mono">{{ field(selected.tool_call_id) }}</dd></div>
+          </dl>
+          <div class="sm-detail-actions">
+            <el-button size="small" :disabled="!selected.trace_id" @click="filterSameTrace">
+              {{ t("skillMonitor.filterSameTrace") }}
+            </el-button>
+            <el-button size="small" :disabled="!selected.session_id" @click="filterSameSession">
+              {{ t("skillMonitor.filterSameSession") }}
+            </el-button>
+            <el-button size="small" :disabled="!selected.trace_id" @click="jumpToMcpTrace">
+              {{ t("skillMonitor.showMCPTrace") }}
+            </el-button>
+          </div>
+        </template>
       </div>
     </div>
   </div>

@@ -1,3 +1,4 @@
+import { gt as tr } from "@/i18n";
 export type ScrollDirection = -1 | 0 | 1;
 export type StoryAnchor = { key: string; top: number; label: string };
 export type StoryChapter = {
@@ -39,7 +40,7 @@ export function buildStoryStops(chapters: readonly StoryChapter[], readableHeigh
       if (previous && !chapter.cinematic) {
         const steps = Math.ceil((point.top - previous.top) / maxStep);
         for (let part = 1; part < steps; part++) {
-          append({ key: `${previous.key}-${point.key}-${part}`, top: previous.top + (point.top - previous.top) * part / steps, label: `${previous.label} · 继续` });
+          append({ key: `${previous.key}-${point.key}-${part}`, top: previous.top + (point.top - previous.top) * part / steps, label: tr('studioManagement.text509', { value0: previous.label }) });
         }
       }
       append(point);

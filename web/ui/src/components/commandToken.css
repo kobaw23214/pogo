@@ -15,6 +15,7 @@
   line-height: 1.4;
 }
 .command-token-surface.skill { --command-token-color: var(--pg-syn-type, #7a5ea8); }
+.command-token-surface.mcp { --command-token-color: var(--el-color-primary); }
 .command-token-copy { display: flex; align-items: center; gap: 7px; min-width: 0; }
 .command-token-type { flex-shrink: 0; opacity: .85; font-size: 11px; }
 .command-token-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }

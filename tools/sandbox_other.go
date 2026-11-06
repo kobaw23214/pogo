@@ -22,8 +22,8 @@ import (
 )
 
 var (
-	sandboxOnce   sync.Once
-	sandboxCached SandboxPolicy
+	sandboxPolicies sandboxPolicyCache
+	sandboxReport   sync.Once
 )
 
 // InitSandbox resolves the mode and reports that no sandbox is available here.
@@ -33,28 +33,24 @@ var (
 // unconfined execution because it happened to be running on a platform without
 // an implementation is exactly the failure the mode exists to prevent.
 func InitSandbox() SandboxPolicy {
-	sandboxOnce.Do(func() {
-		p := SandboxPolicyFromEnv()
-		if p.Mode != SandboxOff {
-			p.Unavailable = "no OS sandbox is implemented for " + runtime.GOOS
-		}
-		sandboxCached = p
-		// Report in the effective mode: a restored runtime override is part
-		// of the truth a startup line tells.
-		p = applyOverride(p)
+	policy := sandboxPolicies.resolve(SandboxPolicyFromEnv, func(p SandboxPolicy) SandboxPolicy {
+		p.Unavailable = "no OS sandbox is implemented for " + runtime.GOOS
+		return p
+	})
+	policy.PrivateDirs = runtimeSkillPrivateDirs()
+	sandboxReport.Do(func() {
+		p := policy
 		switch {
+		case p.Refuses():
+			fmt.Fprintf(os.Stderr, "pogo: %v\n", p.RefusalError())
 		case p.Mode == SandboxOff:
 			// Nothing to say: off on a platform with nothing to turn off.
-		case p.Refuses():
-			fmt.Fprintf(os.Stderr, "pogo: %s=%s but %s — bash and declared tools "+
-				"will be refused. Set %s=%s to run them unconfined.\n",
-				EnvSandbox, SandboxEnforce, p.Unavailable, EnvSandbox, SandboxDegrade)
 		default:
 			fmt.Fprintf(os.Stderr, "pogo: %s — bash and declared tools run unconfined "+
 				"(the container, where there is one, is the only boundary).\n", p.Unavailable)
 		}
 	})
-	return applyOverride(sandboxCached)
+	return policy
 }
 
 // wrapCommand leaves the command alone, unless enforce was asked for.

@@ -101,3 +101,19 @@ describe("HTML Artifact Markdown segments", () => {
     expect(code).toContain('data-language="html"'); expect(code).toContain("&lt;script&gt;");
   });
 });
+
+describe("Managed website Markdown segments", () => {
+  const source = '```web-preview\n{"service_id":"ws_example","title":"Demo site"}\n```';
+  it("renders a scoped website card only after streaming completes", async () => {
+    const html = await render(MarkdownView, { source });
+    expect(html).toContain('data-testid="web-artifact"'); expect(html).toContain("webArtifact.unavailable");
+    expect(html).not.toContain("iframe");
+    const streaming = await render(MarkdownView, { source, streaming: true });
+    expect(streaming).not.toContain('data-testid="web-artifact"'); expect(streaming).toContain('data-language="json"');
+  });
+  it("leaves shared/passive website metadata as inert code", async () => {
+    const passive = await render(MarkdownView, { source, passive: true });
+    expect(passive).not.toContain('data-testid="web-artifact"'); expect(passive).not.toContain("iframe");
+    expect(passive).toContain('data-language="web-preview" data-uncollapsed="true"');
+  });
+});

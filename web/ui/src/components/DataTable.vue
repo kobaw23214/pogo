@@ -6,7 +6,7 @@ import CodeBlock from "./CodeBlock.vue";
 import { parseDataTable, serializeCSV, type DataTableFormat } from "./dataTable";
 
 const props = defineProps<{ source: string; format: DataTableFormat }>();
-const { t } = useI18n();
+const { t, locale } = useI18n();
 const query = ref("");
 const page = ref(1);
 const pageSize = ref(10);
@@ -23,7 +23,7 @@ let copyTimer: ReturnType<typeof setTimeout> | undefined;
 
 const parsed = computed(() => parseDataTable(props.source, props.format));
 const table = computed(() => parsed.value.ok ? parsed.value.table : null);
-const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+const collator = computed(() => new Intl.Collator(locale.value, { numeric: true, sensitivity: "base" }));
 
 const filteredRows = computed(() => {
   const rows = table.value?.rows ?? [];
@@ -41,7 +41,7 @@ const sortedRows = computed(() => {
   const direction = current.direction === "asc" ? 1 : -1;
   return rows
     .map((row, index) => ({ row, index }))
-    .sort((a, b) => collator.compare(a.row[columnIndex], b.row[columnIndex]) * direction || a.index - b.index)
+    .sort((a, b) => collator.value.compare(a.row[columnIndex], b.row[columnIndex]) * direction || a.index - b.index)
     .map(item => item.row);
 });
 const totalPages = computed(() => Math.max(1, Math.ceil(sortedRows.value.length / pageSize.value)));

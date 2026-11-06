@@ -5,7 +5,7 @@ import type { ComposerPart, ComposerShortcutPart } from "@/agent/composerParts";
 import { shortcutComposerPart } from "@/agent/composerParts";
 const host = vi.hoisted(() => ({ cleanups: [] as (() => void)[], register: vi.fn(() => () => {}) }));
 vi.mock("vue", async original => ({ ...await original<typeof import("vue")>(), inject: () => null, useId: () => "nested-test", useSSRContext: () => ({ modules: new Set() }), onBeforeUnmount: (fn: () => void) => host.cleanups.push(fn) }));
-vi.mock("vue-i18n", () => ({ useI18n: () => ({ t: (key: string) => key }) }));
+vi.mock("vue-i18n", async original => { const { ref } = await import("vue"); return { ...await original<typeof import("vue-i18n")>(), useI18n: () => ({ t: (key: string) => key, locale: ref("zh-CN") }) }; });
 vi.mock("@/agent/studioNavigation", () => ({ registerStudioNavigationGuard: host.register }));
 vi.mock("./InlineComposer.vue", () => ({ default: {} }));
 vi.mock("./ShortcutContent.vue", () => ({ default: {} }));

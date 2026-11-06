@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import WorkflowDiagnostics from "@/components/WorkflowDiagnostics.vue";
 import { computed, inject, nextTick, onBeforeUnmount, onMounted, provide, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { ElMessageBox } from "element-plus";
@@ -27,13 +28,18 @@ const emit = defineEmits<{ intent: [string]; close: []; conversation: [boolean];
 const { t, locale } = useI18n();
 const liveUpdate = inject(agentWorkflowUpdatesKey, ref(null));
 const runOverview = inject(agentWorkflowRunStatusKey, null);
-const statusCopy = computed(() => locale.value.startsWith('zh') ? {
-  viewActive: '查看运行', activeRuns: '当前运行', activeCount: '个进行中的运行', completed: '已完成', nodes: '个节点',
-  waiting: '等待本人确认', syncing: '运行状态正在重新同步，上次状态仅供参考', preparing: '准备执行', loading: '正在同步运行状态…', denied: '暂时无法读取运行状态',
-} : {
-  viewActive: 'View run', activeRuns: 'Active runs', activeCount: 'active runs', completed: 'Completed', nodes: 'nodes',
-  waiting: 'Waiting for your confirmation', syncing: 'Reconnecting run status. Showing the last known state.', preparing: 'Preparing execution', loading: 'Syncing run status…', denied: 'Run status is currently unavailable',
-});
+const statusCopy = computed(() => ({
+  viewActive: t("uiCoverage.workflow.viewActive"),
+  activeRuns: t("uiCoverage.workflow.activeRuns"),
+  activeCount: t("uiCoverage.workflow.activeCount"),
+  completed: t("uiCoverage.workflow.completed"),
+  nodes: t("uiCoverage.workflow.nodes"),
+  waiting: t("uiCoverage.workflow.waiting"),
+  syncing: t("uiCoverage.workflow.syncing"),
+  preparing: t("uiCoverage.workflow.preparing"),
+  loading: t("uiCoverage.workflow.loading"),
+  denied: t("uiCoverage.workflow.denied"),
+}));
 provide(workspaceFileNavigationKey, { scope: () => null, open: () => {} });
 const workflows = ref<AgentWorkflowDefinition[]>([]), workflow = ref<AgentWorkflowDefinition | null>(null);
 const showDeleted = ref(false), deletingFlowId = ref("");
@@ -742,7 +748,7 @@ onBeforeUnmount(() => { disposed = true; reset(); frameObserver?.disconnect(); w
         <p v-if="workflow?.deleted" class="af-note" role="status">{{ t('agentWorkflow.deletedHint') }}</p>
         <p v-if="error" class="af-error" role="alert">{{ error }}</p><p v-if="notice" class="af-note" role="status">{{ notice }}</p>
         <p v-if="capabilities.reason || capabilities.missing_tools?.length" class="af-capability">{{ capabilities.reason || t('agentWorkflow.disabled') }}</p>
-        <ul v-if="diagnostics.length" class="af-diagnostics"><li v-for="(item,index) in diagnostics" :key="index"><strong>{{ item.message }}</strong><small v-if="item.field_path">{{ item.field_path }}</small><p v-if="item.fix_hint">{{ item.fix_hint }}</p></li></ul>
+        <WorkflowDiagnostics v-if="diagnostics.length" class="af-diagnostics" :diagnostics="diagnostics" domain="agentWorkflow" />
       </div>
       <div v-if="workflow && controlOpen" class="af-control-panel" :style="{ '--af-card-bottom': run ? '116px' : '26px' }" @wheel.stop @pointerdown.stop>
         <AgentWorkflowControlCard :workflow="workflow" :run="run" :preview="previewVersion" :preview-definition="previewDefinition" :enabled-version="enabledVersion" :versions="versions" :versions-loading="versionsLoading" :versions-error="versionsError" :has-more-versions="hasMoreVersions" :runs="runs" :tab="controlTab" :dirty="editorDirty" :saving="editorStatus.saving" :busy="busy || previewLoading" :actions="workflowActions" :can-restore="canRestore" :operation-error="error || capabilities.reason || (capabilities.missing_tools?.length ? t('agentWorkflow.disabled') : '')" :operation-notice="notice" :diagnostics="diagnostics" @close="closeControl()" @tab="setControlTab" @action="workflowAction" @version="previewSavedVersion" @restore="restoreSavedVersion" @run="chooseRun" @draft="chooseRun('')" @load-more="loadVersions(true)" @retry-versions="loadVersions()" />

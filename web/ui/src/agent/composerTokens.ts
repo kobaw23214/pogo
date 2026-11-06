@@ -1,15 +1,17 @@
 import { parseSkillBlock } from "./timeline";
 import type { SkillBlock } from "./timeline";
-import { normalizeComposerParts, skillComposerPart, type ComposerPart } from "./composerParts";
+import { normalizeComposerParts, skillComposerPart, mcpComposerPart, type ComposerPart } from "./composerParts";
+import { mcpInvocationText, parseMcpInvocation, type MCPReference } from "./mcpInvocation";
 
 export interface ComposerToken {
-  kind: "skill" | "command";
+  kind: "skill" | "mcp" | "command";
   /** A skill name, or the slash-prefixed command name. */
   name: string;
   /** Everything after the completed invocation's first separator. */
   body: string;
   /** The canonical invocation and one ASCII space, ready for serialization. */
   prefix: string;
+  mcp?: MCPReference;
 }
 
 interface AvailableSkill { name: string; aliases?: string[] }
@@ -17,7 +19,7 @@ function availableSkill(skills: readonly AvailableSkill[], name: string) { retur
 
 /** Capture the selected top token before appending a mixed shortcut changes the layout. */
 export function composerDraftWithToken(parts: readonly ComposerPart[], token: ComposerToken | null): ComposerPart[] {
-  return normalizeComposerParts([...(token?.kind === "skill" ? [skillComposerPart(token.name)] : []), ...parts]);
+  return normalizeComposerParts([...(token?.kind === "skill" ? [skillComposerPart(token.name)] : token?.kind === "mcp" && token.mcp ? [mcpComposerPart(token.mcp.server, token.mcp.name)] : []), ...parts]);
 }
 
 // One separator completes a token. Further whitespace belongs to the request,
@@ -25,6 +27,15 @@ export function composerDraftWithToken(parts: readonly ComposerPart[], token: Co
 const SKILL_INVOCATION = /^\/skill:([^\s"'`<>]+)(?:(\r\n|[ \t\n\r\f\v])([\s\S]*))?$/;
 const SKILL_NAME = /^[^\s"'`<>]+$/;
 const COMPLETED_COMMAND = /^(\/[^\s]+)(\r\n|[ \t\n\r\f\v])([\s\S]*)$/;
+
+/** A completed user selection keeps its identity while a catalog refresh is
+ * pending or removes the method. Availability controls sending, not the draft. */
+export function readMcpComposerToken(line: string): ComposerToken | null {
+  const mcp = parseMcpInvocation(line);
+  return mcp?.completed
+    ? { kind: "mcp", name: `${mcp.server}/${mcp.name}`, mcp: { server: mcp.server, name: mcp.name }, body: mcp.body, prefix: `${mcpInvocationText(mcp.server, mcp.name)} ` }
+    : null;
+}
 
 /**
  * Drafts use the currently available skills. Passing an empty list while that
@@ -35,7 +46,11 @@ export function readComposerToken(
   line: string,
   skills: readonly AvailableSkill[],
   commandNames: readonly string[] = ["/compact"],
+  mcps: readonly MCPReference[] = [],
 ): ComposerToken | null {
+  const mcp = readMcpComposerToken(line);
+  const selectedMcp = mcp?.mcp;
+  if (selectedMcp && mcps.some(reference => reference.server === selectedMcp.server && reference.name === selectedMcp.name)) return mcp;
   const skill = SKILL_INVOCATION.exec(line);
   const selected = skill && availableSkill(skills, skill[1]);
   if (skill?.[2] && selected) {

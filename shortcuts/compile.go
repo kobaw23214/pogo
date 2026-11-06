@@ -150,7 +150,7 @@ func SnapshotSHA256(parts []inputref.Part) string {
 }
 
 func partBytes(p inputref.Part) int {
-	size := len(p.Type) + len(p.Text) + len(p.Path) + len(p.Name) + len(p.Favicon) + len(p.ShortcutID) + len(p.Title) + len(p.Icon) + len(p.Language)
+	size := len(p.Type) + len(p.Text) + len(p.Path) + len(p.Name) + len(p.Server) + len(p.Favicon) + len(p.ShortcutID) + len(p.Title) + len(p.Icon) + len(p.Language)
 	if o := p.Office; o != nil {
 		size += len(o.Path) + len(o.Title) + len(o.Editor) + len(o.Text) + len(o.Sheet) + len(o.Range) + len(o.CanvasVersion) + len(o.CapturedAt) + len(o.SourceSession)
 		if l := o.Locator; l != nil {
@@ -195,6 +195,8 @@ func Fallback(parts []inputref.Part) string {
 			fmt.Fprintf(&b, "〔文件：%s〕", path.Base(p.Path))
 		case "skill":
 			fmt.Fprintf(&b, "〔技能：%s〕", p.Name)
+		case "mcp":
+			fmt.Fprintf(&b, "〔MCP：%s/%s〕", p.Server, p.Name)
 		case "office":
 			if p.Office != nil {
 				fmt.Fprintf(&b, "〔Office：%s〕", p.Office.Title)

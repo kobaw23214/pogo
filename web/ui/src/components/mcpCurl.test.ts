@@ -1,5 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { buildCurlPreview, sq } from "./mcpCurl";
+import { setLocale } from "@/i18n";
+afterEach(() => setLocale("zh-CN"));
 
 describe("sq", () => {
   it("wraps in single quotes and escapes embedded ones POSIX-style", () => {
@@ -62,9 +64,23 @@ describe("buildCurlPreview — legacy sse", () => {
     expect(out).toContain("curl -N 'https://example.com/sse'");
     expect(out).toContain("-H 'Accept: text/event-stream'");
     expect(out).toContain("endpoint");
-    expect(out).toContain("curl -N -X POST 'https://example.com<回发路径>'");
+    expect(out).toContain("curl -N -X POST 'https://example.com<post-path>'");
     expect(out).toContain('"method":"initialize"');
     expect(out).toContain('"method":"tools/list"');
+  });
+});
+
+describe("MCP curl preview language", () => {
+  it("updates explanatory comments without changing the executable request", () => {
+    const config = { url: "https://example.com/mcp", bearer_token_env: "MY_TOKEN" };
+    setLocale("zh-CN"); const chinese = buildCurlPreview(config);
+    setLocale("en"); const english = buildCurlPreview(config);
+    expect(chinese).toContain("列出工具");
+    expect(english).toContain("List tools");
+    expect(english).not.toMatch(/\p{Script=Han}/u);
+    const commands = (value: string) => value.split("\n").filter(line => !line.trimStart().startsWith("#"));
+    expect(commands(english)).toEqual(commands(chinese));
+    expect(english).toContain("Mcp-Session-Id: <MCP_SESSION_ID>");
   });
 });
 

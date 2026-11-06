@@ -4,7 +4,7 @@ import { effectScope, nextTick, reactive, type Ref } from "vue";
 import { ShortcutsAPIError, type ShortcutFolder, type ShortcutSnapshot, type ShortcutsView } from "@/api/shortcuts";
 const host = vi.hoisted(() => ({ list: vi.fn(), save: vi.fn(), skills: vi.fn(), cleanups: [] as (() => void)[] }));
 vi.mock("vue", async original => ({ ...await original<typeof import("vue")>(), inject: () => null, useSSRContext: () => ({ modules: new Set() }), onBeforeUnmount: (fn: () => void) => host.cleanups.push(fn) }));
-vi.mock("vue-i18n", () => ({ useI18n: () => ({ t: (key: string) => key }) }));
+vi.mock("vue-i18n", async original => { const { ref } = await import("vue"); return { ...await original<typeof import("vue-i18n")>(), useI18n: () => ({ t: (key: string) => key, locale: ref("zh-CN") }) }; });
 vi.mock("element-plus", () => ({ ElMessage: { success: vi.fn() } }));
 vi.mock("@/api/shortcuts", async original => ({ ...await original<typeof import("@/api/shortcuts")>(), shortcutsApi: { list: host.list, save: host.save } }));
 vi.mock("@/api/client", async original => { const actual = await original<typeof import("@/api/client")>(); return { ...actual, api: { ...actual.api, skills: host.skills } }; });

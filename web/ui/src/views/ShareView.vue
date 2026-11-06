@@ -1,8 +1,10 @@
 <script setup lang="ts">
+import { getLocale } from "@/i18n";
 import { computed, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { Check, CopyDocument, InfoFilled } from "@element-plus/icons-vue";
 import Logo from "@/components/Logo.vue";
+import StudioEntrySkeleton from "@/components/studio/StudioEntrySkeleton.vue";
 import AnswerText from "@/components/AnswerText.vue";
 import WorkLog from "@/components/WorkLog.vue";
 import TurnCard from "@/components/TurnCard.vue";
@@ -61,7 +63,7 @@ const exchange = computed<Exchange | null>(() => {
 });
 
 const createdLabel = computed(() =>
-  entry.value?.created_at ? new Date(entry.value.created_at).toLocaleString() : "",
+  entry.value?.created_at ? new Date(entry.value.created_at).toLocaleString(getLocale()) : "",
 );
 
 async function copyAnswer() {
@@ -84,7 +86,9 @@ async function copyAnswer() {
     </header>
 
     <div v-if="failed" class="state">{{ t("shareView.notFound") }}</div>
-    <div v-else-if="!entry" class="state">{{ t("shareView.loading") }}</div>
+    <article v-else-if="!entry" class="sheet" role="status" :aria-label="t('shareView.loading')" aria-busy="true">
+      <StudioEntrySkeleton area="document" />
+    </article>
 
     <article v-else class="sheet">
       <div class="meta">

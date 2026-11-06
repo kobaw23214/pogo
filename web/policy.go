@@ -263,13 +263,15 @@ func (p *Policy) Decide(req agent.GateRequest) (rule string, auto bool) {
 // reviewsLocked is the mode matrix.
 func (p *Policy) reviewsLocked(req agent.GateRequest) bool {
 	switch req.ToolName {
-	case "read", "ls", "find", "grep", tools.InformationToolName, tools.ToolResultReadName, tools.ShortcutQueryName, tools.ShortcutSearchName, tools.ShortcutReadName, tools.ShortcutListName, tools.SkillSearchName, tools.SkillReadName, tools.ShellTasksName, tools.ShellOutputName, "workflow_discover", "workflow_read", "workflow_validate", tools.AgentWorkflowReadName, tools.RequestUserInputName, tools.RequestUserInputAsyncName:
+	case "read", "ls", "find", "grep", tools.InformationToolName, tools.ToolResultReadName, tools.ShortcutQueryName, tools.ShortcutSearchName, tools.ShortcutReadName, tools.ShortcutListName, tools.SkillSearchName, tools.SkillReadName, tools.ShellTasksName, tools.ShellOutputName, tools.AgentWorkflowReadName, tools.RequestUserInputName, tools.RequestUserInputAsyncName:
 		// Read-only and confined by the path guard. Reviewing them would train
 		// the habit of clicking approve, which is what makes the bash prompt
 		// stop meaning anything.
 		return false
 	case tools.WatchName:
 		return !tools.WatchReadOnly(req.Args)
+	case tools.WebServiceName:
+		return !tools.WebServiceReadOnly(req.Args)
 	case tools.BackgroundTaskName:
 		return !tools.BackgroundTaskReadOnly(req.Args)
 	case tools.WatchTestName:

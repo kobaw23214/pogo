@@ -5,7 +5,7 @@ import CommandTokenIcon from "./CommandTokenIcon.vue";
 import ContextMeter from "./ContextMeter.vue";
 import SlashCommandMenu from "./SlashCommandMenu.vue";
 
-vi.mock("vue-i18n", () => ({ useI18n: () => ({ t: (key: string) => key }) }));
+vi.mock("vue-i18n", async original => { const { ref } = await import("vue"); return { ...await original<typeof import("vue-i18n")>(), useI18n: () => ({ t: (key: string) => key, locale: ref("zh-CN") }) }; });
 
 async function render(component: unknown, props: Record<string, unknown>) {
   const app = createSSRApp({ render: () => h(component as Parameters<typeof h>[0], props) });

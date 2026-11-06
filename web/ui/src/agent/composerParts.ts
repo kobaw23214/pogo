@@ -4,6 +4,7 @@ import { validShortcutLanguage } from "@/components/shortcutPresentation";
 import type { ElementPick } from "./elementPicker";
 import { browserFavicon } from "./browserFavicon";
 import { referenceFavicon } from "./referenceFavicon";
+import { mcpInvocationText, validMcpReference } from "./mcpInvocation";
 
 export interface ComposerTextPart { type: "text"; text: string }
 export interface ComposerElementPart {
@@ -33,9 +34,10 @@ export interface ComposerFilePart {
   error?: string;
 }
 export interface ComposerSkillPart { type: "skill"; id: string; name: string; label: string }
+export interface ComposerMcpPart { type: "mcp"; id: string; server: string; name: string; label: string }
 export interface ComposerShortcutPart { type: "shortcut"; id: string; shortcutId: string; title: string; label: string; text: string; icon?: string; language?: string; parts?: MessageInputPart[] }
 export interface ComposerOfficePart { type: "office"; id: string; label: string; office: OfficeReferenceSnapshot }
-export type ComposerReferencePart = ComposerElementPart | ComposerFilePart | ComposerSkillPart | ComposerShortcutPart | ComposerOfficePart;
+export type ComposerReferencePart = ComposerElementPart | ComposerFilePart | ComposerSkillPart | ComposerMcpPart | ComposerShortcutPart | ComposerOfficePart;
 export type ComposerPart = ComposerTextPart | ComposerReferencePart;
 export interface ComposerSelection { from: number; to: number }
 
@@ -79,6 +81,10 @@ export function skillComposerPart(name: string): ComposerSkillPart {
   return { type: "skill", id: composerOccurrenceID(), name, label: name };
 }
 
+export function mcpComposerPart(server: string, name: string): ComposerMcpPart {
+  return { type: "mcp", id: composerOccurrenceID(), server, name, label: `${server}/${name}` };
+}
+
 export function shortcutComposerPart(value: { id: string; title: string; content: string; icon?: string; language?: string; parts?: MessageInputPart[] }): ComposerShortcutPart {
   return { type: "shortcut", id: composerOccurrenceID(), shortcutId: value.id, title: value.title, label: value.title, text: value.content, ...(value.parts?.length ? { parts: cloneInputParts(value.parts) } : {}), ...(value.icon ? { icon: value.icon } : {}), ...(value.language ? { language: value.language } : {}) };
 }
@@ -99,7 +105,7 @@ export function composerDisplayText(parts: readonly ComposerPart[]): string {
 
 /** Model text for callers that use an explicit textual marker for files. */
 export function composerOrderedText(parts: readonly ComposerPart[], fileText: (part: ComposerFilePart) => string = (part) => part.path ?? part.label): string {
-  return parts.map((part) => part.type === "text" || part.type === "element" ? part.text : part.type === "shortcut" ? `[资料：${part.title}]\n${part.parts?.length ? inputPartsText(part.parts) : part.text}` : part.type === "office" ? officeSnapshotText(part.office) : part.type === "skill" ? `/skill:${part.name} ` : fileText(part)).join("");
+  return parts.map((part) => part.type === "text" || part.type === "element" ? part.text : part.type === "shortcut" ? `[资料：${part.title}]\n${part.parts?.length ? inputPartsText(part.parts) : part.text}` : part.type === "office" ? officeSnapshotText(part.office) : part.type === "skill" ? `/skill:${part.name} ` : part.type === "mcp" ? `${mcpInvocationText(part.server, part.name)} ` : fileText(part)).join("");
 }
 
 /** Resolve one upload in place, including repeated occurrences of that file. */
@@ -122,6 +128,7 @@ export function readComposerReference(value: unknown): ComposerReferencePart | n
     return { ...officeComposerPart(part.office as OfficeReferenceSnapshot), id };
   }
   if (part.type === "skill" && typeof part.name === "string" && /^[^\s"'`<>/\\]{1,128}$/.test(part.name)) return { type: "skill", id, name: part.name, label: part.name };
+  if (part.type === "mcp" && validMcpReference(part)) return { ...mcpComposerPart(part.server, part.name), id };
   if (part.type === "element" && typeof part.text === "string" && part.text.length <= 1_000_000) {
     const result: ComposerElementPart = { type: "element", id, text: part.text, label: part.label };
     const favicon = referenceFavicon(part.favicon);

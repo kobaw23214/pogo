@@ -11,6 +11,8 @@ beforeEach(async () => {
   vi.stubGlobal("location", { origin: "https://pogo.test", href: "https://pogo.test/", search: "", pathname: "/" });
   vi.stubGlobal("sessionStorage", { getItem: () => "synthetic-account-token", setItem() {} });
   vi.stubGlobal("fetch", fetchResponse);
+  const { setLocale } = await import("@/i18n");
+  setLocale("zh-CN");
   client = await import("./client");
 });
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
@@ -21,7 +23,7 @@ describe("Office scoped HTTP error responses", () => {
     await expect(client.officeRequest("GET", "/api/office/sessions/a/config?instanceId=current"))
       .rejects.toMatchObject({ message: "当前文档已绑定其他编辑器实例。", code: "EDITOR_ALREADY_CONNECTED", status: 409 });
     expect(fetchResponse).toHaveBeenCalledTimes(1);
-    expect(fetchResponse.mock.calls[0]![1].headers).toEqual({ Authorization: "Bearer synthetic-account-token", "X-Pogo-Office-Origin": "https://pogo.test" });
+    expect(fetchResponse.mock.calls[0]![1].headers).toEqual({ Authorization: "Bearer synthetic-account-token", "Accept-Language": "zh-CN", "X-Pogo-Office-Origin": "https://pogo.test" });
   });
   it("retains plain authentication and legacy string errors", async () => {
     fetchResponse.mockResolvedValueOnce(new Response("Unauthorized", { status: 401 }));
@@ -39,7 +41,7 @@ describe("Office scoped HTTP error responses", () => {
     await expect(client.officeRequest("POST", "/api/office/sessions", { path: "test.docx", conversation_id: "conversation-a", instanceId: "instance-a" })).resolves.toEqual(reply);
     const [path, options] = fetchResponse.mock.calls[0]!;
     expect(path).toBe("/api/office/sessions");
-    expect(options.headers).toEqual({ Authorization: "Bearer synthetic-account-token", "X-Pogo-Office-Origin": "https://pogo.test", "Content-Type": "application/json" });
+    expect(options.headers).toEqual({ Authorization: "Bearer synthetic-account-token", "Accept-Language": "zh-CN", "X-Pogo-Office-Origin": "https://pogo.test", "Content-Type": "application/json" });
     expect(JSON.parse(options.body)).toEqual({ path: "test.docx", conversation_id: "conversation-a", instanceId: "instance-a" });
   });
   it("preserves non-Office API string error handling", async () => {
@@ -52,7 +54,7 @@ describe("Office scoped HTTP error responses", () => {
     fetchResponse.mockResolvedValue(new Response(JSON.stringify({ browserURL: "/office/editor" }), { status: 200 }));
     await client.officeRequest("GET", "/api/office/sessions/a/config?instanceId=current");
     expect(fetchResponse.mock.calls[0]![0]).toBe("/api/office/sessions/a/config?instanceId=current");
-    expect(fetchResponse.mock.calls[0]![1].headers).toEqual({ Authorization: "Bearer synthetic-account-token", "X-Pogo-Office-Origin": origin });
+    expect(fetchResponse.mock.calls[0]![1].headers).toEqual({ Authorization: "Bearer synthetic-account-token", "Accept-Language": "zh-CN", "X-Pogo-Office-Origin": origin });
   });
   it("rejects another API path without fetching it", () => {
     expect(() => client.officeRequest("GET", "/api/models")).toThrow("Invalid Office request path");
@@ -67,7 +69,7 @@ describe("Office scoped HTTP error responses", () => {
     const [path, options] = fetchResponse.mock.calls[0]!;
     expect(path).toBe(`/api/information/entries/${entry}/office-view`);
     expect(options.method).toBe("POST");
-    expect(options.headers).toEqual({ Authorization: "Bearer synthetic-account-token", "X-Pogo-Office-Origin": "https://pogo.test", "Content-Type": "application/json" });
+    expect(options.headers).toEqual({ Authorization: "Bearer synthetic-account-token", "Accept-Language": "zh-CN", "X-Pogo-Office-Origin": "https://pogo.test", "Content-Type": "application/json" });
     expect(JSON.parse(options.body)).toEqual({ version: 3, instanceId: "instance-a", operationId: "operation-a" });
     expect(options.signal).toBeInstanceOf(AbortSignal);
     expect(vi.getTimerCount()).toBe(0);

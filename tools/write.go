@@ -16,7 +16,8 @@ type Write struct {
 	// Roots are additional directories this tool may write to, for the agent's memory
 	// notes. Empty for every other caller, which is what keeps skill bundles and the
 	// rest of the filesystem out of reach. See Options.WriteRoots.
-	Roots []string
+	Roots      []string
+	FileAccess *FileAccess
 	// Journal, when non-nil, snapshots each file's pre-image on first change.
 	Journal            Journal
 	ProtectionManifest string
@@ -59,7 +60,11 @@ func (t *Write) Execute(ctx context.Context, raw json.RawMessage) (Result, error
 	if err := unmarshal(raw, &a); err != nil {
 		return Result{}, err
 	}
-	path, err := resolve(t.Cwd, a.Path, t.Roots...)
+	roots, err := fileAccessRoots(t.Cwd, t.Roots, t.FileAccess)
+	if err != nil {
+		return Result{}, err
+	}
+	path, err := resolve(t.Cwd, a.Path, roots...)
 	if err != nil {
 		return Result{}, err
 	}

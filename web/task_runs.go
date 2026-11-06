@@ -18,7 +18,6 @@ import (
 
 	"github.com/yosukeno/pogo/schedule"
 	"github.com/yosukeno/pogo/taskqueue"
-	"github.com/yosukeno/pogo/workflow"
 )
 
 const taskRunConcurrency = 2
@@ -29,21 +28,18 @@ type taskExecution struct {
 }
 
 type taskRunRuntime struct {
-	m                                 *Manager
-	ctx                               context.Context
-	stop                              context.CancelFunc
-	mu                                sync.Mutex
-	admitMu                           sync.Mutex
-	store                             *taskqueue.Store
-	lease                             *os.File
-	err                               error
-	active                            map[string]taskExecution
-	wakeup                            chan struct{}
-	done                              chan struct{}
-	wg                                sync.WaitGroup
-	workflowAuthorize                 func(taskqueue.WorkflowRunMeta) bool
-	workflowApprovalResolver          func(workflow.Definition, taskqueue.WorkflowRunMeta, map[string][]string, map[string]taskqueue.WorkflowApprovalAssignment) (map[string]taskqueue.WorkflowApprovalAssignment, error)
-	workflowApprovalDecisionAuthorize func(workflow.RunRecord, workflow.HumanDecision) error
+	m       *Manager
+	ctx     context.Context
+	stop    context.CancelFunc
+	mu      sync.Mutex
+	admitMu sync.Mutex
+	store   *taskqueue.Store
+	lease   *os.File
+	err     error
+	active  map[string]taskExecution
+	wakeup  chan struct{}
+	done    chan struct{}
+	wg      sync.WaitGroup
 }
 
 func newTaskRunRuntime(m *Manager) *taskRunRuntime {
@@ -155,6 +151,14 @@ func (r *taskRunRuntime) pump() {
 	}
 	sort.SliceStable(rows, func(i, j int) bool { return rows[i].CreatedAt < rows[j].CreatedAt })
 	for _, row := range rows {
+		if row.Source == "workflow" || row.Source == "schedule" && row.WorkflowID != "" {
+			// Retire only platform admissions; Agent-private runs use their own
+			// source and must keep both their queue identity and durable history.
+			if row.Status == taskqueue.Queued {
+				_, _ = db.Cancel(row.ID, row.Revision)
+			}
+			continue
+		}
 		if row.Status != "queued" || row.DueAt > nowMS() || r.ctx.Err() != nil {
 			continue
 		}
@@ -163,7 +167,7 @@ func (r *taskRunRuntime) pump() {
 		}
 		// The server binds owner checks after Manager construction. Persistent
 		// requests wait for that binding instead of failing during startup.
-		if row.AgentID != "" || row.Source == "workflow" {
+		if row.AgentID != "" {
 			r.m.mu.Lock()
 			ready := r.m.scheduleOwnerValid != nil
 			r.m.mu.Unlock()
@@ -248,8 +252,6 @@ func (r *taskRunRuntime) execute(ctx context.Context, db *taskqueue.Store, run t
 		outcome = taskqueue.Outcome{EndReason: "not_started"}
 	case run.Source == "agent_workflow":
 		outcome = r.executeAgentWorkflow(ctx, db, run)
-	case run.Source == "workflow":
-		outcome = r.executeWorkflow(ctx, run)
 	case run.Source == "schedule":
 		outcome = r.executeSchedule(ctx, run)
 	case run.Source == "sentinel":
@@ -293,6 +295,9 @@ type scheduleTaskPayload struct {
 }
 
 func (r *taskRunRuntime) enqueueSchedule(job schedule.Job, trigger string, fire time.Time) (taskqueue.Run, bool, error) {
+	if job.WorkflowID != "" {
+		return taskqueue.Run{}, false, errors.New("平台工作流已移除，此计划不可执行")
+	}
 	r.admitMu.Lock()
 	defer r.admitMu.Unlock()
 	r.m.mu.Lock()
@@ -314,29 +319,12 @@ func (r *taskRunRuntime) enqueueSchedule(job schedule.Job, trigger string, fire 
 	if trigger == schedule.TriggerScheduled {
 		key = fmt.Sprintf("scheduled:%s:%d", schedule.DefinitionHash(job), fire.UnixNano())
 	}
-	workflowGuard := newWorkflowScheduleGuard(r, db)
 	for _, row := range prior {
 		if row.TriggerID == key {
 			if trigger == schedule.TriggerScheduled {
 				err = r.advanceScheduleAdmission(job, row)
 			}
 			return row, false, err
-		}
-		if blocked, handled, err := workflowGuard.blocked(row); err != nil {
-			return taskqueue.Run{}, false, err
-		} else if handled {
-			if blocked {
-				return taskqueue.Run{}, false, schedule.ErrRunning
-			}
-			continue
-		}
-		if row.WorkflowID != "" && row.SessionID != "" && r.m.wfruns != nil {
-			if native, ok := r.m.wfruns.snapshot(row.SessionID); ok && native.Status == "working" {
-				// A workflow suspended on a durable human node released its
-				// execution slot, but its logical task is still unfinished.
-				// Do not create duplicate approval requests on each timer tick.
-				return taskqueue.Run{}, false, schedule.ErrRunning
-			}
 		}
 		if row.Status == "queued" || row.Status == "running" {
 			return taskqueue.Run{}, false, schedule.ErrRunning
@@ -358,7 +346,7 @@ func (r *taskRunRuntime) enqueueSchedule(job schedule.Job, trigger string, fire 
 		title = job.ID
 	}
 	payload, _ := json.Marshal(scheduleTaskPayload{schedule.DefaultDir()})
-	row, created, err := db.Enqueue(taskqueue.Request{TaskID: taskID, Source: "schedule", SourceID: job.ID, Trigger: trigger, TriggerID: key, DefinitionHash: schedule.DefinitionHash(job), OwnerID: sessionResultOwnerKey(job.Owner), AgentID: job.AgentID, WorkflowID: job.WorkflowID, Title: title, DueAt: fire.UnixMilli(), Payload: payload})
+	row, created, err := db.Enqueue(taskqueue.Request{TaskID: taskID, Source: "schedule", SourceID: job.ID, Trigger: trigger, TriggerID: key, DefinitionHash: schedule.DefinitionHash(job), OwnerID: sessionResultOwnerKey(job.Owner), AgentID: job.AgentID, Title: title, DueAt: fire.UnixMilli(), Payload: payload})
 	if err == nil && trigger == schedule.TriggerScheduled {
 		err = r.advanceScheduleAdmission(job, row)
 	}
@@ -382,6 +370,9 @@ func (r *taskRunRuntime) advanceScheduleAdmission(job schedule.Job, run taskqueu
 }
 
 func (r *taskRunRuntime) executeSchedule(ctx context.Context, run taskqueue.Run) taskqueue.Outcome {
+	if run.WorkflowID != "" {
+		return taskqueue.Outcome{Status: "cancelled", Error: "平台工作流已移除，此计划不可执行"}
+	}
 	fail := func(message string) taskqueue.Outcome { return taskqueue.Outcome{Status: "failed", Error: message} }
 	var payload scheduleTaskPayload
 	if json.Unmarshal(run.Payload, &payload) != nil || filepath.Clean(payload.Directory) != filepath.Clean(schedule.DefaultDir()) {
@@ -463,6 +454,9 @@ func (r *taskRunRuntime) retry(id string, revision int64) (taskqueue.Run, error)
 			err = taskqueue.ErrConflict
 		}
 		return run, err
+	}
+	if run.Source == "workflow" || run.Source == "schedule" && run.WorkflowID != "" {
+		return taskqueue.Run{}, taskqueue.ErrNotFound
 	}
 	if run.Source == "sentinel" {
 		return r.retrySentinel(run)

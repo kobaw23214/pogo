@@ -468,7 +468,7 @@ func TestShortcutToolHostReceiptHistorySurvivesMoreThan256DeletedRoots(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = writeWorkflowFileAtomic(p, raw); err != nil {
+	if err = writePrivateFileAtomic(p, raw); err != nil {
 		t.Fatal(err)
 	}
 	created, err := b.Create(ctx, shortcutToolSimpleRequest("after-deletions", "Still possible"))

@@ -4,7 +4,7 @@
 // at a time) cannot drift apart: nav visibility, module switching and
 // cross-module links all ask these functions instead of restating the map.
 
-export type SettingsSection = "models" | "mcp" | "account" | "general";
+export type SettingsSection = "models" | "mcp" | "account" | "general" | "memory";
 
 // The dialog's own sheets, unchanged — embedded mode only chooses which are
 // reachable, it never invents parallel pages or stores.
@@ -14,6 +14,8 @@ export type SettingsSheet =
   | "sandbox"
   | "attach"
   | "icons"
+  | "websites"
+  | "memory"
   | "account"
   | "mcp"
   | "mcpServe"
@@ -25,6 +27,8 @@ export const SETTINGS_SHEETS: readonly SettingsSheet[] = [
   "sandbox",
   "attach",
   "icons",
+  "websites",
+  "memory",
   "account",
   "mcp",
   "mcpServe",
@@ -45,6 +49,8 @@ const SHEET_SECTION: Record<SettingsSheet, SettingsSection> = {
   sandbox: "general",
   attach: "general",
   icons: "general",
+  websites: "general",
+  memory: "memory",
 };
 
 // Where a module opens: its first sheet in dialog nav order.
@@ -53,6 +59,7 @@ const SECTION_DEFAULT_SHEET: Record<SettingsSection, SettingsSheet> = {
   mcp: "mcp",
   account: "account",
   general: "storage",
+  memory: "memory",
 };
 
 // An embed without a section shows general — the least privileged module —

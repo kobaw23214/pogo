@@ -24,7 +24,8 @@ type Find struct {
 	Cwd string
 	// Roots are extra directories this tool may search outside Cwd, already
 	// canonical. See tools.CanonicalRoots.
-	Roots []string
+	Roots      []string
+	FileAccess *FileAccess
 }
 
 type findArgs struct {
@@ -75,7 +76,11 @@ func (t *Find) Execute(ctx context.Context, raw json.RawMessage) (Result, error)
 		return Result{}, fmt.Errorf("invalid pattern %q: %w", a.Pattern, err)
 	}
 
-	root, err := searchRoot(t.Cwd, a.Path, t.Roots)
+	roots, err := fileAccessRoots(t.Cwd, t.Roots, t.FileAccess)
+	if err != nil {
+		return Result{}, err
+	}
+	root, err := searchRoot(t.Cwd, a.Path, roots)
 	if err != nil {
 		return Result{}, err
 	}

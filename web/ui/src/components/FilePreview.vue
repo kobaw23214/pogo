@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { knownHostReason } from "@/agent/hostStatusCopy";
 import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { ArrowLeft, Check, Close, CopyDocument, Download, EditPen, Monitor } from "@element-plus/icons-vue";
@@ -80,6 +81,8 @@ let officeCheckController: AbortController | null = null;
 let officeCheckTimer: ReturnType<typeof setInterval> | undefined;
 const officeBinding = ref<{ path: string; conversationId: string; id?: string; mtime?: number; size?: number; mode: "view" | "edit" } | null>(null);
 const officeEditor = ref<{ prepareClose(): Promise<boolean>; refreshStatus(): Promise<void> } | null>(null);
+const officeModeChanging = ref(false);
+let officeModeChange: Promise<void> | null = null;
 const officeNotice = ref("");
 const officeVersionObserved = ref(false);
 const closedOfficeSessions = new Set<string>();
@@ -226,8 +229,26 @@ async function viewSavedOffice() {
   readOnlyOffice.value = true; failed.value = "";
   await load();
 }
-function enableOfficeEdit() {
-  if (officeBinding.value) officeBinding.value = { ...officeBinding.value, mode: "edit" };
+function enableOfficeEdit(): Promise<void> {
+  if (officeModeChange) return officeModeChange;
+  const binding = officeBinding.value, currentEditor = officeEditor.value;
+  if (!binding || binding.mode === "edit" || !currentEditor) return Promise.resolve();
+  const version = loadVersion, requestedPath = props.path, owner = props.sessionId;
+  officeModeChanging.value = true;
+  const work = (async () => {
+    // Changing the keyed mode unmounts the old canvas. Retire its exact clean
+    // session first, then request a fresh editor: reusing binding.id races the
+    // old component's detach beacon and yields SESSION_CLOSED on /config.
+    if (!await currentEditor.prepareClose()) return;
+    if (version !== loadVersion || officeBinding.value !== binding || props.path !== requestedPath || props.sessionId !== owner || !officeEditing.value) return;
+    if (binding.id) officeClosedPrevious(binding.id);
+    const supplied = officeClaim.value;
+    officeClaim.value = supplied && supplied.claim.session.id !== binding.id ? supplied : null;
+    officeBinding.value = { ...binding, id: officeClaim.value?.claim.session.id, mode: "edit" };
+  })().catch(error => { if (version === loadVersion && officeBinding.value === binding) failed.value = error instanceof Error ? error.message : String(error); })
+    .finally(() => { if (officeModeChange === work) { officeModeChange = null; officeModeChanging.value = false; } });
+  officeModeChange = work;
+  return work;
 }
 function editSavedOffice() {
   officeClaim.value = null;
@@ -414,7 +435,7 @@ async function load(keepHTMLSource?: unknown) {
       // its five-minute readiness wait; a short health check must not preempt it.
       officeEnabled.value = config.enabled && config.state !== "config_error" && config.state !== "disabled";
       if (!officeEnabled.value) {
-        failed.value = config.reason || t(config.configured || config.enabled ? "officeEditor.unavailable" : "officeEditor.notConfigured");
+        failed.value = knownHostReason(config.reason) || t(config.configured || config.enabled ? "officeEditor.unavailable" : "officeEditor.notConfigured");
         return;
       }
       startOffice();
@@ -593,7 +614,7 @@ async function discard() {
       <template #document-details>
         <code class="office-detail-path">{{ displayPath }}</code>
         <div class="office-detail-actions">
-          <button v-if="officeBinding.mode === 'view'" type="button" class="ghost" @click="enableOfficeEdit"><el-icon><EditPen /></el-icon>{{ t('officeEditor.edit') }}</button>
+          <button v-if="officeBinding.mode === 'view'" type="button" class="ghost" :disabled="officeModeChanging || !officeEditor" :aria-busy="officeModeChanging" @click="enableOfficeEdit"><el-icon><EditPen /></el-icon>{{ t('officeEditor.edit') }}</button>
           <button type="button" class="ghost" :title="t('filePreview.copyPath')" @click="copyPath"><el-icon><Check v-if="copied" /><CopyDocument v-else /></el-icon>{{ t('filePreview.copyPath') }}</button>
           <button type="button" class="ghost" :title="backClose ? t('common.close') : t('filePreview.back')" @click="back"><el-icon><Close v-if="backClose" /><ArrowLeft v-else /></el-icon>{{ backClose ? t('common.close') : t('filePreview.back') }}</button>
         </div>
@@ -719,7 +740,7 @@ async function discard() {
           :source="content.text ?? ''"
         />
         <CodeBlock
-          v-else
+          v-else-if="kind === 'text'"
           :code="content.text ?? ''"
           :lang="ext"
           line-numbers

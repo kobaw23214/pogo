@@ -3,7 +3,7 @@ import { effectScope, nextTick, reactive, type Ref } from "vue";
 import type { McpCall, McpCallsPage, McpCallStats, McpMonitorFilter } from "./mcpMonitor";
 const host = vi.hoisted(() => ({ globalCalls: vi.fn(), globalStats: vi.fn(), globalDetail: vi.fn(), calls: vi.fn(), stats: vi.fn(), detail: vi.fn(), cleanup: [] as (() => void)[] }));
 vi.mock("vue", async original => ({ ...await original<typeof import("vue")>(), onBeforeUnmount: (fn: () => void) => host.cleanup.push(fn), useSSRContext: () => ({ modules: new Set() }) }));
-vi.mock("vue-i18n", () => ({ useI18n: () => ({ t: (key: string) => key, d: (date: Date) => date.toISOString() }) }));
+vi.mock("vue-i18n", async original => ({ ...await original<typeof import("vue-i18n")>(), useI18n: () => ({ t: (key: string) => key, d: (date: Date) => date.toISOString() }) }));
 vi.mock("@/api/client", () => ({ api: { mcpCalls: host.globalCalls, mcpCallStats: host.globalStats, mcpCall: host.globalDetail, mcpAgentCalls: host.calls, mcpAgentCallStats: host.stats, mcpAgentCall: host.detail } }));
 vi.mock("./ObserveStatusCard.vue", () => ({ default: {} }));
 import McpMonitorPanel from "./McpMonitorPanel.vue";

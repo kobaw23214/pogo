@@ -8,8 +8,13 @@ import (
 // SkillContextUpdate replaces only the host-selected Skill projection. The
 // owning session must be idle, including background delegations.
 type SkillContextUpdate struct {
-	Previous           []Tool
-	Tools              []Tool
+	Previous []Tool
+	Tools    []Tool
+	// MCP, when present, is projected against Tools by the host. Prepare the
+	// Skill and external replacements together so a new Skill can take over a
+	// colliding wire name, or release it back to MCP, in the same commit.
+	// Nil retains the old external registry for callers without an MCP pool.
+	MCP                *[]Tool
 	ReadRoots          []string
 	ChildReadRoots     []string
 	SkillReads         []SkillReadTarget
@@ -24,6 +29,9 @@ type SkillContextUpdate struct {
 // retained delegation), replacing the file-read grants and declared tools.
 // apply updates the retained subagent only after the caller persists policy.
 func (r *Registry) WithSkillContext(u SkillContextUpdate) (*Registry, func(), error) {
+	if u.MCP != nil {
+		r = r.WithMCP(nil)
+	}
 	old := map[string]bool{}
 	for _, t := range u.Previous {
 		if hostShellJobName(t.Name()) || hostShortcutName(t.Name()) || hostWatchName(t.Name()) {
@@ -112,6 +120,9 @@ func (r *Registry) WithSkillContext(u SkillContextUpdate) (*Registry, func(), er
 	next.results, next.scopedOutputRoot, next.nativeTools = r.results, r.scopedOutputRoot, r.nativeTools
 	next.sentinelEvent = r.sentinelEvent
 	next.resultDelivery = CloneResultDeliveryPolicy(r.resultDelivery)
+	if u.MCP != nil {
+		next = next.WithMCP(*u.MCP)
+	}
 	apply := func() {
 		if child != nil {
 			child.SkillPaths = append([]string(nil), u.SkillPaths...)

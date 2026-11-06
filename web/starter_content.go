@@ -39,6 +39,8 @@ func starterInputFallback(parts []MessageInputPart) string {
 			out.WriteString("【" + path.Base(part.Path) + "】")
 		case "skill":
 			out.WriteString("【/skill:" + part.Name + "】")
+		case "mcp":
+			out.WriteString("【" + skills.MCPInputText(part.Server, part.Name) + "】")
 		case "office":
 			out.WriteString("【Office选区：" + part.Office.Title + "】")
 		case "shortcut":

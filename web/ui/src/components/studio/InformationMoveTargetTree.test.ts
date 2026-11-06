@@ -3,7 +3,7 @@ import { effectScope, reactive, type Ref } from "vue";
 import type { InformationEntry } from "@/api/information";
 import type { InformationMoveTargetRow } from "./informationMoveTargets";
 vi.mock("vue", async original => ({ ...await original<typeof import("vue")>(), useSSRContext: () => ({ modules: new Set() }) }));
-vi.mock("vue-i18n", () => ({ useI18n: () => ({ t: (key: string) => key }) }));
+vi.mock("vue-i18n", async original => ({ ...await original<typeof import("vue-i18n")>(), useI18n: () => ({ t: (key: string) => key }) }));
 import Tree from "./InformationMoveTargetTree.vue";
 const entry = (id: string, parent_id = ""): InformationEntry => ({ id, parent_id, name: id, kind: "folder", version: 1, created_at: "2026-10-18", updated_at: "2026-10-18" });
 interface Controller { expanded: Ref<string[]>; focused: Ref<string>; rows: Ref<InformationMoveTargetRow[]>; destinationValid: Ref<boolean>; select(id: string): void; toggle(id: string): void; expandAll(): void; collapseAll(): void; onKey(event: KeyboardEvent, id: string): void }

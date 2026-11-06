@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { getLocale } from "@/i18n";
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { Search, Document, Lock, Close, Fold, Expand, Refresh } from "@element-plus/icons-vue";
@@ -16,7 +17,7 @@ const entries = ref<InformationEntry[]>([]), query = ref(""), listLoading = ref(
 const chosen = ref<InformationEntry | null>(null), selected = ref<OfficeReferenceSnapshot | null>(null), viewerError = ref("");
 const filesCollapsed = ref(false), viewerVersion = ref(0), detailsOpen = ref(false);
 let listSequence = 0, disposed = false, listController: AbortController | undefined;
-const files = computed(() => entries.value.filter(entry => entry.kind === "file" && entry.file && /\.(?:docx|xlsx)$/i.test(entry.file.name)).sort((a, b) => a.name.localeCompare(b.name)));
+const files = computed(() => entries.value.filter(entry => entry.kind === "file" && entry.file && /\.(?:docx|xlsx)$/i.test(entry.file.name)).sort((a, b) => a.name.localeCompare(b.name, getLocale())));
 const visibleFiles = computed(() => files.value.filter(entry => entry.name.toLocaleLowerCase().includes(query.value.trim().toLocaleLowerCase())));
 const viewerKey = computed(() => chosen.value ? `${chosen.value.id}:${chosen.value.version}:${viewerVersion.value}` : "");
 const canInsert = computed(() => !props.disabled && !!selected.value);

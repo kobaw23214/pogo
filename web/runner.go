@@ -148,8 +148,8 @@ type Session struct {
 	// at an idle boundary, while uploads alone leave the current projection intact.
 	skillSnapshot []skillSnapshotEntry
 
-	// MCP grants remain fixed at creation. Model and Skill policies synchronize
-	// independently between runs under mu; invocationSkills
+	// Model, Skill, native and MCP policies synchronize independently between
+	// runs under mu; invocationSkills
 	// is the skill set /skill:name may expand from;
 	// mcpOnly narrows every MCP projection and refresh (nil = the whole
 	// pool, which is also what ordinary sessions carry).
@@ -425,6 +425,10 @@ func (s *Session) startOrderedInput(prompt string, attachments []string, parts [
 
 func (s *Session) startPreparedInput(prompt string, attachments []string, parts []MessageInputPart, layout, clientID string, observed mcpobserve.Metadata, inboxID string, preparationContext context.Context, prepare func() error, capture ...func(*activeRun)) (string, error) {
 	var err error
+	parts, err = canonicalMCPInput(prompt, attachments, parts, layout)
+	if err != nil {
+		return "", err
+	}
 	prompt, attachments, err = normalizeMessageInput(prompt, attachments, parts, layout)
 	if err != nil {
 		return "", err
@@ -434,10 +438,7 @@ func (s *Session) startPreparedInput(prompt string, attachments []string, parts 
 		return "", err
 	}
 	if s.studioID != "" {
-		if _, err := s.syncStudioSkillPolicy(inboxID); err != nil {
-			return "", err
-		}
-		if _, err := s.syncStudioToolPolicy(inboxID); err != nil {
+		if err := s.syncStudioCapabilities(inboxID); err != nil {
 			return "", err
 		}
 	}
@@ -540,10 +541,7 @@ func (s *Session) startPreparedInput(prompt string, attachments []string, parts 
 		}
 	}
 	if due && s.studioID != "" {
-		if _, err := s.syncStudioSkillPolicy(inboxID); err != nil {
-			return "", err
-		}
-		if _, err := s.syncStudioToolPolicy(inboxID); err != nil {
+		if err := s.syncStudioCapabilities(inboxID); err != nil {
 			return "", err
 		}
 	}
@@ -954,8 +952,7 @@ func (s *Session) finish() {
 	}
 	_, _ = s.SyncModelConfig()
 	if s.studioID != "" {
-		_, _ = s.SyncStudioSkillPolicy()
-		_, _ = s.SyncStudioToolPolicy()
+		s.syncStudioCapabilitiesAtIdle()
 	}
 	s.resumeShellNotifications()
 }
@@ -1221,8 +1218,7 @@ func (s *Session) compact(ctx context.Context, keep int64, instructions string) 
 		// boundary at which a model update deferred during the summary applies.
 		_, _ = s.SyncModelConfig()
 		if s.studioID != "" {
-			_, _ = s.SyncStudioSkillPolicy()
-			_, _ = s.SyncStudioToolPolicy()
+			s.syncStudioCapabilitiesAtIdle()
 		}
 	}()
 	before := a.Messages()

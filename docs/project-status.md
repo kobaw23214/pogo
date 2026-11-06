@@ -10,6 +10,8 @@
 
 2026-10-02 后续正确性修复（尚未部署）：`3974d98` 修复 STU-01；`cec98ac` 修复 WF-01/WF-04（包括取消与保存失败的并发边界），UI 单独显示保存失败与停止后续调度，不覆盖最后保存的状态。发布执行器见 `0115bbe` 与 [RELEASE.md](../../w_deploy/RELEASE.md)；详细验证和 CI 状态见根 [HANDOFF.md](../../HANDOFF.md) 第 12 节。以下早期探针描述用于保留问题依据，不能再作为当前代码仍有这些缺陷的结论。
 
+2026-11-05 范围调整：平台工作流的管理、执行、组织审批与发布嵌入模块已从源码移除，只保留 [Agent 内部工作流](agent-internal-workflows.md)。本次只改代码，未测试、构建或部署；下方早期验证数量及平台问题记录不代表本次状态。
+
 ## 能力与实现边界
 
 2026-10-01 浏览器升级：新增可配置的 Playwright/Chromium 托管运行时，直接访问原始网站，接入会话隔离、模型截图、前端画面与人工接管。未配置时仍使用旧面板。第一阶段能力、测试入口与未完成边界见 [原生浏览器运行时](native-browser-runtime.md)，不代表已部署或达到 SOTA。
@@ -21,27 +23,23 @@
 | 内置工具 | 文件、Shell、浏览器、todo、subagent、可选图像分析等 | `tools/builtin.go` 有不可移除的核心工具，显式空选不代表零工具 |
 | Skill Runtime | ZIP 安装、契约和摘要验证、平台兼容性预检、服务端绑定、会话锁、工具/资源、停用与删除检查、workspaceData 物化 | 工具型 Skill 执行要求 Linux/amd64 或 Linux/arm64、匹配架构的 Skill 包与可用 bubblewrap；管理可用不等于执行可用；Pogo 运行声明是私有扩展 |
 | MCP | 上游 stdio/HTTP/SSE、用户凭据覆盖、按 Agent 选择、普通会话运行前刷新；实例及 Agent 对外 MCP | MCP 机器凭据与 Web 用户身份不同，不能互换会话权限 |
-| 工作流 | DAG、条件边、并行、人工节点、动态分派、发布/回滚、定时和恢复记录 | 仍有下列执行语义缺口，不能宣称与普通会话能力完全等价 |
-| 身份和存储 | 本地账号/固定 Token、SQLite 会话归属、JSONL 对话、Studio/工作流文件注册表 | 旧业务 JWT 委托通道已移除；用户目录划分不等于租户进程隔离 |
+| Agent 内部工作流 | 对话建改、画布、代码/条件/并行/汇聚/迭代/循环、本人确认、版本和运行记录 | 归属于用户与单个 Agent；不提供平台发布嵌入、组织审批和跨 Agent 流程编排 |
+| 身份和存储 | 本地账号/固定 Token、SQLite 会话归属、JSONL 对话、Studio 注册表与内部流程独立表 | 旧业务 JWT 委托通道已移除；用户目录划分不等于租户进程隔离 |
 | 运行入口 | Web、一次性 JSON/text CLI、交互 TUI、子进程与运维命令 | TUI 尚未退役；平台仍依赖无界面 CLI |
 
-主要入口：[Studio](../web/studio.go)、[会话装配](../web/manager.go)、[Skill 装配](../web/skill_runtime.go)、[MCP 刷新](../web/mcprefresh.go)、[工作流装配](../web/workflowrun.go)、[运行结束原因](../agent/endreason.go)。
+主要入口：[Studio](../web/studio.go)、[会话装配](../web/manager.go)、[Skill 装配](../web/skill_runtime.go)、[MCP 刷新](../web/mcprefresh.go)、[内部工作流装配](../web/agent_workflow_runtime.go)、[运行结束原因](../agent/endreason.go)。
 
 ## 已确认问题与待验收边界
 
 | 编号 | 现状 | 证据和影响 |
 | --- | --- | --- |
-| WF-01 | 已修复，待部署（`cec98ac`） | 节点与 dispatch 消费完整 Agent 终态；模型错误、取消和预算耗尽不再成功，旧产物不能掩盖失败。模型错误与全部 EndReason 回归通过 |
-| WF-02 | 工作流另建 Agent，没有接入普通会话完整的 Skill Runtime 装配 | 静态对照 `web/manager.go` 的 `runtimeSkillTools` 与 `web/workflowrun.go` 的 `executor/dispatchTool.execute`；缺少会话式绑定/锁、运行工具与数据物化路径，不能保证同一 Agent 在两种入口能力相同 |
-| WF-03 | 发布冻结工作流定义，没有固定引用的 Agent 定义 | overlay 探针发布后修改 Agent instructions，已发布工作流采用了新指令；节点执行时读取 `studio.get`，人工等待恢复也会读取当时的定义 |
-| WF-04 | 已修复，待部署（`cec98ac`） | 状态写入返回错误贯穿 Runner；node_start 保存成功才执行，首次失败停调度、取消并等待在途任务，以最后保存状态展示独立 persistence_error；慢取消不再原地改未保存状态。进程内隔离与重启恢复避免重放结果未知节点 |
 | ISO-01 | 会话/API 归属与进程隔离强度不同 | 普通会话 Bash 未装配严格 `CommandScope`；终端经 `startTerminal` 传 nil scope；通用沙箱有整个文件系统只读视图及 HOME 写入范围。未做真实用户数据越权实验，跨用户 Shell/终端隔离待专门验收 |
 | CI-01 | 入口与本地门禁已补齐，真实 GitLab 执行待接入（`a01e9d0`） | 根 `.gitlab-ci.yml` 复用原生 Linux Docker 验证入口，UI/worker/eval/Go 与部署各组已实际通过；13 关键集成要求真实 PASS。先前失败与分组复验边界保留在 `.ci-artifacts/validation-summary.json`。本轮未注册 Runner/触发 GitLab pipeline，不能将本地通过写成线上 CI 通过 |
 | STU-01 | 已修复，待部署（`3974d98`） | Session 同一锁内检查运行状态、保存 binding、更新 client/schema/cfg 并发布事件。拒绝/写失败/并发及重启一致性回归通过 |
 
-WF-02、WF-03、ISO-01 仍待修复或专项验收；STU-01、WF-01、WF-04 已有回归修复，尚未部署。CI 配置与实际 Runner 执行仍需区分。
+上述 ISO、STU 与 CI 内容保留其原核对日期和验证边界；平台工作流 WF 系列事项随模块退役，不再作为当前功能缺口。CI 配置与实际 Runner 执行仍需区分。
 
-Studio 默认工作区为用户根下 `agents/<id>`；同一用户的 memory、journal 和 checkpoint 仍按用户共享。工作流各节点共享本次 run 的 workspace，通过文件传递产物。两种范围不得混为一谈。
+Studio 默认工作区为用户根下 `agents/<id>`；同一用户的 memory、journal 和 checkpoint 仍按用户共享。Agent 内部流程有独立 Run 工作区与输入/产物快照，并行节点独立执行；其范围与普通会话工作区不同。
 
 ## 本次验证记录
 

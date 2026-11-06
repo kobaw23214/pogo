@@ -251,7 +251,8 @@ body,
 body {
   font-family:
     -apple-system, BlinkMacSystemFont, "Segoe UI Variable Display", "Segoe UI", "PingFang SC",
-    "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    "PingFang TC", "Hiragino Sans", "Hiragino Sans GB", "Yu Gothic UI", "Malgun Gothic",
+    "Microsoft YaHei", "Microsoft JhengHei", sans-serif;
   font-size: 14px;
   color: var(--el-text-color-primary);
   background: var(--el-bg-color-page);
@@ -261,6 +262,18 @@ body {
      difference shows most on the mixed Latin/CJK text this UI is full of. */
   font-kerning: normal;
   text-rendering: optimizeLegibility;
+}
+
+// Prefer the appropriate Han glyph forms rather than forcing Simplified
+// Chinese system fonts on Traditional Chinese, Japanese or Korean copy.
+html:lang(zh-TW) body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang TC", "Microsoft JhengHei", sans-serif;
+}
+html:lang(ja) body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Yu Gothic UI", "Meiryo", sans-serif;
+}
+html:lang(ko) body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
 }
 
 ::selection {

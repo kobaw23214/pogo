@@ -23,7 +23,6 @@ func (s *Server) Close() {
 		return
 	}
 	s.closeOnce.Do(func() {
-		s.unbindWorkflowAuthoringTools()
 		if s.mgr != nil {
 			s.mgr.mu.Lock()
 			if s.mgr.agentWorkflowHost == s {
@@ -31,7 +30,6 @@ func (s *Server) Close() {
 			}
 			s.mgr.mu.Unlock()
 		}
-		s.stopWorkflowCallbacks()
 		s.closeHTMLPreviews()
 		s.closeOffice()
 		s.closeBrowserLive()

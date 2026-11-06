@@ -5,7 +5,7 @@ import type { ShortcutDraftSource } from "@/agent/shortcutDraftSource";
 import type { ShortcutSnapshot } from "@/api/shortcuts";
 const host = vi.hoisted(() => ({ source: null as ShortcutDraftSource | null, cleanups: [] as (() => void)[] }));
 vi.mock("vue", async original => ({ ...await original<typeof import("vue")>(), inject: () => () => host.source, useId: () => "test-workspace", useSSRContext: () => ({ modules: new Set() }), onBeforeUnmount: (fn: () => void) => host.cleanups.push(fn) }));
-vi.mock("vue-i18n", () => ({ useI18n: () => ({ t: (key: string) => key }) }));
+vi.mock("vue-i18n", async original => { const { ref } = await import("vue"); return { ...await original<typeof import("vue-i18n")>(), useI18n: () => ({ t: (key: string) => key, locale: ref("zh-CN") }) }; });
 vi.mock("@/agent/studioNavigation", () => ({ registerStudioNavigationGuard: () => () => {} }));
 vi.mock("./InlineComposer.vue", () => ({ default: {} }));
 vi.mock("./OrderedMessageContent.vue", () => ({ default: {} }));

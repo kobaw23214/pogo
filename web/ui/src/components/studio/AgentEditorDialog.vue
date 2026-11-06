@@ -1,8 +1,11 @@
 <script setup lang="ts">
+import { useI18n } from "vue-i18n";
+const { t: tr } = useI18n();
 import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from "vue";
 import { ArrowLeft, ArrowRight, Check, Close, Document, MagicStick, Plus, Refresh, Search } from "@element-plus/icons-vue";
 import AgentAvatar, { AVATAR_COLORS } from "@/components/AgentAvatar.vue";
 import SkillToolsConfiguration from './SkillToolsConfiguration.vue';
+import { builtinSkillDescription, builtinToolDescription } from '@/agent/builtinToolCopy';
 import FieldHelp from './FieldHelp.vue';
 import StarterIconPicker from './StarterIconPicker.vue';
 import InlineComposer from '@/components/InlineComposer.vue';
@@ -27,9 +30,7 @@ import {
   normalizeStarter,
   padStarters,
   starterToWire,
-  CATEGORY_ORDER,
   buildAgentInput,
-  categoryLabel,
   defaultModelId,
   initialCapabilities,
   initialCreateSkills,
@@ -235,8 +236,8 @@ const platformWorkflowToolNames = new Set([
   "workflow_discover", "workflow_read", "workflow_validate", "workflow_edit",
   "workflow_test", "workflow_run", "workflow_publish",
 ]);
-// Keep obsolete saved selections visible and removable, while never offering
-// platform management capabilities as Agent grants (including stale catalogs).
+// Never offer retired platform management capabilities as Agent grants, even
+// when a retained catalog still contains obsolete names.
 const agentCapabilities = computed(() => {
   const catalog = props.capabilities;
   if (!catalog) return null;
@@ -267,12 +268,12 @@ const generationMessage = ref('');
 // (the server's studioGenerateStarterLimit).
 const generationMax = AGENT_FORM_LIMITS.starterGenerationBatch;
 const generationReason = computed(() => {
-  if (!form.models.length || !form.model || !form.models.includes(form.model)) return '请先在上方勾选至少一个模型，并设置默认模型。';
-  if (!props.models.some(model => model.id === form.model && model.available)) return '当前默认模型不可用，请选择一个可用模型。';
-  if (form.models.some(id => !props.models.some(model => model.id === id && model.available))) return '已勾选的模型中有不可用项，请先取消勾选或恢复模型配置。';
-  if (!form.name.trim() && !form.description.trim() && !form.instructions.trim()) return '请先填写名称、简介或指令，让 AI 了解这个 Agent 的用途。';
-  if (!capabilitiesReady.value) return '技能与工具清单加载完成后即可生成。';
-  if (!Number.isInteger(generationCount.value) || generationCount.value < 1 || generationCount.value > generationMax) return `生成条数需为 1 到 ${generationMax}。`;
+  if (!form.models.length || !form.model || !form.models.includes(form.model)) return tr('studioManagement.text014');
+  if (!props.models.some(model => model.id === form.model && model.available)) return tr('studioManagement.text015');
+  if (form.models.some(id => !props.models.some(model => model.id === id && model.available))) return tr('studioManagement.text016');
+  if (!form.name.trim() && !form.description.trim() && !form.instructions.trim()) return tr('studioManagement.text017');
+  if (!capabilitiesReady.value) return tr('studioManagement.text018');
+  if (!Number.isInteger(generationCount.value) || generationCount.value < 1 || generationCount.value > generationMax) return tr('studioManagement.text019', { value0: generationMax });
   return '';
 });
 const canGenerate = computed(() => !generationReason.value && !generating.value && !props.saving);
@@ -283,7 +284,7 @@ const generationContext = computed(() => JSON.stringify({
 }));
 let generationEpoch = 0;
 let generationController: AbortController | null = null;
-function cancelGeneration(message = '已取消生成。') {
+function cancelGeneration(message = tr('studioManagement.text020')) {
   generationEpoch++;
   generationController?.abort();
   generationController = null;
@@ -292,7 +293,7 @@ function cancelGeneration(message = '已取消生成。') {
   generationMessage.value = message;
 }
 watch(generationContext, () => {
-  if (generating.value) cancelGeneration('信息已修改，已取消本次生成。可按新内容重新生成。');
+  if (generating.value) cancelGeneration(tr('studioManagement.text021'));
 }, { flush: 'sync' });
 async function generateStarters() {
   if (!canGenerate.value) return;
@@ -310,10 +311,10 @@ async function generateStarters() {
     generating.value = false;
     generationController = null;
     form.starters = merged.starters;
-    generationMessage.value = `已新增 ${merged.added} 条开场提示，原有内容已保留。可继续修改后保存。`;
+    generationMessage.value = tr('studioManagement.text022', { value0: merged.added });
   } catch (error) {
     if (epoch !== generationEpoch || controller.signal.aborted) return;
-    generationError.value = error instanceof Error ? error.message : '生成暂时失败，请稍后重试。';
+    generationError.value = error instanceof Error ? error.message : tr('studioManagement.text023');
   } finally {
     if (epoch === generationEpoch) {
       generating.value = false;
@@ -382,8 +383,8 @@ const allToolRows = computed<CapRow[]>(() => {
   const rows: CapRow[] = (agentCapabilities.value?.builtin_tools ?? []).map((t) => ({
     id: t.name,
     name: t.name,
-    desc: t.description,
-    meta: nativeToolSkill(t.name, agentCapabilities.value) ? `关联 ${nativeToolSkill(t.name, agentCapabilities.value)}` : t.protected ? "核心，始终保留" : t.read_only ? "只读" : "",
+    desc: builtinToolDescription(t.name, t.description),
+    meta: nativeToolSkill(t.name, agentCapabilities.value) ? tr('studioManagement.text024', { value0: nativeToolSkill(t.name, agentCapabilities.value) }) : t.protected ? tr('studioManagement.text025') : t.read_only ? tr('studioManagement.text026') : "",
     selected: !!t.protected || form.tools.includes(t.name),
     locked: !canToggleNativeTool(t, agentCapabilities.value),
     stale: false,
@@ -394,16 +395,13 @@ const allToolRows = computed<CapRow[]>(() => {
   for (const skill of linkedSkills.value) {
     for (const name of skill.legacy_native_tools ?? []) {
       if (!form.tools.includes(name)) continue;
-      rows.push({ id: name, name, desc: '保留原有兼容权限。切换关联 Skill 后，统一使用当前工具入口，不会自动扩大旧权限。', meta: `关联 ${skill.name} · 兼容授权`, selected: true, locked: true, stale: true, disabled: false, builtin: false, associatedSkill: skill.name });
+      rows.push({ id: name, name, desc: tr('studioManagement.text027'), meta: tr('studioManagement.text028', { value0: skill.name }), selected: true, locked: true, stale: true, disabled: false, builtin: false, associatedSkill: skill.name });
     }
   }
   const legacy = legacyShortcutManagementNames.filter(name => form.tools.includes(name));
-  for (const name of form.tools.filter(tool => platformWorkflowToolNames.has(tool))) {
-    rows.push({ id: name, name, desc: "平台工作流在管理页面维护。此绑定已无操作权限，可取消勾选移除。", meta: "历史绑定", selected: true, locked: false, stale: true, disabled: true, builtin: false });
-  }
   if (legacy.length && !form.tools.includes("shortcut_manage")) {
-    const labels: Record<string, string> = { shortcut_create: "创建", shortcut_update: "修改", shortcut_folder_create: "创建文件夹", shortcut_folder_rename: "文件夹改名", shortcut_move: "移动" };
-    rows.push({ id: "legacy_shortcut_management", name: "shortcut_manage (legacy)", desc: `仅允许：${legacy.map(name => labels[name]).join("、")}。保留此项不会增加权限；启用上方“shortcut_manage”才会开放全部管理操作。`, meta: "兼容授权", selected: true, locked: false, stale: false, disabled: false, builtin: false });
+    const labels: Record<string, string> = { shortcut_create: tr('studioManagement.text031'), shortcut_update: tr('studioManagement.text032'), shortcut_folder_create: tr('studioManagement.text033'), shortcut_folder_rename: tr('studioManagement.text034'), shortcut_move: tr('studioManagement.text035') };
+    rows.push({ id: "legacy_shortcut_management", name: "shortcut_manage (legacy)", desc: tr('studioManagement.text036', { value0: legacy.map(name => labels[name]).join("、") }), meta: tr('studioManagement.text037'), selected: true, locked: false, stale: false, disabled: false, builtin: false });
   }
   return rows;
 });
@@ -439,8 +437,8 @@ const allSkillRows = computed<CapRow[]>(() => {
   const rows: CapRow[] = catalog.map((s) => ({
     id: s.id,
     name: s.name,
-    desc: s.description,
-    meta: [s.package ? `${s.package_name} · v${s.package.version}` : '', skillStateLabel(s.state), s.hidden ? "仅手动调用" : "", s.builtin ? "系统内置" : "", s.native_tools?.length ? `${s.native_tools.length} 关联内置工具` : s.tool_count ? `${s.tool_count} 技能工具` : '操作指南'].filter(Boolean).join(" · "),
+    desc: builtinSkillDescription(s.name, s.description, !!s.builtin),
+    meta: [s.package ? `${s.package_name} · v${s.package.version}` : '', skillStateLabel(s.state), s.hidden ? tr('studioManagement.text038') : "", s.builtin ? tr('studioManagement.text039') : "", s.native_tools?.length ? tr('studioManagement.text040', { value0: s.native_tools.length }) : s.tool_count ? tr('studioManagement.text041', { value0: s.tool_count }) : tr('studioManagement.text042')].filter(Boolean).join(" · "),
     selected: requiredBuiltinSkill(s) || form.skills.includes(s.id),
     locked: requiredBuiltinSkill(s) || (!form.skills.includes(s.id) && (s.state === 'revoked' || s.state === 'unavailable')),
     stale: false,
@@ -453,7 +451,7 @@ const allSkillRows = computed<CapRow[]>(() => {
 });
 
 const mcpStatusLabels: Record<string, string> = {
-  connected: "已连接", connecting: "连接中", disconnected: "未连接", disabled: "已停用",
+  get connected() { return tr('studioManagement.text043'); }, get connecting() { return tr('studioManagement.text044'); }, get disconnected() { return tr('studioManagement.text045'); }, get disabled() { return tr('studioManagement.text046'); },
 };
 const allMcpRows = computed<CapRow[]>(() => {
   const catalog = agentCapabilities.value?.mcp_servers ?? [];
@@ -463,7 +461,7 @@ const allMcpRows = computed<CapRow[]>(() => {
     desc: m.name && m.name !== m.id ? m.id : "",
     // A disabled server's status moves out of the meta line into a badge so
     // the row's whole look, not one word, says "cannot be granted here".
-    meta: [m.transport, m.enabled ? mcpStatusLabels[m.status] || m.status : "", `${m.tool_count} 工具`].filter(Boolean).join(" · "),
+    meta: [m.transport, m.enabled ? mcpStatusLabels[m.status] || m.status : "", tr('studioManagement.text047', { value0: m.tool_count })].filter(Boolean).join(" · "),
     selected: form.mcpServers.includes(m.id),
     // A disabled server keeps an existing selection but cannot gain one.
     locked: !m.enabled && !form.mcpServers.includes(m.id),
@@ -475,7 +473,7 @@ const allMcpRows = computed<CapRow[]>(() => {
     form.mcpServers,
     catalog.map((m) => m.id),
   ).map((id) => ({
-    id, name: id, desc: "配置中已不存在的服务器", meta: "不可用",
+    id, name: id, desc: tr('studioManagement.text048'), meta: tr('studioManagement.text049'),
     selected: true, locked: false, stale: true, disabled: false, builtin: false,
   }));
   return [...rows, ...stale];
@@ -781,26 +779,26 @@ const editingIsDraft = computed(() => editingAgent.value?.status === "draft");
     <div class="ed-shell">
       <header class="ed-head">
         <div class="ed-head-text">
-          <h2 id="editor-title">{{ mode === "create" ? "创建 Agent" : `编辑 ${editingAgent?.name ?? "Agent"}` }}</h2>
-          <p>{{ mode === "create" ? "从模板或空白开始，选择模型、MCP 与 Skill。" : "模型、技能和内置工具会同步到已有对话，执行中的任务结束后应用；指令与 MCP 授权仅对新对话生效。" }}</p>
+          <h2 id="editor-title">{{ mode === "create" ? tr('studioManagement.text050') : tr('studioManagement.text051', { value0: editingAgent?.name ?? "Agent" }) }}</h2>
+          <p>{{ mode === "create" ? tr('studioManagement.text052') : tr('studioManagement.text053') }}</p>
         </div>
-        <button type="button" class="iconbtn" aria-label="关闭" :disabled="saving" @click="requestClose">
+        <button type="button" class="iconbtn" :aria-label="tr('studioManagement.text054')" :disabled="saving" @click="requestClose">
           <el-icon aria-hidden="true"><Close /></el-icon>
         </button>
       </header>
 
       <div v-if="error" class="ed-error" role="alert">
         <span class="ed-error-msg">{{ error }}</span>
-        <button type="button" class="iconbtn sm" aria-label="关闭提示" @click="emit('dismissError')">
+        <button type="button" class="iconbtn sm" :aria-label="tr('studioManagement.text055')" @click="emit('dismissError')">
           <el-icon aria-hidden="true"><Close /></el-icon>
         </button>
       </div>
 
-      <div v-if="confirmDiscard" class="ed-discard" role="alertdialog" aria-label="放弃更改确认">
-        <span>有未保存的更改，确定放弃吗？</span>
+      <div v-if="confirmDiscard" class="ed-discard" role="alertdialog" :aria-label="tr('studioManagement.text056')">
+        <span>{{ tr('studioManagement.text057') }}</span>
         <span class="ed-discard-actions">
-          <button type="button" class="btn ghost sm" @click="confirmDiscard = false">继续编辑</button>
-          <button type="button" class="btn danger sm" @click="close">放弃更改</button>
+          <button type="button" class="btn ghost sm" @click="confirmDiscard = false">{{ tr('studioManagement.text058') }}</button>
+          <button type="button" class="btn danger sm" @click="close">{{ tr('studioManagement.text059') }}</button>
         </span>
       </div>
 
@@ -810,8 +808,8 @@ const editingIsDraft = computed(() => editingAgent.value?.status === "draft");
              or saving the current draft as a new template. The row is always
              one horizontal line — native scroll carries it, the arrows and
              edge fades just make that visible. -->
-        <section v-if="mode === 'create'" class="ed-templates" aria-label="从模板开始">
-          <span class="group-label"><el-icon aria-hidden="true"><MagicStick /></el-icon>从模板开始</span>
+        <section v-if="mode === 'create'" class="ed-templates" :aria-label="tr('studioManagement.text060')">
+          <span class="group-label"><el-icon aria-hidden="true"><MagicStick /></el-icon>{{ tr('studioManagement.text060') }}</span>
           <div
             class="tpl-scroll"
             :class="{ 'can-left': tplCanLeft, 'can-right': tplCanRight }"
@@ -820,7 +818,7 @@ const editingIsDraft = computed(() => editingAgent.value?.status === "draft");
               ref="tplRow"
               class="tpl-row"
               role="group"
-              aria-label="模板选择"
+              :aria-label="tr('studioManagement.text061')"
               @scroll.passive="tplScrollState"
             >
               <button
@@ -833,8 +831,8 @@ const editingIsDraft = computed(() => editingAgent.value?.status === "draft");
                 <!-- A blank page, not a plus: the trailing card already owns
                      the "+" shape for saving the draft as a template. -->
                 <span class="tpl-blank" aria-hidden="true"><el-icon><Document /></el-icon></span>
-                <span class="tpl-name">空白 Agent</span>
-                <span class="tpl-desc">从一个好名字和一段清晰的指令开始。</span>
+                <span class="tpl-name">{{ tr('studioManagement.text062') }}</span>
+                <span class="tpl-desc">{{ tr('studioManagement.text063') }}</span>
               </button>
               <div
                 v-for="t in templates"
@@ -857,45 +855,43 @@ const editingIsDraft = computed(() => editingAgent.value?.status === "draft");
                   v-if="tplConfirmId !== t.id"
                   type="button"
                   class="tpl-del"
-                  aria-label="删除模板"
+                  :aria-label="tr('studioManagement.text064')"
                   @click.stop="requestTemplateRemove(t.id)"
                 >
                   <el-icon aria-hidden="true"><Close /></el-icon>
                 </button>
-                <div v-else class="tpl-confirm" role="alertdialog" aria-label="删除模板确认" @click.stop>
-                  <span class="tpl-confirm-text">删除「{{ t.name }}」？</span>
+                <div v-else class="tpl-confirm" role="alertdialog" :aria-label="tr('studioManagement.text065')" @click.stop>
+                  <span class="tpl-confirm-text">{{ tr('studioSentences.removeTemplate', { name: t.name }) }}</span>
                   <span class="tpl-confirm-actions">
-                    <button type="button" class="btn ghost sm" @click="tplConfirmId = null">取消</button>
+                    <button type="button" class="btn ghost sm" @click="tplConfirmId = null">{{ tr('studioManagement.text067') }}</button>
                     <button
                       type="button"
                       class="btn danger sm"
                       :disabled="saving"
                       @click="confirmTemplateRemove(t.id)"
-                    >
-                      删除
-                    </button>
+                    > {{ tr('studioManagement.text008') }} </button>
                   </span>
                 </div>
               </div>
               <button v-if="!tplAdding" type="button" class="tpl tpl-add" @click="startTplAdd">
                 <el-icon class="tpl-add-icon" aria-hidden="true"><Plus /></el-icon>
-                <span class="tpl-name">存为模板</span>
-                <span class="tpl-desc">把当前填写的身份与开场存成一个模板。</span>
+                <span class="tpl-name">{{ tr('studioManagement.text068') }}</span>
+                <span class="tpl-desc">{{ tr('studioManagement.text069') }}</span>
               </button>
               <div v-else class="tpl tpl-add-form" @click.stop>
-                <span class="field-label-row"><span class="tpl-name">模板名称</span><FieldHelp label="模板名称" text="为这个起点取一个易识别的名字。模板保存名称、简介、指令、外观和开场提示；模型、技能与工具选择不会随模板保存。" /></span>
+                <span class="field-label-row"><span class="tpl-name">{{ tr('studioManagement.text070') }}</span><FieldHelp :label="tr('studioManagement.text070')" :text="tr('studioManagement.text071')" /></span>
                 <input
                   ref="tplNameInput"
                   v-model="tplName"
                   class="tpl-add-input"
                   type="text"
                   maxlength="60"
-                  placeholder="模板名称"
+                  :placeholder="tr('studioManagement.text070')"
                   :aria-invalid="tplNameErr"
                   @keyup.enter="submitTemplate"
                   @keyup.esc="cancelTplAdd"
                 />
-                <span v-if="tplNameErr" class="tpl-add-err" role="alert">请填写模板名称</span>
+                <span v-if="tplNameErr" class="tpl-add-err" role="alert">{{ tr('studioManagement.text072') }}</span>
                 <span class="tpl-add-actions">
                   <button
                     type="button"
@@ -903,11 +899,9 @@ const editingIsDraft = computed(() => editingAgent.value?.status === "draft");
                     :disabled="saving"
                     @click="submitTemplate"
                   >
-                    {{ saving ? "保存中…" : "保存" }}
+                    {{ saving ? tr('studioManagement.text073') : tr('studioManagement.text074') }}
                   </button>
-                  <button type="button" class="btn ghost sm" :disabled="saving" @click="cancelTplAdd">
-                    取消
-                  </button>
+                  <button type="button" class="btn ghost sm" :disabled="saving" @click="cancelTplAdd"> {{ tr('studioManagement.text067') }} </button>
                 </span>
               </div>
             </div>
@@ -915,7 +909,7 @@ const editingIsDraft = computed(() => editingAgent.value?.status === "draft");
               v-if="tplCanLeft"
               type="button"
               class="tpl-nav left"
-              aria-label="向左滚动模板"
+              :aria-label="tr('studioManagement.text075')"
               @click="tplScrollBy(-1)"
             >
               <el-icon aria-hidden="true"><ArrowLeft /></el-icon>
@@ -924,7 +918,7 @@ const editingIsDraft = computed(() => editingAgent.value?.status === "draft");
               v-if="tplCanRight"
               type="button"
               class="tpl-nav right"
-              aria-label="向右滚动模板"
+              :aria-label="tr('studioManagement.text076')"
               @click="tplScrollBy(1)"
             >
               <el-icon aria-hidden="true"><ArrowRight /></el-icon>
@@ -934,10 +928,10 @@ const editingIsDraft = computed(() => editingAgent.value?.status === "draft");
 
         <form class="ed-form" autocomplete="off" @submit.prevent>
           <section class="group" aria-labelledby="eg-identity">
-            <h3 id="eg-identity" class="group-title">身份</h3>
+            <h3 id="eg-identity" class="group-title">{{ tr('studioManagement.text077') }}</h3>
 
             <div class="field">
-              <div class="field-label-row"><label class="flabel" for="mf-name">名称<span class="req" aria-hidden="true"> *</span></label><FieldHelp label="名称" text="这个 Agent 的名字，用于列表和对话中的识别，也会告诉模型它的身份。建议简短明确，例如“项目研究助手”。" /></div>
+              <div class="field-label-row"><label class="flabel" for="mf-name">{{ tr('studioManagement.text078') }}<span class="req" aria-hidden="true"> *</span></label><FieldHelp :label="tr('studioManagement.text078')" :text="tr('studioManagement.text079')" /></div>
               <input
                 id="mf-name"
                 ref="nameInput"
@@ -945,7 +939,7 @@ const editingIsDraft = computed(() => editingAgent.value?.status === "draft");
                 class="input"
                 type="text"
                 :maxlength="AGENT_FORM_LIMITS.name"
-                placeholder="例如：研究助手"
+                :placeholder="tr('studioManagement.text080')"
                 :aria-invalid="!!showErr('name')"
               />
               <div class="fmeta">
@@ -955,14 +949,14 @@ const editingIsDraft = computed(() => editingAgent.value?.status === "draft");
             </div>
 
             <div class="field">
-              <div class="field-label-row"><label class="flabel" for="mf-desc">简介</label><FieldHelp label="简介" text="向使用者说明这个 Agent 擅长什么，显示在 Agent 列表中。简介不作为每次对话的行为指令；长期规则请填写在“指令”中。" /></div>
+              <div class="field-label-row"><label class="flabel" for="mf-desc">{{ tr('studioManagement.text081') }}</label><FieldHelp :label="tr('studioManagement.text081')" :text="tr('studioManagement.text082')" /></div>
               <textarea
                 id="mf-desc"
                 v-model="form.description"
                 class="input"
                 rows="2"
                 :maxlength="AGENT_FORM_LIMITS.description"
-                placeholder="一句话说明它擅长什么。"
+                :placeholder="tr('studioManagement.text083')"
                 :aria-invalid="!!showErr('description')"
               />
               <div class="fmeta">
@@ -970,41 +964,24 @@ const editingIsDraft = computed(() => editingAgent.value?.status === "draft");
                 <span class="fcount">{{ form.description.trim().length }}/{{ AGENT_FORM_LIMITS.description }}</span>
               </div>
             </div>
-
-            <div class="field">
-              <div class="field-label-row"><span class="flabel" id="mf-cat-label">分类</span><FieldHelp label="分类" text="帮助在列表中归类和查找 Agent，例如研究、写作或开发。分类不会改变模型的能力或工具权限。" /></div>
-              <div class="chip-row" role="group" aria-labelledby="mf-cat-label">
-                <button
-                  v-for="c in CATEGORY_ORDER"
-                  :key="c"
-                  type="button"
-                  class="chip"
-                  :class="{ on: form.category === c }"
-                  :aria-pressed="form.category === c"
-                  @click="form.category = c"
-                >
-                  {{ categoryLabel(c) }}
-                </button>
-              </div>
-            </div>
           </section>
 
           <section class="group" aria-labelledby="eg-behavior">
-            <h3 id="eg-behavior" class="group-title">行为与模型</h3>
+            <h3 id="eg-behavior" class="group-title">{{ tr('studioManagement.text086') }}</h3>
 
             <div class="field">
-              <div class="field-label-row"><label class="flabel" for="mf-inst">指令</label><FieldHelp label="指令" text="规定这个 Agent 长期遵循的身份、工作步骤、约束和回答格式。每次模型请求都会带上这些规则。可以写“用中文回答、结论附来源”；工具与技能仍需在下方勾选。" /></div>
+              <div class="field-label-row"><label class="flabel" for="mf-inst">{{ tr('studioManagement.text087') }}</label><FieldHelp :label="tr('studioManagement.text087')" :text="tr('studioManagement.text088')" /></div>
               <textarea
                 id="mf-inst"
                 v-model="form.instructions"
                 class="input code"
                 rows="8"
                 :maxlength="AGENT_FORM_LIMITS.instructions"
-                placeholder="告诉这个 Agent 它是谁、怎么工作、什么不要做。"
+                :placeholder="tr('studioManagement.text089')"
                 :aria-invalid="!!showErr('instructions')"
               />
               <div class="fmeta">
-                <span class="fhint">指令是它的行为准则，越具体越好。</span>
+                <span class="fhint">{{ tr('studioManagement.text090') }}</span>
                 <span v-if="showErr('instructions')" class="ferr" role="alert">{{ errors.instructions }}</span>
                 <span class="fcount">{{ form.instructions.trim().length }}/{{ AGENT_FORM_LIMITS.instructions }}</span>
               </div>
@@ -1013,16 +990,14 @@ const editingIsDraft = computed(() => editingAgent.value?.status === "draft");
             <!-- Models: multi-select, exactly one default. The default opens
                  the conversation; the rest stay switchable in chat. -->
             <div class="field">
-              <div class="field-label-row"><span class="flabel" id="mf-model-label">模型<span class="req" aria-hidden="true"> *</span></span><FieldHelp label="模型" text="勾选允许使用的模型，并选择默认模型。保存后同步到已有对话；正在执行的任务结束后应用。修改默认模型会切换到新默认，只修改可选列表时保留仍然允许的当前模型。技能和工具权限不会随之扩大。" /></div>
+              <div class="field-label-row"><span class="flabel" id="mf-model-label">{{ tr('studioManagement.text091') }}<span class="req" aria-hidden="true"> *</span></span><FieldHelp :label="tr('studioManagement.text091')" :text="tr('studioManagement.text092')" /></div>
               <template v-if="modelRows.length">
                 <div class="fmeta">
                   <span v-if="showErr('model')" class="ferr" role="alert">{{ errors.model }}</span>
-                  <span v-else class="fhint">
-                    已选 {{ form.models.length }} 个；默认模型开启对话，其余可在对话中切换。
-                  </span>
+                  <span v-else class="fhint"> {{ tr('studioSentences.selectedModels', { count: form.models.length }) }} </span>
                   <span class="fcount">{{ form.models.length }}/{{ modelRows.length }}</span>
                 </div>
-                <div class="field-label-row model-default-help"><span class="fhint">默认模型</span><FieldHelp label="默认模型" text="新对话和生成开场提示使用默认模型。更换默认模型也会同步到已有对话，正在执行的任务完成后切换；取消勾选它时会自动选择另一个已选模型。" /></div>
+                <div class="field-label-row model-default-help"><span class="fhint">{{ tr('studioManagement.text095') }}</span><FieldHelp :label="tr('studioManagement.text095')" :text="tr('studioManagement.text096')" /></div>
                 <div class="caps-list" role="group" aria-labelledby="mf-model-label">
                   <div
                     v-for="m in modelRows"
@@ -1038,7 +1013,7 @@ const editingIsDraft = computed(() => editingAgent.value?.status === "draft");
                         @change="toggleModel(m.id)"
                       />
                       <span class="cap-name">{{ m.provider ? `${m.provider} · ${m.id}` : m.id }}</span>
-                      <span v-if="!m.available" class="cap-tag bad">不可用</span>
+                      <span v-if="!m.available" class="cap-tag bad">{{ tr('studioManagement.text049') }}</span>
                     </label>
                     <label class="cap-default" :class="{ on: form.model === m.id }">
                       <input
@@ -1046,56 +1021,46 @@ const editingIsDraft = computed(() => editingAgent.value?.status === "draft");
                         type="radio"
                         name="agent-default-model"
                         :value="m.id"
-                        :aria-label="`设 ${m.id} 为默认模型`"
+                        :aria-label="tr('studioManagement.text097', { value0: m.id })"
                         :disabled="!m.selected || saving"
-                      />
-                      默认
-                    </label>
+                      /> {{ tr('studioManagement.text098') }} </label>
                   </div>
                   </div>
                 </template>
-                <div v-else class="model-empty" role="note">
-                还没有可用的模型。请先在「模型配置」中完成配置，再回来创建 Agent。
-              </div>
+                <div v-else class="model-empty" role="note"> {{ tr('studioManagement.text099') }} </div>
             </div>
           </section>
 
           <section class="group" aria-labelledby="eg-capabilities">
-            <h3 id="eg-capabilities" class="group-title">技能与工具<span class="opt">（可选）</span></h3>
+            <h3 id="eg-capabilities" class="group-title">{{ tr('studioManagement.text100') }}<span class="opt">{{ tr('studioManagement.text101') }}</span></h3>
 
             <!-- Catalog loading/error are explicit: a failed fetch is never
                  an authoritative empty list, and saving stays blocked so no
                  capability can be silently dropped. -->
             <div v-if="capabilitiesLoading" class="caps-state" role="status">
-              <el-icon class="spin" aria-hidden="true"><Refresh /></el-icon>
-              正在加载技能与 MCP 清单…
-            </div>
+              <el-icon class="spin" aria-hidden="true"><Refresh /></el-icon> {{ tr('studioManagement.text102') }} </div>
             <div v-else-if="capabilitiesError" class="caps-state bad" role="alert">
-              <span class="caps-state-msg">技能与 MCP 清单加载失败：{{ capabilitiesError }}</span>
+              <span class="caps-state-msg">{{ tr('studioSentences.capabilitiesError', { message: capabilitiesError ?? '' }) }}</span>
               <button type="button" class="btn ghost sm" @click="emit('retryCapabilities')">
-                <el-icon aria-hidden="true"><Refresh /></el-icon>
-                重试
-              </button>
+                <el-icon aria-hidden="true"><Refresh /></el-icon> {{ tr('studioManagement.text104') }} </button>
             </div>
 
             <template v-else>
-              <p v-if="mode === 'edit' && (form.skillsInherited || form.mcpInherited || form.toolsInherited)" class="caps-inherit" role="note">
-                此 Agent 此前未单独设置技能、MCP 与内置工具，因此继承工作空间全部资源（已全部勾选）。保存时会把当前勾选固化为明确清单。
-              </p>
+              <p v-if="mode === 'edit' && (form.skillsInherited || form.mcpInherited || form.toolsInherited)" class="caps-inherit" role="note"> {{ tr('studioManagement.text105') }} </p>
 
               <!-- Linked native grants can only change through the Skill selection. -->
               <div v-if="linkedToolRows.length" class="caps-group" data-testid="skill-linked-native-tools">
                 <div class="caps-head">
-                  <span class="field-label-row"><span class="caps-title">内置工具 · Skill 关联</span><FieldHelp label="Skill 关联工具" text="这些工具随对应 Skill 一起启用或关闭，不能单独勾选。请在下方 Skills 中选择能力，保存后生效。工具调用仍遵循原有审批和用户权限。" /></span>
-                  <span class="caps-count">已选 {{ linkedToolRows.filter(row => row.selected).length }}/{{ linkedToolRows.length }}</span>
+                  <span class="field-label-row"><span class="caps-title">{{ tr('studioManagement.text106') }}</span><FieldHelp :label="tr('studioManagement.text107')" :text="tr('studioManagement.text108')" /></span>
+                  <span class="caps-count">{{ tr('studioManagement.text093') }} {{ linkedToolRows.filter(row => row.selected).length }}/{{ linkedToolRows.length }}</span>
                 </div>
-                <p class="caps-hint">在下方 Skills 中勾选或取消对应 Skill，这里的工具同步变化；保存前可以核对本次授权范围。</p>
-                <p v-if="hasLegacySkillGrants" class="caps-inherit" role="note">部分旧配置的指南与工具权限尚未关联，当前保留原权限。切换对应 Skill 后，将统一启用或关闭整组工具。</p>
-                <div class="caps-list" role="group" aria-label="Skill 关联内置工具">
+                <p class="caps-hint">{{ tr('studioManagement.text109') }}</p>
+                <p v-if="hasLegacySkillGrants" class="caps-inherit" role="note">{{ tr('studioManagement.text110') }}</p>
+                <div class="caps-list" role="group" :aria-label="tr('studioManagement.text111')">
                   <label v-for="row in linkedToolRows" :key="row.id" class="cap-row" :class="{ on: row.selected, stale: row.stale }">
                     <input type="checkbox" :checked="row.selected" disabled />
                     <span class="cap-main">
-                      <span class="cap-name">{{ row.name }}<span class="cap-tag sys">随 Skill</span></span>
+                      <span class="cap-name">{{ row.name }}<span class="cap-tag sys">{{ tr('studioManagement.text112') }}</span></span>
                       <span class="cap-desc">{{ row.desc }}</span>
                     </span>
                     <span class="cap-meta">{{ row.meta }}</span>
@@ -1105,11 +1070,11 @@ const editingIsDraft = computed(() => editingAgent.value?.status === "draft");
 
               <div class="caps-group" data-testid="general-native-tools">
                 <div class="caps-head">
-                  <span class="field-label-row"><span class="caps-title">内置工具 · 一般工具</span><FieldHelp label="一般内置工具" text="独立配置文件、命令和快捷方式等通用能力。核心只读与协作工具始终可用；其他工具可以取消勾选。写进指令不会自动启用工具。" /></span>
-                  <span class="caps-count">已选 {{ generalToolRows.filter(row => row.selected).length }}/{{ generalToolRows.length }}</span>
+                  <span class="field-label-row"><span class="caps-title">{{ tr('studioManagement.text113') }}</span><FieldHelp :label="tr('studioManagement.text114')" :text="tr('studioManagement.text115')" /></span>
+                  <span class="caps-count">{{ tr('studioManagement.text093') }} {{ generalToolRows.filter(row => row.selected).length }}/{{ generalToolRows.length }}</span>
                 </div>
-                <p class="caps-hint">通用工具独立选择。快捷方式删除与合并分别授权；文件写入不会因选择工作流 Skill 自动启用。Agent 对话只操作当前 Agent 的内部工作流。</p>
-                <div class="caps-list" role="group" aria-label="一般内置工具选择">
+                <p class="caps-hint">{{ tr('studioManagement.text116') }}</p>
+                <div class="caps-list" role="group" :aria-label="tr('studioManagement.text117')">
                   <label
                     v-for="row in generalToolRows"
                     :key="row.id"
@@ -1120,8 +1085,8 @@ const editingIsDraft = computed(() => editingAgent.value?.status === "draft");
                     <span class="cap-main">
                       <span class="cap-name">
                         {{ row.name }}
-                        <span v-if="row.locked" class="cap-tag sys">核心</span>
-                        <span v-if="row.disabled" class="cap-tag off">已停用</span>
+                        <span v-if="row.locked" class="cap-tag sys">{{ tr('studioManagement.text118') }}</span>
+                        <span v-if="row.disabled" class="cap-tag off">{{ tr('studioManagement.text046') }}</span>
                       </span>
                       <span class="cap-desc">{{ row.desc }}</span>
                     </span>
@@ -1134,19 +1099,17 @@ const editingIsDraft = computed(() => editingAgent.value?.status === "draft");
               <!-- ── MCP：按服务器整体授权 ─────────────────────────── -->
               <div class="caps-group">
                 <div class="caps-head">
-                  <span class="field-label-row"><span class="caps-title">MCP 服务器</span><FieldHelp label="MCP 服务器" text="把工作空间已配置的外部工具连接授权给这个 Agent。勾选后可使用该连接提供的工具；没有连接也可以进行普通文字对话。停用的连接需先启用。" /></span>
-                  <span class="caps-count">已选 {{ form.mcpServers.length }}/{{ allMcpRows.length }}</span>
+                  <span class="field-label-row"><span class="caps-title">{{ tr('studioManagement.text119') }}</span><FieldHelp :label="tr('studioManagement.text119')" :text="tr('studioManagement.text120')" /></span>
+                  <span class="caps-count">{{ tr('studioManagement.text093') }} {{ form.mcpServers.length }}/{{ allMcpRows.length }}</span>
                 </div>
-                <p class="caps-hint">勾选后可使用该连接提供的工具；已停用的连接需先在 MCP 管理中启用。</p>
+                <p class="caps-hint">{{ tr('studioManagement.text121') }}</p>
                 <div v-if="allMcpRows.length > 6" class="caps-search">
                   <el-icon aria-hidden="true"><Search /></el-icon>
-                  <input v-model="mcpQuery" type="search" placeholder="搜索服务器" aria-label="搜索 MCP 服务器" />
+                  <input v-model="mcpQuery" type="search" :placeholder="tr('studioManagement.text122')" :aria-label="tr('studioManagement.text123')" />
                 </div>
-                <div v-if="!allMcpRows.length" class="caps-empty" role="note">
-                  工作空间还没有 MCP 服务器。需要时先到「MCP 管理」添加并启用，再回来勾选。
-                </div>
-                <div v-else-if="!mcpView.length" class="caps-empty" role="note">没有匹配的服务器。</div>
-                <div v-else class="caps-list" role="group" aria-label="MCP 服务器选择">
+                <div v-if="!allMcpRows.length" class="caps-empty" role="note"> {{ tr('studioManagement.text124') }} </div>
+                <div v-else-if="!mcpView.length" class="caps-empty" role="note">{{ tr('studioManagement.text125') }}</div>
+                <div v-else class="caps-list" role="group" :aria-label="tr('studioManagement.text126')">
                   <label
                     v-for="row in mcpView"
                     :key="row.id"
@@ -1157,9 +1120,9 @@ const editingIsDraft = computed(() => editingAgent.value?.status === "draft");
                       <span class="cap-main">
                         <span class="cap-name">
                           {{ row.name }}
-                          <span v-if="row.disabled" class="cap-tag off">已停用</span>
+                          <span v-if="row.disabled" class="cap-tag off">{{ tr('studioManagement.text046') }}</span>
                         </span>
-                        <span v-if="row.stale" class="cap-tag bad">不可用</span>
+                        <span v-if="row.stale" class="cap-tag bad">{{ tr('studioManagement.text049') }}</span>
                         <span v-if="row.desc" class="cap-desc">{{ row.desc }}</span>
                       </span>
                       <span class="cap-meta">{{ row.meta }}</span>
@@ -1170,26 +1133,24 @@ const editingIsDraft = computed(() => editingAgent.value?.status === "draft");
               <!-- ── Skills：技能目录 ────────────────────────────────── -->
               <div class="caps-group">
                 <div class="caps-head">
-                  <span class="field-label-row"><span class="caps-title">Skills</span><FieldHelp label="Skills" text="选择 Agent 可使用的工作方法。带关联内置工具的 Skill 可以勾选，相关工具会一起启用或关闭；其他必需系统指南始终保留。“仅手动调用”的技能需要主动发起。" /></span>
-                  <span class="caps-count">已选 {{ allSkillRows.filter(row => row.selected).length }}/{{ allSkillRows.length }}</span>
+                  <span class="field-label-row"><span class="caps-title">Skills</span><FieldHelp label="Skills" :text="tr('studioManagement.text127')" /></span>
+                  <span class="caps-count">{{ tr('studioManagement.text093') }} {{ allSkillRows.filter(row => row.selected).length }}/{{ allSkillRows.length }}</span>
                 </div>
-                <p class="caps-hint">勾选关联 Skill 时，同时授权下方列出的内置工具；取消勾选会关闭这些工具。文件、命令和外部服务等通用权限仍独立配置。</p>
-                <div v-if="skillOptions.unavailable.length" class="unavailable-skills" role="note" aria-label="失效的 Skill 绑定">
-                  <p>已有配置包含失效的 Skill，请移除后重新选择。</p>
+                <p class="caps-hint">{{ tr('studioManagement.text128') }}</p>
+                <div v-if="skillOptions.unavailable.length" class="unavailable-skills" role="note" :aria-label="tr('studioManagement.text129')">
+                  <p>{{ tr('studioManagement.text130') }}</p>
                   <div v-for="skill in skillOptions.unavailable" :key="skill.id">
                     <span>{{ skill.name }} · {{ skill.reason }}</span>
-                    <button type="button" :aria-label="`移除失效 Skill ${skill.name}`" @click="removeUnavailableSkill(skill.id)">移除</button>
+                    <button type="button" :aria-label="tr('studioManagement.text131', { value0: skill.name })" @click="removeUnavailableSkill(skill.id)">{{ tr('studioManagement.text132') }}</button>
                   </div>
                 </div>
                 <div v-if="allSkillRows.length > 6" class="caps-search">
                   <el-icon aria-hidden="true"><Search /></el-icon>
-                  <input v-model="skillQuery" type="search" placeholder="搜索技能" aria-label="搜索技能" />
+                  <input v-model="skillQuery" type="search" :placeholder="tr('studioManagement.text133')" :aria-label="tr('studioManagement.text133')" />
                 </div>
-                <div v-if="!allSkillRows.length" class="caps-empty" role="note">
-                  还没有可管理的技能。需要时先到「Skill 管理」上传技能，再回来勾选。
-                </div>
-                <div v-else-if="!skillView.length" class="caps-empty" role="note">没有匹配的技能。</div>
-                  <div v-else class="caps-list" role="group" aria-label="技能选择">
+                <div v-if="!allSkillRows.length" class="caps-empty" role="note"> {{ tr('studioManagement.text134') }} </div>
+                <div v-else-if="!skillView.length" class="caps-empty" role="note">{{ tr('studioManagement.text135') }}</div>
+                  <div v-else class="caps-list" role="group" :aria-label="tr('studioManagement.text136')">
                     <label
                       v-for="row in skillView"
                       :key="row.id"
@@ -1200,38 +1161,38 @@ const editingIsDraft = computed(() => editingAgent.value?.status === "draft");
                       <span class="cap-main">
                         <span class="cap-name">
                           {{ row.name }}
-                          <span v-if="row.builtin" class="cap-tag sys">系统</span>
-                          <span v-if="row.mixed" class="cap-tag">旧配置待关联</span>
+                          <span v-if="row.builtin" class="cap-tag sys">{{ tr('studioManagement.text137') }}</span>
+                          <span v-if="row.mixed" class="cap-tag">{{ tr('studioManagement.text138') }}</span>
                         </span>
-                        <span v-if="row.stale" class="cap-tag bad">不可用</span>
+                        <span v-if="row.stale" class="cap-tag bad">{{ tr('studioManagement.text049') }}</span>
                         <span class="cap-desc">{{ row.desc }}</span>
-                        <span v-if="row.nativeTools?.length" class="cap-desc">关联工具：{{ row.nativeTools.join('、') }}</span>
+                        <span v-if="row.nativeTools?.length" class="cap-desc">{{ tr('studioSentences.associatedTools', { tools: row.nativeTools.join(', ') }) }}</span>
                       </span>
                       <span class="cap-meta">{{ row.meta }}</span>
                     </label>
                   </div>
               </div>
-              <p v-if="runtimeSkillMode" class="caps-hint">勾选 Skill 后自动关联它包含的工具和数据；需要的 MCP 服务可同时选择。</p>
+              <p v-if="runtimeSkillMode" class="caps-hint">{{ tr('studioManagement.text140') }}</p>
               <SkillToolsConfiguration v-if="agentCapabilities" :selection="skillSelection" :catalog="agentCapabilities" @validation="runtimeSkillValidation = $event" />
             </template>
           </section>
 
           <section class="group" aria-labelledby="eg-presence">
-            <h3 id="eg-presence" class="group-title">开场提示与外观</h3>
+            <h3 id="eg-presence" class="group-title">{{ tr('studioManagement.text141') }}</h3>
 
             <div class="field">
-              <div class="field-label-row"><span class="flabel">开场提示<span class="opt">（可选）</span></span><FieldHelp label="开场提示" text="显示在这个 Agent 的对话首页，帮助使用者快速开始。点击卡片会把完整问题填入输入框，确认发送后才交给 Agent；它不会自动执行，也不会作为长期指令。" /></div>
+              <div class="field-label-row"><span class="flabel">{{ tr('studioManagement.text142') }}<span class="opt">{{ tr('studioManagement.text101') }}</span></span><FieldHelp :label="tr('studioManagement.text142')" :text="tr('studioManagement.text143')" /></div>
               <div class="starter-generation">
                 <div class="starter-generation-controls">
-                  <span class="field-label-row"><label class="fhint" for="starter-generation-count">生成条数</label><FieldHelp label="生成条数" :text="`一次生成 1 到 ${generationMax} 条。新提示会追加，保留你已填写的内容；开场提示总数不限。`" /></span>
+                  <span class="field-label-row"><label class="fhint" for="starter-generation-count">{{ tr('studioManagement.text144') }}</label><FieldHelp :label="tr('studioManagement.text144')" :text="tr('studioManagement.text145', { value0: generationMax })" /></span>
                   <input id="starter-generation-count" v-model.number="generationCount" class="input starter-generation-count" type="number" min="1" :max="generationMax" step="1" :disabled="generating || saving" />
                   <button type="button" class="btn soft sm starter-generate-btn" :disabled="!canGenerate" :aria-busy="generating" aria-describedby="starter-generation-hint" @click="generateStarters">
                     <el-icon :class="{ spin: generating }" aria-hidden="true"><component :is="generating ? Refresh : MagicStick" /></el-icon>
-                    {{ generating ? '生成中…' : 'AI 生成' }}
+                    {{ generating ? tr('studioManagement.text146') : tr('studioManagement.text147') }}
                   </button>
-                  <button v-if="generating" type="button" class="btn ghost sm starter-generation-cancel" @click="cancelGeneration()">取消</button>
+                  <button v-if="generating" type="button" class="btn ghost sm starter-generation-cancel" @click="cancelGeneration()">{{ tr('studioManagement.text067') }}</button>
                 </div>
-                <p id="starter-generation-hint" class="fhint starter-generation-hint">{{ generationReason || `使用默认模型 ${form.model}，根据名称、简介、指令及已选技能与工具生成。` }}</p>
+                <p id="starter-generation-hint" class="fhint starter-generation-hint">{{ generationReason || tr('studioManagement.text148', { value0: form.model }) }}</p>
                 <p v-if="generationMessage" class="starter-generation-state" role="status">{{ generationMessage }}</p>
                 <p v-if="generationError" class="starter-generation-error" role="alert">{{ generationError }}</p>
               </div>
@@ -1242,52 +1203,52 @@ const editingIsDraft = computed(() => editingAgent.value?.status === "draft");
                      plain-text opening. -->
                 <div v-for="(s, i) in form.starters" :key="i" class="starter-row">
                   <div class="starter-field starter-icon">
-                    <span class="field-label-row starter-field-label"><span>图标</span><FieldHelp :label="`开场提示 ${i + 1} 图标`" text="显示在这条开场卡片上的图标。点击后在网格中选择；也可以选“无”以不显示图标。" /></span>
-                    <StarterIconPicker v-model="s.icon" :label="`开场提示 ${i + 1} 图标`" />
+                    <span class="field-label-row starter-field-label"><span>{{ tr('studioManagement.text149') }}</span><FieldHelp :label="tr('studioManagement.text150', { value0: i + 1 })" :text="tr('studioManagement.text151')" /></span>
+                    <StarterIconPicker v-model="s.icon" :label="tr('studioManagement.text150', { value0: i + 1 })" />
                   </div>
                   <div class="starter-field starter-title">
-                    <span class="field-label-row starter-field-label"><label :for="`starter-title-${i}`">标题</label><FieldHelp :label="`开场提示 ${i + 1} 标题`" text="卡片上的简短标题，例如“分析项目”。可选；不填写时会使用完整问题作为卡片内容。" /></span>
+                    <span class="field-label-row starter-field-label"><label :for="`starter-title-${i}`">{{ tr('studioManagement.text152') }}</label><FieldHelp :label="tr('studioManagement.text153', { value0: i + 1 })" :text="tr('studioManagement.text154')" /></span>
                     <input
                     :id="`starter-title-${i}`"
                     v-model="s.title"
                     class="input"
                     type="text"
                     :maxlength="AGENT_FORM_LIMITS.starterTitle"
-                    :placeholder="`标题 ${i + 1}（可选）`"
-                    :aria-label="`开场提示 ${i + 1} 标题`"
+                    :placeholder="tr('studioManagement.text155', { value0: i + 1 })"
+                    :aria-label="tr('studioManagement.text153', { value0: i + 1 })"
                     />
                   </div>
                   <div class="starter-field starter-label">
-                    <span class="field-label-row starter-field-label"><label :for="`starter-label-${i}`">标签</label><FieldHelp :label="`开场提示 ${i + 1} 标签`" text="卡片右上角的短标签，例如“推荐”或“进阶”。仅用于展示，不会加到发送的问题中；可以留空。" /></span>
+                    <span class="field-label-row starter-field-label"><label :for="`starter-label-${i}`">{{ tr('studioManagement.text156') }}</label><FieldHelp :label="tr('studioManagement.text157', { value0: i + 1 })" :text="tr('studioManagement.text158')" /></span>
                     <input
                     :id="`starter-label-${i}`"
                     v-model="s.label"
                     class="input"
                     type="text"
                     :maxlength="AGENT_FORM_LIMITS.starterLabel"
-                    :placeholder="`标签 ${i + 1}（可选）`"
-                    :aria-label="`开场提示 ${i + 1} 标签`"
+                    :placeholder="tr('studioManagement.text159', { value0: i + 1 })"
+                    :aria-label="tr('studioManagement.text157', { value0: i + 1 })"
                     />
                   </div>
                   <button
                     v-if="form.starters.length > 3 || s.prompt.trim()"
                     type="button"
                     class="iconbtn sm starter-del"
-                    :aria-label="`删除开场提示 ${i + 1}`"
+                    :aria-label="tr('studioManagement.text160', { value0: i + 1 })"
                     @click="removeStarter(i)"
                   >
                     <el-icon aria-hidden="true"><Close /></el-icon>
                   </button>
                   <div class="starter-field starter-prompt">
-                    <span class="field-label-row starter-field-label"><label :for="`starter-prompt-${i}`">完整问题</label><FieldHelp :label="`开场提示 ${i + 1} 完整问题`" text="点击这条开场提示时，填入对话输入框的完整内容。这是实际发送给 Agent 的问题；每条要保存的提示都需要填写。" /></span>
+                    <span class="field-label-row starter-field-label"><label :for="`starter-prompt-${i}`">{{ tr('studioManagement.text161') }}</label><FieldHelp :label="tr('studioManagement.text162', { value0: i + 1 })" :text="tr('studioManagement.text163')" /></span>
                     <template v-if="s.parts?.length">
                       <InlineComposer
                         :model-value="starterCardComposerParts(s)"
                         class="starter-structured-preview"
                         :disabled="true"
-                        :aria-label="`开场提示 ${i + 1}，含引用的完整问题`"
+                        :aria-label="tr('studioManagement.text164', { value0: i + 1 })"
                       />
-                      <p class="starter-structured-hint">此卡片已保存文字和引用的排列顺序。请在对话页的「快捷卡片 → 编辑」中修改完整问题；这里可修改标题、标签和图标。</p>
+                      <p class="starter-structured-hint">{{ tr('studioManagement.text165') }}</p>
                     </template>
                     <input
                     v-else
@@ -1296,8 +1257,8 @@ const editingIsDraft = computed(() => editingAgent.value?.status === "draft");
                     class="input"
                     type="text"
                     :maxlength="AGENT_FORM_LIMITS.starter"
-                    :placeholder="['例如：帮我梳理这个问题的思路', '例如：把这份资料提炼成要点', '例如：对比两个方案并给出建议'][i] || '开场问题（点击后填入输入框的完整问题）'"
-                    :aria-label="`开场提示 ${i + 1}`"
+                    :placeholder="[tr('studioManagement.text166'), tr('studioManagement.text167'), tr('studioManagement.text168')][i] || tr('studioManagement.text169')"
+                    :aria-label="tr('studioManagement.text170', { value0: i + 1 })"
                     />
                   </div>
                 </div>
@@ -1306,15 +1267,13 @@ const editingIsDraft = computed(() => editingAgent.value?.status === "draft");
                   class="btn ghost sm starter-add"
                   @click="addStarter"
                 >
-                  <el-icon aria-hidden="true"><Plus /></el-icon>
-                  添加开场提示
-                </button>
+                  <el-icon aria-hidden="true"><Plus /></el-icon> {{ tr('studioManagement.text171') }} </button>
               </div>
-              <div class="fmeta"><span class="fhint">标题与标签会渲染成对话首页的卡片；留空则为普通文字问题。</span></div>
+              <div class="fmeta"><span class="fhint">{{ tr('studioManagement.text172') }}</span></div>
             </div>
 
             <div class="field">
-              <div class="field-label-row"><span class="flabel" id="mf-color-label">颜色</span><FieldHelp label="颜色" text="设置 Agent 头像的主题颜色，方便在列表和对话中识别。颜色只影响外观。" /></div>
+              <div class="field-label-row"><span class="flabel" id="mf-color-label">{{ tr('studioManagement.text173') }}</span><FieldHelp :label="tr('studioManagement.text173')" :text="tr('studioManagement.text174')" /></div>
               <div class="swatch-row" role="group" aria-labelledby="mf-color-label">
                 <button
                   v-for="c in AVATAR_COLORS"
@@ -1324,7 +1283,7 @@ const editingIsDraft = computed(() => editingAgent.value?.status === "draft");
                   :class="{ on: form.color === c }"
                   :style="{ background: c }"
                   :aria-pressed="form.color === c"
-                  :aria-label="`选择颜色 ${c}`"
+                  :aria-label="tr('studioManagement.text175', { value0: c })"
                   @click="form.color = c"
                 >
                   <el-icon v-if="form.color === c" aria-hidden="true"><Check /></el-icon>
@@ -1333,8 +1292,8 @@ const editingIsDraft = computed(() => editingAgent.value?.status === "draft");
             </div>
 
             <div class="field">
-              <div class="field-label-row"><span class="flabel" id="mf-icon-label">图标</span><FieldHelp label="图标" text="设置 Agent 的头像图标，显示在 Agent 列表和对话中。它与每条开场提示的卡片图标可以分别选择。" /></div>
-              <StarterIconPicker v-model="form.icon" module="agents" :allow-none="false" :disabled="saving" label="Agent 头像图标" />
+              <div class="field-label-row"><span class="flabel" id="mf-icon-label">{{ tr('studioManagement.text149') }}</span><FieldHelp :label="tr('studioManagement.text149')" :text="tr('studioManagement.text176')" /></div>
+              <StarterIconPicker v-model="form.icon" module="agents" :allow-none="false" :disabled="saving" :label="tr('studioManagement.text177')" />
             </div>
         </section>
         </form>
@@ -1344,23 +1303,19 @@ const editingIsDraft = computed(() => editingAgent.value?.status === "draft");
         <span class="foot-note">
           {{
             saving
-              ? "正在保存，请稍候…"
+              ? tr('studioManagement.text178')
               : capabilitiesReady
                 ? mode === "edit"
-                  ? "模型设置会同步到已有对话；其他配置用于新对话。"
-                  : "草稿稍后可以再编辑并发布。"
-                : "技能与 MCP 清单加载完成后才能保存。"
+                  ? tr('studioManagement.text179')
+                  : tr('studioManagement.text180')
+                : tr('studioManagement.text181')
           }}
         </span>
         <div class="foot-actions">
-          <button type="button" class="btn ghost" :disabled="saving" @click="requestClose">取消</button>
+          <button type="button" class="btn ghost" :disabled="saving" @click="requestClose">{{ tr('studioManagement.text067') }}</button>
           <template v-if="mode === 'create'">
-            <button type="button" class="btn soft" :disabled="saving || !canSubmit" @click="submitCreate(false)">
-              保存草稿
-            </button>
-            <button type="button" class="btn solid" :disabled="saving || !canPublish" @click="submitCreate(true)">
-              创建并进入对话
-            </button>
+            <button type="button" class="btn soft" :disabled="saving || !canSubmit" @click="submitCreate(false)"> {{ tr('studioManagement.text182') }} </button>
+            <button type="button" class="btn solid" :disabled="saving || !canPublish" @click="submitCreate(true)"> {{ tr('studioManagement.text183') }} </button>
           </template>
           <template v-else>
             <button
@@ -1369,16 +1324,14 @@ const editingIsDraft = computed(() => editingAgent.value?.status === "draft");
               class="btn soft"
               :disabled="saving || !canSubmit"
               @click="submitEdit('draft')"
-            >
-              保存草稿
-            </button>
+            > {{ tr('studioManagement.text182') }} </button>
             <button
               type="button"
               class="btn solid"
               :disabled="saving || !canPublish"
               @click="submitEdit(editingIsDraft ? 'ready' : undefined)"
             >
-              {{ editingIsDraft ? "发布 Agent" : "保存更改" }}
+              {{ editingIsDraft ? tr('studioManagement.text184') : tr('studioManagement.text185') }}
             </button>
           </template>
         </div>

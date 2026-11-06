@@ -77,7 +77,7 @@ func TestBrowserVisibleEvidenceAndCalculationReachModelWithoutLegacyDataHook(t *
 func TestBrowserUnsupportedCalculationRetainsItsEvidenceAndLimit(t *testing.T) {
 	link := &capabilityBrowserLink{backend: BrowserBackendNative, stubLink: stubLink{replies: []BrowserReply{{OK: false, Error: "incompatible_units", Evidence: json.RawMessage(`{"status":"unsupported","reason":"incompatible_units","scope":"as_observed","current_state_verified":false,"sources":[{"raw":"4年"},{"raw":"24天"}]}`)}}}}
 	result, err := (&Browser{Link: link, ImageMode: BrowserImageNone}).Execute(context.Background(), json.RawMessage(`{"action":"calculate","operation":"compare","quantity_refs":["q1","q2"]}`))
-	if err != nil || result.Details.(map[string]any)["ok"] != false || !strings.Contains(result.Text, `"status": "unsupported"`) || !strings.Contains(result.Text, "4年") || !strings.Contains(result.Text, `"current_state_verified": false`) {
+	if err == nil || result.Details.(map[string]any)["ok"] != false || !strings.Contains(result.Text, `"status": "unsupported"`) || !strings.Contains(result.Text, "4年") || !strings.Contains(result.Text, `"current_state_verified": false`) {
 		t.Fatalf("unsupported quantities lost their source or scope: %v / %+v", err, result)
 	}
 }

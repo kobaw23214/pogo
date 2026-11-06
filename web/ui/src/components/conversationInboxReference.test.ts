@@ -3,7 +3,7 @@ import { effectScope, reactive, type Ref } from "vue";
 import type { ComposerPart } from "@/agent/composerParts";
 import type { InboxItem } from "@/api/types";
 vi.mock("vue", async original => ({ ...await original<typeof import("vue")>(), useSSRContext: () => ({ modules: new Set() }) }));
-vi.mock("vue-i18n", () => ({ useI18n: () => ({ t: (key: string) => key }) }));
+vi.mock("vue-i18n", async original => { const { ref } = await import("vue"); return { ...await original<typeof import("vue-i18n")>(), useI18n: () => ({ t: (key: string) => key, locale: ref("zh-CN") }) }; });
 vi.mock("./InlineComposer.vue", () => ({ default: {} }));
 vi.mock("./OrderedMessageContent.vue", () => ({ default: {} }));
 vi.mock("./ShortcutReferenceDialog.vue", () => ({ default: {} }));

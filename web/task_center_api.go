@@ -4,7 +4,6 @@ package web
 // admissions, not a second source of truth or a source of execution authority.
 import (
 	"context"
-	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -20,7 +19,6 @@ import (
 	"github.com/yosukeno/pogo/schedule"
 	"github.com/yosukeno/pogo/sentinel"
 	"github.com/yosukeno/pogo/taskqueue"
-	"github.com/yosukeno/pogo/workflow"
 )
 
 // Explicit fields keep private execution payloads, account bindings, cursors,
@@ -33,7 +31,6 @@ type taskCenterTask struct {
 	Description     string `json:"description"`
 	AgentID         string `json:"agent_id"`
 	AgentName       string `json:"agent_name,omitempty"`
-	WorkflowID      string `json:"workflow_id,omitempty"`
 	Trigger         string `json:"trigger"`
 	Executor        string `json:"executor"`
 	Enabled         bool   `json:"enabled"`
@@ -62,11 +59,6 @@ type taskCenterRun struct {
 	SourceID        string `json:"source_id"`
 	Title           string `json:"title"`
 	AgentID         string `json:"agent_id"`
-	WorkflowID      string `json:"workflow_id,omitempty"`
-	WorkflowRunID   string `json:"workflow_run_id,omitempty"`
-	TestRun         bool   `json:"test_run,omitempty"`
-	DraftRevision   int    `json:"draft_revision,omitempty"`
-	DefinitionHash  string `json:"definition_hash,omitempty"`
 	Trigger         string `json:"trigger"`
 	Status          string `json:"status"`
 	Revision        int64  `json:"revision"`
@@ -126,12 +118,12 @@ func (s *Server) taskCenterSentinelVisible(r *http.Request, spec sentinel.Spec) 
 
 func (s *Server) taskCenterScheduleView(j schedule.Job) taskCenterTask {
 	v := s.scheduleJobViews([]schedule.Job{j})[0]
-	result := taskCenterTask{ID: "schedule:" + j.ID, Source: "schedule", SourceID: j.ID, Title: j.Title, Description: j.Prompt, AgentID: j.AgentID, AgentName: v.AgentName, WorkflowID: j.WorkflowID, Trigger: "time", Executor: v.ExecutionMode, Enabled: j.Enabled, State: "scheduled", ResultURL: v.ResultURL, Revision: j.Revision, CanManage: true}
+	result := taskCenterTask{ID: "schedule:" + j.ID, Source: "schedule", SourceID: j.ID, Title: j.Title, Description: j.Prompt, AgentID: j.AgentID, AgentName: v.AgentName, Trigger: "time", Executor: v.ExecutionMode, Enabled: j.Enabled, State: "scheduled", ResultURL: v.ResultURL, Revision: j.Revision, CanManage: true}
 	if result.Title == "" {
 		result.Title = j.ID
 	}
 	if j.SessionID != "" {
-		result.ResultURL = s.taskCenterRunView(taskqueue.Run{Request: taskqueue.Request{AgentID: j.AgentID, WorkflowID: j.WorkflowID, OwnerID: sessionResultOwnerKey(j.Owner)}, SessionID: j.SessionID}).ResultURL
+		result.ResultURL = s.taskCenterRunView(taskqueue.Run{Request: taskqueue.Request{AgentID: j.AgentID, OwnerID: sessionResultOwnerKey(j.Owner)}, SessionID: j.SessionID}).ResultURL
 	}
 	if v.NextRun != nil {
 		result.NextRun = v.NextRun.Format(time.RFC3339)
@@ -238,7 +230,7 @@ func (s *Server) taskCenterDefinitions(r *http.Request) (map[string]taskCenterBi
 
 func taskCenterRunVisible(run taskqueue.Run, defs map[string]taskCenterBinding) bool {
 	b, ok := defs[run.TaskID]
-	return ok && run.TaskID == run.Source+":"+run.SourceID && run.Source == b.view.Source && run.SourceID == b.view.SourceID && run.OwnerID == b.owner && run.AgentID == b.view.AgentID && run.WorkflowID == b.view.WorkflowID
+	return ok && run.TaskID == run.Source+":"+run.SourceID && run.Source == b.view.Source && run.SourceID == b.view.SourceID && run.OwnerID == b.owner && run.AgentID == b.view.AgentID
 }
 
 // The immutable admission owner survives deletion or rebinding of the source.
@@ -248,13 +240,7 @@ func (s *Server) taskCenterRunReadable(r *http.Request, run taskqueue.Run) bool 
 	if aid := r.URL.Query().Get("agent_id"); aid != "" && aid != run.AgentID {
 		return false
 	}
-	if _, rec, ok := s.taskCenterWorkflowBound(run); ok {
-		allowed, err := s.workflowRunAllowed(r, rec, wfRunRead, "")
-		return err == nil && allowed
-	}
-	if run.Source == "workflow" {
-		// A claimed WorkflowRunID in a raw queue request is not an ownership
-		// binding. Only the transactional catalog association is authoritative.
+	if run.WorkflowID != "" {
 		return false
 	}
 	if run.Source != "schedule" && run.Source != "sentinel" || run.TaskID != run.Source+":"+run.SourceID {
@@ -268,102 +254,6 @@ func (s *Server) taskCenterRunReadable(r *http.Request, run taskqueue.Run) bool 
 	}
 	owner, valid := s.taskCenterOwner(r)
 	return valid && run.OwnerID == sessionResultOwnerKey(owner)
-}
-
-func (s *Server) taskCenterWorkflowBound(run taskqueue.Run) (taskqueue.WorkflowRunMeta, workflow.RunRecord, bool) {
-	if run.WorkflowID == "" || s.mgr.taskRuns == nil || s.mgr.wfruns == nil {
-		return taskqueue.WorkflowRunMeta{}, workflow.RunRecord{}, false
-	}
-	db, err := s.mgr.taskRuns.database(false)
-	if err != nil || db == nil {
-		return taskqueue.WorkflowRunMeta{}, workflow.RunRecord{}, false
-	}
-	meta, err := db.WorkflowRunForExecution(run.ID)
-	if errors.Is(err, taskqueue.ErrNotFound) && run.Source == "schedule" && run.TaskID == "schedule:"+run.SourceID && validID(run.SessionID) {
-		meta, err = db.GetWorkflowRun(run.SessionID)
-		if err == nil {
-			segments, lookupErr := db.ListWorkflowExecutions(meta.ID)
-			if lookupErr != nil {
-				return taskqueue.WorkflowRunMeta{}, workflow.RunRecord{}, false
-			}
-			managed := false
-			for _, segment := range segments {
-				managed = managed || segment.Source == "workflow"
-			}
-			if !managed {
-				return taskqueue.WorkflowRunMeta{}, workflow.RunRecord{}, false
-			}
-		}
-	}
-	if err != nil || meta.WorkflowID != run.WorkflowID || meta.OwnerID != run.OwnerID {
-		return taskqueue.WorkflowRunMeta{}, workflow.RunRecord{}, false
-	}
-	rec, ok := s.mgr.wfruns.snapshot(meta.ID)
-	if !ok || rec.WorkflowID != meta.WorkflowID {
-		return taskqueue.WorkflowRunMeta{}, workflow.RunRecord{}, false
-	}
-	return meta, rec, true
-}
-
-func (s *Server) taskCenterWorkflowProjection(run taskqueue.Run, meta taskqueue.WorkflowRunMeta, rec workflow.RunRecord) taskCenterRun {
-	v := taskCenterRun{ID: meta.ID, WorkflowRunID: meta.ID, TaskID: "workflow-run:" + meta.ID,
-		Source: "workflow", SourceID: meta.WorkflowID, Title: rec.Definition.Name, WorkflowID: meta.WorkflowID,
-		Trigger: meta.Source, Status: rec.Status, Revision: rec.StateRevision + 1, Attempt: 1,
-		CancelRequested: meta.CancelRequested, CreatedAt: meta.CreatedAt, SessionID: meta.ID,
-		TestRun: meta.TestRun, DraftRevision: meta.DraftRevision, DefinitionHash: meta.DefinitionHash,
-		ResultURL: "/manage/workflows/" + url.PathEscape(meta.WorkflowID) + "?run=" + url.QueryEscape(meta.ID),
-		Summary:   run.Summary, Error: rec.Error, EndReason: run.EndReason}
-	if meta.Source == "schedule" && meta.SourceID != "" {
-		v.Source, v.SourceID, v.TaskID = "schedule", meta.SourceID, "schedule:"+meta.SourceID
-	}
-	if v.Title == "" {
-		v.Title = run.Title
-	}
-	for _, node := range rec.Nodes {
-		v.WaitingHuman = v.WaitingHuman || node.Status == workflow.NodeWaitingHuman
-		if at, err := time.Parse(time.RFC3339Nano, node.StartedAt); err == nil && (v.StartedAt == 0 || at.UnixMilli() < v.StartedAt) {
-			v.StartedAt = at.UnixMilli()
-		}
-	}
-	if rec.Status == workflow.RunWorking {
-		v.Status = taskqueue.Running
-	}
-	if workflow.IsTerminal(rec.Status) {
-		v.WaitingHuman = false
-		if ended, err := time.Parse(time.RFC3339Nano, rec.EndedAt); err == nil {
-			v.FinishedAt = ended.UnixMilli()
-		}
-	}
-	if rec.PersistenceError != "" {
-		v.Error = rec.PersistenceError
-	}
-	if !v.WaitingHuman && v.EndReason == "waiting_human" {
-		v.EndReason = ""
-	}
-	v.CanCancel = (rec.Status == "queued" || rec.Status == workflow.RunWorking) && !meta.CancelRequested
-	v.CanRetry = rec.Status == workflow.RunFailed || rec.Status == workflow.RunCancelled || rec.Status == taskqueue.Interrupted
-	return v
-}
-
-func (s *Server) taskCenterRunViewFor(r *http.Request, run taskqueue.Run) taskCenterRun {
-	if meta, rec, ok := s.taskCenterWorkflowBound(run); ok {
-		v := s.taskCenterWorkflowProjection(run, meta, rec)
-		if nodes := s.workflowReadableNodes(r, rec); nodes != nil {
-			v.Summary = ""
-			if v.Error != "" {
-				v.Error = "工作流执行异常，请由运行负责人核查"
-			}
-		}
-		cancel, cerr := s.workflowRunAllowed(r, rec, wfRunCancel, "")
-		retry, rerr := s.workflowRunAllowed(r, rec, wfRunRetry, "")
-		v.CanCancel = v.CanCancel && cerr == nil && cancel
-		v.CanRetry = v.CanRetry && rerr == nil && retry
-		if _, available := s.mgr.workflows.get(rec.WorkflowID); !available {
-			v.CanRetry = false
-		}
-		return v
-	}
-	return s.taskCenterRunView(run)
 }
 
 func (s *Server) taskCenterRunSession(run taskqueue.Run) *Session {
@@ -422,10 +312,7 @@ func (s *Server) taskCenterSentinelCancelledNeedsReview(run taskqueue.Run) bool 
 }
 
 func (s *Server) taskCenterRunView(run taskqueue.Run) taskCenterRun {
-	if meta, rec, ok := s.taskCenterWorkflowBound(run); ok {
-		return s.taskCenterWorkflowProjection(run, meta, rec)
-	}
-	v := taskCenterRun{ID: run.ID, TaskID: run.TaskID, Source: run.Source, SourceID: run.SourceID, Title: run.Title, AgentID: run.AgentID, WorkflowID: run.WorkflowID, Trigger: run.Trigger, Status: run.Status, Revision: run.Revision, Attempt: run.Attempt, CancelRequested: run.CancelRequested, CreatedAt: run.CreatedAt, StartedAt: run.StartedAt, FinishedAt: run.FinishedAt, SessionID: run.SessionID, Summary: run.Summary, Error: run.Error, EndReason: run.EndReason}
+	v := taskCenterRun{ID: run.ID, TaskID: run.TaskID, Source: run.Source, SourceID: run.SourceID, Title: run.Title, AgentID: run.AgentID, Trigger: run.Trigger, Status: run.Status, Revision: run.Revision, Attempt: run.Attempt, CancelRequested: run.CancelRequested, CreatedAt: run.CreatedAt, StartedAt: run.StartedAt, FinishedAt: run.FinishedAt, SessionID: run.SessionID, Summary: run.Summary, Error: run.Error, EndReason: run.EndReason}
 	if run.Source == "sentinel" {
 		v.SentinelID = run.SourceID
 		if records, _, err := s.mgr.sentinelSessionRecords(); err == nil {
@@ -437,36 +324,7 @@ func (s *Server) taskCenterRunView(run taskqueue.Run) taskCenterRun {
 			}
 		}
 	}
-	if run.SessionID != "" && run.WorkflowID != "" {
-		v.SessionID = ""
-		if s.mgr.wfruns != nil {
-			if rec, ok := s.mgr.wfruns.snapshot(run.SessionID); ok && rec.WorkflowID == run.WorkflowID && sessionResultOwnerKey(rec.Owner) == run.OwnerID {
-				v.SessionID = run.SessionID
-				v.ResultURL = "/manage/workflows/" + url.PathEscape(run.WorkflowID) + "?run=" + url.QueryEscape(run.SessionID)
-				for _, node := range rec.Nodes {
-					v.WaitingHuman = v.WaitingHuman || node.Status == workflow.NodeWaitingHuman
-				}
-				// The schedule wrapper may have returned while a human node was
-				// suspended. The native workflow remains the live display truth.
-				switch rec.Status {
-				case workflow.RunWorking:
-					v.Status, v.FinishedAt = taskqueue.Running, 0
-				case workflow.RunCompleted:
-					v.Status = taskqueue.Completed
-				case workflow.RunFailed:
-					v.Status, v.Error = taskqueue.Failed, rec.Error
-				case workflow.RunCancelled:
-					v.Status = taskqueue.Cancelled
-				}
-				if rec.Status != workflow.RunWorking {
-					v.WaitingHuman = false
-					if ended, err := time.Parse(time.RFC3339Nano, rec.EndedAt); err == nil {
-						v.FinishedAt = ended.UnixMilli()
-					}
-				}
-			}
-		}
-	} else if run.SessionID != "" && run.AgentID != "" {
+	if run.SessionID != "" && run.AgentID != "" {
 		sess := s.taskCenterRunSession(run)
 		if sess == nil && !s.taskCenterColdSessionOwned(run) {
 			v.SessionID = ""
@@ -519,31 +377,14 @@ func (s *Server) handleTaskCenter(w http.ResponseWriter, r *http.Request) {
 		} else {
 			latest := map[string]taskCenterRun{}
 			waitingHuman := map[string]bool{}
-			seenWorkflows := map[string]bool{}
 			for _, row := range rows {
 				if !s.taskCenterRunReadable(r, row) {
 					continue
 				}
-				v := s.taskCenterRunViewFor(r, row)
-				if v.WorkflowRunID != "" {
-					if seenWorkflows[v.WorkflowRunID] {
-						continue
-					}
-					seenWorkflows[v.WorkflowRunID] = true
-					if v.Source != "schedule" {
-						runs = append(runs, v)
-						continue
-					}
-				}
+				v := s.taskCenterRunView(row)
 				visible := taskCenterRunVisible(row, defs)
-				if v.WorkflowRunID != "" && v.Source == "schedule" {
-					binding, found := defs[v.TaskID]
-					visible = found && binding.view.Source == "schedule" && binding.view.WorkflowID == v.WorkflowID && binding.owner == row.OwnerID
-				}
 				if !visible {
-					if v.WorkflowRunID == "" {
-						v.CanCancel, v.CanRetry = false, false
-					}
+					v.CanCancel, v.CanRetry = false, false
 					runs = append(runs, v)
 					continue
 				}
@@ -679,16 +520,6 @@ func (s *Server) handleTaskCenterRunControl(w http.ResponseWriter, r *http.Reque
 		writeErr(w, http.StatusNotFound, ErrNotFound)
 		return
 	}
-	if meta, err := db.GetWorkflowRun(r.PathValue("id")); err == nil {
-		s.handleTaskCenterWorkflowControl(w, r, db, meta, retry)
-		return
-	} else if errors.Is(err, taskqueue.ErrConflict) {
-		writeErr(w, http.StatusNotFound, ErrNotFound)
-		return
-	} else if !errors.Is(err, taskqueue.ErrNotFound) {
-		writeErr(w, http.StatusInternalServerError, err)
-		return
-	}
 	run, err := db.Get(r.PathValue("id"))
 	if errors.Is(err, taskqueue.ErrNotFound) || errors.Is(err, taskqueue.ErrConflict) {
 		writeErr(w, http.StatusNotFound, ErrNotFound)
@@ -696,10 +527,6 @@ func (s *Server) handleTaskCenterRunControl(w http.ResponseWriter, r *http.Reque
 	}
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
-		return
-	}
-	if meta, _, ok := s.taskCenterWorkflowBound(run); ok {
-		s.handleTaskCenterWorkflowControl(w, r, db, meta, retry)
 		return
 	}
 	if !s.taskCenterRunReadable(r, run) {
@@ -749,87 +576,6 @@ func (s *Server) handleTaskCenterRunControl(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"run": s.taskCenterRunView(run)})
-}
-
-func (s *Server) handleTaskCenterWorkflowControl(w http.ResponseWriter, r *http.Request, db *taskqueue.Store, meta taskqueue.WorkflowRunMeta, retry bool) {
-	if r.URL.Query().Get("agent_id") != "" {
-		writeErr(w, http.StatusNotFound, ErrNotFound)
-		return
-	}
-	rec, ok := s.mgr.wfruns.snapshot(meta.ID)
-	if !ok || rec.WorkflowID != meta.WorkflowID {
-		writeErr(w, http.StatusNotFound, ErrNotFound)
-		return
-	}
-	action := wfRunCancel
-	if retry {
-		action = wfRunRetry
-	}
-	read, rerr := s.workflowRunAllowed(r, rec, wfRunRead, "")
-	allowed, err := s.workflowRunAllowed(r, rec, action, "")
-	if rerr != nil || err != nil {
-		writeErr(w, http.StatusServiceUnavailable, errors.New("暂时无法确认工作流运行权限"))
-		return
-	}
-	if !read || !allowed {
-		writeErr(w, http.StatusNotFound, ErrNotFound)
-		return
-	}
-	var body struct {
-		Revision int64 `json:"revision"`
-	}
-	d := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096))
-	d.DisallowUnknownFields()
-	if err := d.Decode(&body); err != nil || d.Decode(new(any)) != io.EOF || body.Revision <= 0 {
-		writeErr(w, http.StatusBadRequest, errors.New("请提供执行记录的有效 revision"))
-		return
-	}
-	if body.Revision != rec.StateRevision+1 {
-		writeErr(w, http.StatusConflict, taskqueue.ErrConflict)
-		return
-	}
-	if retry {
-		if rec.Status != workflow.RunFailed && rec.Status != workflow.RunCancelled && rec.Status != "interrupted" {
-			writeErr(w, http.StatusConflict, taskqueue.ErrConflict)
-			return
-		}
-		initiator := s.workflowPrincipal(r).ID
-		actorDigest := sha256.Sum256([]byte(initiator))
-		key := fmt.Sprintf("task-center-retry:%s:%d:%x", rec.ID, body.Revision, actorDigest)
-		next, err := s.mgr.admitWorkflow(rec.Definition, rec.Owner, "retry", rec.ID, key, rec.ID, initiator)
-		if err != nil {
-			status := http.StatusInternalServerError
-			if errors.Is(err, errWorkflowApprovalAssignment) {
-				status = http.StatusBadRequest
-			}
-			if errors.Is(err, taskqueue.ErrConflict) {
-				status = http.StatusConflict
-			}
-			writeErr(w, status, err)
-			return
-		}
-		segments, err := db.ListWorkflowExecutions(next.ID)
-		if err != nil || len(segments) == 0 {
-			writeErr(w, http.StatusInternalServerError, errors.New("新运行已受理，执行段读取失败"))
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]any{"run": s.taskCenterRunViewFor(r, segments[0])})
-		return
-	}
-	if rec.Status != "queued" && rec.Status != workflow.RunWorking {
-		writeErr(w, http.StatusConflict, taskqueue.ErrConflict)
-		return
-	}
-	if _, err := s.mgr.cancelWorkflowRun(meta.ID); err != nil {
-		writeErr(w, http.StatusInternalServerError, err)
-		return
-	}
-	segments, err := db.ListWorkflowExecutions(meta.ID)
-	if err != nil || len(segments) == 0 {
-		writeJSON(w, http.StatusOK, map[string]any{"cancelled": true})
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"run": s.taskCenterRunViewFor(r, segments[0])})
 }
 
 // Keep a bounded query shape; empty means the current owner's visible tasks.

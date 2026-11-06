@@ -1,3 +1,6 @@
+import { setLocale } from "@/i18n";
+import { beforeEach } from "vitest";
+beforeEach(() => setLocale("zh-CN"));
 import { describe, expect, it, vi } from "vitest";
 import { captureStarterFiles, prepareStarterFileParts } from "./starterDraftFiles";
 import { fileComposerPart, type ComposerPart } from "./composerParts";

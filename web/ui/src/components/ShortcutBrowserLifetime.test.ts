@@ -6,7 +6,7 @@ import type { ComposerPart, ComposerReferencePart } from "@/agent/composerParts"
 
 const host = vi.hoisted(() => ({ cleanups: [] as (() => void)[], create: vi.fn(), close: vi.fn(), state: vi.fn(), tabs: vi.fn(), control: vi.fn() }));
 vi.mock("vue", async original => ({ ...await original<typeof import("vue")>(), inject: () => null, useId: () => "browser-lifetime", useSSRContext: () => ({ modules: new Set() }), onBeforeUnmount: (fn: () => void) => host.cleanups.push(fn) }));
-vi.mock("vue-i18n", () => ({ useI18n: () => ({ t: (key: string) => key }) }));
+vi.mock("vue-i18n", async original => { const { ref } = await import("vue"); return { ...await original<typeof import("vue-i18n")>(), useI18n: () => ({ t: (key: string) => key, locale: ref("zh-CN") }) }; });
 vi.mock("@/api/client", () => ({ api: { browserAuthoringCreate: host.create, browserAuthoringClose: host.close, browserState: host.state, browserTabs: host.tabs, browserControl: host.control } }));
 vi.mock("@/agent/studioNavigation", () => ({ registerStudioNavigationGuard: () => () => {} }));
 vi.mock("./InlineComposer.vue", () => ({ default: {} }));

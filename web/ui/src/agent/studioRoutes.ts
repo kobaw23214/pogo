@@ -1,10 +1,9 @@
 /** Management locations and published conversation links are distinct surfaces. */
-export type StudioSection = "agents" | "information" | "workflows" | "models" | "mcp" | "skills" | "account" | "settings";
+export type StudioSection = "agents" | "information" | "models" | "mcp" | "skills" | "account" | "settings" | "memory";
 
 export type StudioRoute =
   | { kind: "manage"; section: StudioSection }
   | { kind: "chat"; agentId: string; managedChat: boolean; embedded: boolean }
-  | { kind: "workflow"; workflowId: string }
   | { kind: "invalid"; management: boolean };
 
 export function parseStudioRoute(pathname: string, search = ""): StudioRoute | null {
@@ -13,9 +12,7 @@ export function parseStudioRoute(pathname: string, search = ""): StudioRoute | n
   // address of that section.
   if (pathname === "/" || pathname === "") return { kind: "manage", section: "agents" };
   if (/^\/manage\/?$/.test(pathname)) return { kind: "manage", section: "agents" };
-  const workflow = /^\/manage\/workflows\/([a-zA-Z0-9_-]+)\/?$/.exec(pathname);
-  if (workflow) return { kind: "workflow", workflowId: workflow[1]! };
-  const section = /^\/manage\/(information|workflows|models|mcp|skills|account|settings)\/?$/.exec(pathname);
+  const section = /^\/manage\/(information|models|mcp|skills|account|settings|memory)\/?$/.exec(pathname);
   if (section) return { kind: "manage", section: section[1] as StudioSection };
   const preview = /^\/manage\/agents\/([a-zA-Z0-9_-]+)\/chat\/?$/.exec(pathname);
   if (preview) return { kind: "chat", agentId: preview[1]!, managedChat: true, embedded: false };
@@ -60,6 +57,5 @@ export function workbenchRedirect(pathname: string): string | null {
   if (parseStudioRoute(pathname) !== null) return null;
   if (pathname.startsWith("/share/")) return null;
   if (pathname === "/embed/") return null;
-  if (/^\/embed\/workflows\/[A-Za-z0-9_-]+\/?$/.test(pathname)) return null;
   return "/";
 }

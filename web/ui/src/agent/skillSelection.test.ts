@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { setLocale } from "@/i18n";
+import { beforeEach, describe, expect, it } from 'vitest';
 import { skillChoices, skillIsReady } from './skillSelection';
 import type { PlatformCapabilities } from './platformTypes';
 
@@ -22,3 +23,6 @@ describe('Skill choices', () => {
     expect(skillChoices([...catalog.skills, revoked], []).unavailable).toEqual([]);
   });
 });
+
+// These fixtures assert Chinese labels/order; the interface now follows an explicit locale.
+beforeEach(() => setLocale("zh-CN"));

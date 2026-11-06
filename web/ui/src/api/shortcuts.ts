@@ -1,3 +1,4 @@
+import { hostAPIError } from "./hostErrorCopy";
 import type { InputLayout, MessageInputPart, AttachmentMeta, StarterCard, Starters } from "./types";
 import { authHeaders } from "./client";
 import { validateInputParts } from "@/agent/shortcutStructure";
@@ -104,7 +105,7 @@ export interface ShortcutAssets { parts: MessageInputPart[]; input_layout?: Inpu
 async function assets(action: "assets" | "resolve", sid: string, input: { parts: MessageInputPart[]; input_layout?: InputLayout; prompt?: string }): Promise<ShortcutAssets> {
   const response = await fetch(`/api/sessions/${encodeURIComponent(sid)}/shortcuts/${action}`, { method: "POST", credentials: "same-origin", headers: { ...authHeaders(), "Content-Type": "application/json" }, body: JSON.stringify(input) });
   const result = await response.json();
-  if (!response.ok) throw new Error(result.error || response.statusText);
+  if (!response.ok) throw hostAPIError(result.error || response.statusText);
   if (!Array.isArray(result.parts) || !Array.isArray(result.attachments)) throw new Error("Invalid shortcut assets response");
   return result;
 }
@@ -113,7 +114,7 @@ export const shortcutAssetsApi = { save: (sid: string, input: Parameters<typeof 
 export async function resolveStarterShortcut(sid: string, item: ShortcutSnapshot): Promise<ShortcutSnapshot> {
   const response = await fetch(`/api/sessions/${encodeURIComponent(sid)}/shortcuts/starters/${encodeURIComponent(item.id)}/resolve`, { method: "POST", credentials: "same-origin", headers: authHeaders() });
   const result = await response.json();
-  if (!response.ok) throw new Error(result.error || response.statusText);
+  if (!response.ok) throw hostAPIError(result.error || response.statusText);
   if (!Array.isArray(result.parts) || !Array.isArray(result.attachments) || validateInputParts(result.parts)) throw new Error("Invalid shortcut source response");
   const { source: _source, ...snapshot } = item;
   return { ...snapshot, parts: result.parts };
@@ -122,6 +123,6 @@ export async function resolveStarterShortcut(sid: string, item: ShortcutSnapshot
 export async function saveHomepageStarters(set: Pick<Starters, "heading" | "send" | "cards" | "followups">, expectedRevision: string) {
   const response = await fetch("/api/starters", { method: "PUT", credentials: "same-origin", headers: { ...authHeaders(), "Content-Type": "application/json" }, body: JSON.stringify({ ...set, expected_revision: expectedRevision }) });
   const result = await response.json();
-  if (!response.ok) throw new Error(result.error || response.statusText);
+  if (!response.ok) throw hostAPIError(result.error || response.statusText);
   return result as { ok: boolean; cards: number; warnings?: string[] };
 }

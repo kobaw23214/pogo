@@ -43,6 +43,9 @@ func decodeScheduleBody(r *http.Request, b *scheduleJobBody) error {
 	return nil
 }
 func (s *Server) scheduleVisible(r *http.Request, j schedule.Job) bool {
+	if j.WorkflowID != "" {
+		return false
+	}
 	if j.AgentID == "" {
 		return s.adminRequest(r)
 	}
@@ -88,7 +91,7 @@ func scheduleAPIError(w http.ResponseWriter, err error) {
 func scheduleResultURL(aid, sid string) string {
 	return "/manage/agents/" + url.PathEscape(aid) + "/chat?task_session=" + url.QueryEscape(sid)
 }
-func scheduleRunViews(runs []schedule.RunRecord, aid string, wid ...string) []map[string]any {
+func scheduleRunViews(runs []schedule.RunRecord, aid string) []map[string]any {
 	out := make([]map[string]any, 0, len(runs))
 	for _, run := range runs {
 		raw, _ := json.Marshal(run)
@@ -96,9 +99,6 @@ func scheduleRunViews(runs []schedule.RunRecord, aid string, wid ...string) []ma
 		_ = json.Unmarshal(raw, &row)
 		if aid != "" && run.SessionID != "" {
 			row["result_url"] = scheduleResultURL(aid, run.SessionID)
-		}
-		if aid == "" && len(wid) > 0 && wid[0] != "" && run.SessionID != "" {
-			row["result_url"] = "/manage/workflows/" + url.PathEscape(wid[0]) + "?run=" + url.QueryEscape(run.SessionID)
 		}
 		out = append(out, row)
 	}
@@ -109,7 +109,7 @@ func scheduleRunViews(runs []schedule.RunRecord, aid string, wid ...string) []ma
 // Snapshot text is data, never a way to grant the Agent another capability.
 func (s *Server) prepareScheduleBody(r *http.Request, b *scheduleJobBody, old *schedule.Job) (*identity.Scope, error) {
 	if old != nil && (old.AgentID != b.AgentID || old.WorkflowID != "") {
-		return nil, errors.New("任务绑定不可更换；Workflow 计划请从工作流编辑")
+		return nil, errors.New("任务绑定不可更换；平台工作流计划已不再支持")
 	}
 	if err := b.normalizeAgentRunOptions(old); err != nil {
 		return nil, err

@@ -31,7 +31,7 @@ func TestEmbeddedLoad(t *testing.T) {
 	// channel; docs extracts text-layer content from pdf/word/excel
 	// attachments. All are framework capabilities, and all must survive the
 	// embed→materialize→load pipeline — frontmatter included.
-	for _, want := range []string{"web-drawing", "browser-use", "office", "skill-creator"} {
+	for _, want := range []string{"web-drawing", "web-development", "browser-use", "office", "skill-creator"} {
 		t.Run(want, func(t *testing.T) {
 			var s *Skill
 			for i := range list {
@@ -56,6 +56,18 @@ func TestEmbeddedLoad(t *testing.T) {
 	for _, s := range list {
 		if s.Name == "browser-use" && !s.BrowserTask {
 			t.Error("browser-use browser-task flag not parsed")
+		}
+		if s.Name == "web-development" {
+			if s.BrowserTask {
+				t.Error("web-development must not arm a browser task")
+			}
+			if _, err := os.ReadFile(filepath.Join(s.Dir, "references", "python-web.md")); err != nil {
+				t.Fatalf("web-development reference was not materialized: %v", err)
+			}
+			invocation, err := Invocation(s, "检查现有应用")
+			if err != nil || !strings.Contains(invocation, `<skill name="web-development"`) || !strings.Contains(invocation, "检查现有应用") {
+				t.Fatalf("web-development invocation failed: %v", err)
+			}
 		}
 	}
 	// The docs skill's scripts are exec'd by absolute path (the mal-*
@@ -164,8 +176,10 @@ func TestEmbeddedLosesNameCollisions(t *testing.T) {
 func TestEmbeddedDisabled(t *testing.T) {
 	embedded := materializeEmbeddedForTest(t)
 	list, _ := Load(Options{Cwd: t.TempDir(), Embedded: embedded, Disabled: true})
-	if _, ok := Find(list, "web-drawing"); ok {
-		t.Error("embedded skill loaded despite Disabled")
+	for _, name := range []string{"web-drawing", "web-development"} {
+		if _, ok := Find(list, name); ok {
+			t.Errorf("embedded %s loaded despite Disabled", name)
+		}
 	}
 }
 

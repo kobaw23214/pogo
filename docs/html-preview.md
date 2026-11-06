@@ -1,5 +1,28 @@
 # Workspace HTML previews
 
+## Choosing a delivery path
+
+Static websites and interactive pages using project-local HTML, CSS,
+JavaScript, modules, JSON and media use the built-in HTML Preview. Save a real
+workspace HTML file and return an `html-preview` fence containing its path and
+optional title. A Python or Node HTTP server is not needed to display these
+files. Referenced assets must stay inside the preview project root; the
+existing completed-edit refresh behavior applies.
+
+Ordinary `html` fences show source code. Only `html-preview` metadata requests
+the interactive Artifact; its body is JSON, not executable HTML.
+
+The preview is temporary and restricted to the supported static assets. It
+does not host a backend, SSR, server-side API or WebSocket server, and it does
+not constitute permanent website deployment. Those projects need a managed
+Web service capability that is actually available in the Agent's tools. If
+that capability is absent or a project is unsupported, the Agent should
+explain the limitation rather than start an unmanaged background server,
+guess a `localhost` URL or change container port mappings. This document does
+not announce a new hosting tool or expand the existing preview permissions.
+
+## Existing preview behavior
+
 Ordinary `.html` and `.htm` artifact links open source code in the file tab,
 with line numbers, source editing, citation positioning and the original download.
 The two toolbar actions, in order, are

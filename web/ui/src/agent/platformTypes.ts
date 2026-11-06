@@ -27,7 +27,10 @@ export interface PlatformAgent {
   revision: number;
   created_at: string;
   updated_at: string;
+  /** Bound Session count; the field name is retained for wire compatibility. */
   conversation_count: number;
+  /** User-role messages across those Sessions. */
+  user_message_count?: number;
 }
 
 export interface PlatformAgentInput {

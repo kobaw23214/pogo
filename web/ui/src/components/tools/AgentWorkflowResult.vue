@@ -2,6 +2,8 @@
 import { computed, inject } from "vue";
 import { useI18n } from "vue-i18n";
 import { agentWorkflowNavigationKey, agentWorkflowReceiptLocation, type AgentWorkflowDetails } from "@/agent/agentWorkflowNavigation";
+import WorkflowDiagnostics from "@/components/WorkflowDiagnostics.vue";
+import type { HostWorkflowDiagnostic } from "@/agent/hostWorkflowDiagnostic";
 const props = defineProps<{ details: AgentWorkflowDetails }>();
 const { t } = useI18n();
 const navigation = inject(agentWorkflowNavigationKey, undefined);
@@ -10,7 +12,7 @@ const workflow = computed(() => result.value.workflow as { name?: string; revisi
 const run = computed(() => result.value.run as { status?: string; trial?: boolean } | undefined);
 const location = computed(() => agentWorkflowReceiptLocation(props.details, navigation?.agentId()));
 const title = computed(() => workflow.value?.name || t(`agentWorkflow.${props.details.group === "edit" ? "editAction" : props.details.group === "enable" ? "enableAction" : props.details.group === "run" ? "runAction" : "read"}`));
-const diagnostics = computed(() => Array.isArray(result.value.diagnostics) ? result.value.diagnostics as { message: string; fix_hint?: string }[] : []);
+const diagnostics = computed(() => Array.isArray(result.value.diagnostics) ? result.value.diagnostics as HostWorkflowDiagnostic[] : []);
 const failure = computed(() => result.value.error as string | { message?: string } | undefined);
 </script>
 <template>
@@ -20,7 +22,7 @@ const failure = computed(() => result.value.error as string | { message?: string
     <p v-else-if="workflow?.deleted">{{ t('agentWorkflow.deleted') }}</p>
     <p v-else-if="run">{{ run.trial ? t('agentWorkflow.testLabel') + ' · ' : '' }}{{ t(`agentWorkflow.status.${run.status || 'queued'}`) }}<template v-if="run.status !== 'completed'"> · {{ t('agentWorkflow.waiting') }}</template></p>
     <p v-else-if="details.action === 'validate'">{{ t(result.valid ? 'agentWorkflow.valid' : 'agentWorkflow.invalid') }}</p>
-    <ul v-if="diagnostics.length"><li v-for="(diagnostic, index) in diagnostics" :key="index">{{ diagnostic.message }}<small v-if="diagnostic.fix_hint">{{ diagnostic.fix_hint }}</small></li></ul>
+    <WorkflowDiagnostics v-if="diagnostics.length" :diagnostics="diagnostics" domain="agentWorkflow" />
     <button v-if="location && navigation" type="button" @click="navigation.open(location!)">{{ t('agentWorkflow.open') }}</button>
   </section>
 </template>

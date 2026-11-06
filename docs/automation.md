@@ -2,13 +2,13 @@
 
 > 2026-10-23 Web 更新：Agent 的入口已升级为「后台任务」，时间与条件触发共用持久执行队列；Web 准入、恢复和操作语义以 [后台任务](background-tasks.md) 为准。下文的独立 CLI / OS 调度说明仍适用，旧 Web 面板描述保留作历史参考。
 
-> 2026-09-29：交互 TUI、无界面 CLI 与 Web 定时器是不同层。普通 prompt 任务仍通过 CLI 子进程执行；工作流定时任务在 Web 进程内运行，见 [工作流](workflow.md)。Windows 的非 Unix 调度锁当前返回不支持，不能仅凭管理页面和 internal 后端存在就认定任务可执行。
+> 2026-09-29：交互 TUI、无界面 CLI 与 Web 定时器是不同层。普通 prompt 任务通过 CLI 子进程执行，绑定 Agent 的定时任务使用 Web Agent 执行器。Windows 的非 Unix 调度锁当前返回不支持，不能仅凭管理页面和 internal 后端存在就认定任务可执行。
 
 自动 worktree 与相关 CLI 已退役；子任务的并发和文件写入规则见 [subagent](subagent.md)，已有数据处理见 [迁移说明](git-retirement.md)。定时任务本身仍在配置的工作目录执行。
 
 ## 定时任务 / schedule
 
-独立 CLI 进程不会常驻，因此普通 prompt 任务可交给操作系统调度器：`-schedule add` 写入 `~/.pogo/schedule/jobs.json`，OS 触发器回调 `pogo -schedule-exec <id>`。Web 服务另有 internal 定时器；无论谁触发，普通 prompt 任务最终仍通过无界面 CLI 子进程执行。工作流任务则由 Web 的工作流执行器运行。
+独立 CLI 进程不会常驻，因此普通 prompt 任务可交给操作系统调度器：`-schedule add` 写入 `~/.pogo/schedule/jobs.json`，OS 触发器回调 `pogo -schedule-exec <id>`。Web 服务另有 internal 定时器；普通 prompt 任务通过无界面 CLI 子进程执行，绑定 Agent 的计划通过 Web 持久队列执行；Agent 内部工作流仍由对话或工作流面板显式启动。
 
 ```bash
 # 每天早上 9 点跑（cron 表达式，也接受 @daily 等宏）

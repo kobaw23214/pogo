@@ -26,6 +26,38 @@ describe("shared tool header", () => {
     expect(html).toContain("<button"); expect(html).toContain('aria-expanded="true"'); expect(html).toContain('aria-controls="details-c1"');
   });
 
+  it("collapses a multiline command to one bounded line and restores the exact command when opened", async () => {
+    const command = ["python3 -c '", ...Array.from({ length: 20 }, (_, i) => `  print(\"line ${i}\")`), "'"].join("\n");
+    const presentation = presentToolCall({ ...call, name: "bash", args: { command } });
+    const target = (html: string) => /<span\b[^>]*class="tool-target"[^>]*>([\s\S]*?)<\/span>/.exec(html)?.[1] ?? "";
+    const closed = await renderHeader(presentation, { layered: true, expandable: true, open: false });
+    expect(closed).toContain("command-collapsed"); expect(closed).toContain('aria-expanded="false"');
+    expect(target(closed)).not.toContain("\n"); expect(target(closed)).toContain("…");
+    expect(target(closed)).not.toContain("line 19");
+    const opened = await renderHeader(presentation, { layered: true, expandable: true, open: true });
+    expect(opened).not.toContain("command-collapsed"); expect(opened).toContain('aria-expanded="true"');
+    expect(target(opened)).toContain("\n  print("); expect(target(opened)).toContain("line 19");
+    expect(presentation.target).toBe(command);
+    const full = await renderHeader(presentation, { layered: true, expandable: false, open: true });
+    expect(target(full)).toBe(target(opened)); expect(full).not.toContain("aria-expanded");
+  });
+
+  it("does not compact file paths or other command-shaped tool targets", async () => {
+    const presentation = { ...presentToolCall(call), glyph: "command" as const, protocolName: "shell_output", target: "first line\nsecond line" };
+    const html = await renderHeader(presentation, { layered: true, expandable: true, open: false });
+    expect(html).not.toContain("command-collapsed"); expect(html).toContain("first line\nsecond line");
+  });
+
+  it("keeps the disclosure and file action as independent controls rather than nested buttons", async () => {
+    const html = await renderHeader(presentToolCall(call), { expandable: true, open: false, controls: "details-c1", fileTarget: { path: "文件.txt", name: "文件.txt" } });
+    const buttons = [...html.matchAll(/<button\b[^>]*>[\s\S]*?<\/button>/g)].map(match => match[0]);
+    expect(buttons).toHaveLength(2);
+    expect(buttons.every(button => (button.match(/<button\b/g) ?? []).length === 1)).toBe(true);
+    expect(buttons[0]).toContain('aria-controls="details-c1"');
+    expect(buttons[1]).toContain('data-open-file="文件.txt"');
+    expect(buttons[1]).not.toContain("aria-expanded");
+  });
+
   it("renders the same header in a tool call and retains citation anchors and its result", async () => {
     const settled = { ...call, running: false, result: { call_id: call.callId, text: "saved output", duration_ms: 20, source: { label: "S1" } } } as TimelineCall;
     const html = await renderToString(createSSRApp({ render: () => h(ToolCall, { call: settled, runActive: false }) }).use(i18n));

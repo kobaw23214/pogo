@@ -17,10 +17,21 @@ import (
 // fixed cost and invalidates the provider measurement whenever the visible
 // definitions change — even when the byte total happens to stay identical.
 func (a *Agent) ReplaceMCP(projected []tools.Tool) error {
+	return a.ReplaceMCPWithCommit(projected, nil)
+}
+
+// ReplaceMCPWithCommit persists an idle host policy before replacing its live
+// registry. A failed commit leaves tool definitions and discovery untouched.
+func (a *Agent) ReplaceMCPWithCommit(projected []tools.Tool, persist func() error) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if a.running {
 		return fmt.Errorf("cannot replace MCP tools during an active run")
+	}
+	if persist != nil {
+		if err := persist(); err != nil {
+			return err
+		}
 	}
 	a.registry = a.registry.WithMCP(projected)
 	a.resetMCPSelection()

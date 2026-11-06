@@ -8,9 +8,9 @@ import {
   FolderOpened,
   Connection,
   Cpu,
+  Document,
   Lock,
   Setting,
-  Share,
   SwitchButton,
 } from "@element-plus/icons-vue";
 import type { Component } from "vue";
@@ -41,15 +41,15 @@ const props = withDefaults(
 );
 
 const emit = defineEmits<{ "update:open": [boolean] }>();
-const { t } = useI18n();
+const { t: tr } = useI18n();
 
 const SECTION_ICONS: Record<StudioSection, Component> = {
   agents: ChatDotRound,
   information: FolderOpened,
-  workflows: Share,
   models: Cpu,
   mcp: Connection,
   skills: Collection,
+  memory: Document,
   account: Lock,
   settings: Setting,
 };
@@ -88,7 +88,7 @@ function go(path: string) {
     <div v-if="open" class="rail-backdrop" aria-hidden="true" @click="emit('update:open', false)" />
   </transition>
 
-  <aside class="rail" :class="{ open }" aria-label="Agent Studio 导航">
+  <aside class="rail" :class="{ open }" :aria-label="tr('studioManagement.text504')">
     <div class="brand">
       <Logo :size="30" class="brand-logo" />
       <span class="brand-text">
@@ -108,7 +108,7 @@ function go(path: string) {
         @click="go(item.path)"
       >
         <el-icon class="rail-ico" aria-hidden="true"><component :is="SECTION_ICONS[item.section]" /></el-icon>
-        <span class="rail-label">{{ item.section === 'workflows' ? t('workflow.list.title') : item.label }}</span>
+        <span class="rail-label">{{ item.label }}</span>
         <span v-if="item.section === 'agents' && agentCount > 0" class="rail-count">{{ agentCount }}</span>
       </button>
     </nav>
@@ -124,23 +124,21 @@ function go(path: string) {
             class="account"
             :aria-expanded="accountMenuOpen"
             aria-haspopup="menu"
-            :title="accountName || '个人工作空间'"
+            :title="accountName || tr('studioManagement.text505')"
             @click="accountMenuOpen = !accountMenuOpen"
             @keydown.esc="accountMenuOpen = false"
           >
             <span class="account-initial" aria-hidden="true">{{ accountInitial }}</span>
             <span class="account-meta">
-              <strong>{{ accountName || "个人空间" }}</strong>
-              <em>个人工作空间</em>
+              <strong>{{ accountName || tr('studioManagement.text506') }}</strong>
+              <em>{{ tr('studioManagement.text505') }}</em>
             </span>
             <el-icon class="account-caret" aria-hidden="true"><CaretTop /></el-icon>
           </button>
           <transition name="pop">
-            <div v-if="accountMenuOpen" class="account-pop" role="menu" aria-label="账号操作">
+            <div v-if="accountMenuOpen" class="account-pop" role="menu" :aria-label="tr('studioManagement.text507')">
               <button type="button" role="menuitem" class="account-pop-item" @click="logout">
-                <el-icon aria-hidden="true"><SwitchButton /></el-icon>
-                退出登录
-              </button>
+                <el-icon aria-hidden="true"><SwitchButton /></el-icon> {{ tr('studioManagement.text508') }} </button>
             </div>
           </transition>
         </div>

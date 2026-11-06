@@ -75,3 +75,52 @@ describe("composer suggestion keys", () => {
     expect(composerSuggestionAction({ key: "Enter", repeat: true }, false)).toBe("ignore");
   });
 });
+
+describe("MCP composer suggestions", () => {
+  const mcpEntry = { label: "使用 MCP 方法", description: "选择服务及方法" };
+  const methods = [
+    { server: "gitlab", name: "list_issues", description: "查询议题" },
+    { server: "gitlab", name: "create_issue", description: "创建议题" },
+    { server: "docs", name: "search", description: "Search documents" },
+  ];
+  const available = (line: string) => composerSuggestions(line, commands, skills, entry, methods, mcpEntry);
+
+  it("adds a discoverable MCP entry without flooding the root menu with every method", () => {
+    expect(available("/").map(item => item.id)).toEqual(["command-compact", "skill-entry", "skill-browser-use", "skill-docs", "mcp-entry"]);
+    expect(available("/mcp")).toEqual([{ id: "mcp-entry", kind: "mcp-entry", label: mcpEntry.label, description: mcpEntry.description, value: "/mcp:", shortcut: "/mcp:" }]);
+    expect(available("/MCP:").map(item => item.label)).toEqual(["gitlab/list_issues", "gitlab/create_issue", "docs/search"]);
+    expect(composerSuggestions("/mcp", [], [{ name: "mcp-helper", description: "Skill", source: "project" }], entry, methods, mcpEntry).map(item => item.kind)).toEqual(["mcp-entry"]);
+  });
+
+  it("searches exact service identities and method or description fragments without executing", () => {
+    expect(available("/mcp:GIT").map(item => item.value)).toEqual(["/mcp:gitlab/list_issues ", "/mcp:gitlab/create_issue "]);
+    expect(available("/mcp:create")[0]?.mcp).toEqual({ server: "gitlab", name: "create_issue" });
+    expect(available("/mcp:查询").map(item => item.value)).toEqual(["/mcp:gitlab/list_issues "]);
+    expect(available("/mcp:gitlab/LIST").map(item => item.value)).toEqual(["/mcp:gitlab/list_issues "]);
+    expect(available("/mcp:docs/").map(item => item.value)).toEqual(["/mcp:docs/search "]);
+    expect(available("/mcp:docs/list")).toEqual([]);
+  });
+
+  it("never invents methods outside the scoped catalog or merges different servers", () => {
+    expect(composerSuggestions("/mcp:", commands, skills, entry, [], mcpEntry)).toEqual([]);
+    const sameName = [{ server: "one", name: "search", description: "one" }, { server: "two", name: "search", description: "two" }];
+    const items = composerSuggestions("/mcp:", commands, [], entry, [...sameName, sameName[0]], mcpEntry);
+    expect(items.map(item => item.mcp)).toEqual([{ server: "one", name: "search" }, { server: "two", name: "search" }]);
+    expect(new Set(items.map(item => item.id)).size).toBe(2);
+  });
+
+  it("encodes names with separators unambiguously and handles incomplete escapes", () => {
+    const scoped = [{ server: "内部/文档", name: "find item/%", description: "搜索" }];
+    const get = (line: string) => composerSuggestions(line, [], [], entry, scoped, mcpEntry);
+    const result = get("/mcp:")[0];
+    expect(result?.value).toBe(`/mcp:${encodeURIComponent("内部/文档")}/${encodeURIComponent("find item/%")} `);
+    expect(result?.mcp).toEqual({ server: "内部/文档", name: "find item/%" });
+    expect(get(`/mcp:${encodeURIComponent("内部/文档")}/find%20item`)).toEqual([result]);
+    expect(() => get("/mcp:%E")).not.toThrow();
+    expect(get("/mcp:%E")).toHaveLength(1);
+  });
+
+  it.each(["read /mcp:", "/mcp:gitlab/list_issues task", "/mcp:gitlab/list_issues\n", "https://host/mcp:"])("leaves prose and completed invocations alone: %j", line => {
+    expect(available(line)).toEqual([]);
+  });
+});

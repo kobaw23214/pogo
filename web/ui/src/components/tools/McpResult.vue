@@ -3,6 +3,7 @@ import { computed, ref, useId } from "vue";
 import { useI18n } from "vue-i18n";
 import Chevron from "../Chevron.vue";
 import ResultPreview from "./ResultPreview.vue";
+import ResultContent from "./ResultContent.vue";
 import { hasResultArgs, isExactResultJSON, resultTextPreview, resultValueText, structuredResultText } from "./resultPresentation";
 import { useCardDisclosure } from "@/agent/cardDisclosure";
 import { formatDuration } from "@/agent/timeline";
@@ -70,10 +71,10 @@ function mediaSrc(block: { mime_type?: string; data?: string }, fallback: string
       <span v-if="details.truncated" class="chip warn" :title="details.full_output_path">{{ t("mcpResult.truncated") }}</span>
     </div>
 
-    <ResultPreview v-if="failed" :text="result.text" :more-label="t('mcpResult.previewMore')" error />
-    <ResultPreview v-if="hasStructured" :text="structuredText" :more-label="t('mcpResult.previewMore')" />
+    <ResultPreview v-if="failed" :text="result.text" :more-label="t('mcpResult.previewMore')" card error />
+    <ResultPreview v-if="hasStructured" :text="structuredText" :more-label="t('mcpResult.previewMore')" card />
     <template v-for="(block, i) in blocks" :key="i">
-      <ResultPreview v-if="block.type === 'text'" :text="block.text ?? ''" :more-label="t('mcpResult.previewMore')" />
+      <ResultPreview v-if="block.type === 'text'" :text="block.text ?? ''" :more-label="t('mcpResult.previewMore')" card />
       <div v-else-if="block.type === 'image'" class="media">
         <img v-if="block.data" :src="mediaSrc(block, 'image/png')" :alt="block.mime_type ?? 'image'" />
         <span v-else class="omitted">{{ t("mcpResult.imageOmitted", { size: block.size ?? 0 }) }}</span>
@@ -86,7 +87,7 @@ function mediaSrc(block: { mime_type?: string; data?: string }, fallback: string
         class="reslink" :href="block.uri" target="_blank" rel="noopener noreferrer">{{ block.name || block.uri }}</a>
       <span v-else class="omitted">{{ t("mcpResult.unknownBlock") }}</span>
     </template>
-    <ResultPreview v-if="fallbackText" :text="fallbackText" :more-label="t('mcpResult.previewMore')" />
+    <ResultPreview v-if="fallbackText" :text="fallbackText" :more-label="t('mcpResult.previewMore')" card />
 
     <button class="detail-toggle" :aria-expanded="detailsOpen" :aria-controls="detailsId" @click="detailsOpen = !detailsOpen">
       <Chevron :open="detailsOpen" />{{ t("mcpResult.details") }}
@@ -95,11 +96,11 @@ function mediaSrc(block: { mime_type?: string; data?: string }, fallback: string
       {{ copied ? t("common.copied") : t("common.copy") }}
     </button>
     <div v-if="detailsOpen" :id="detailsId" class="raw-details">
-      <template v-if="hasArgs"><div class="raw-label">{{ t("mcpResult.arguments") }}</div><pre class="raw">{{ argsText }}</pre></template>
-      <template v-if="hasStructured"><div class="raw-label">{{ t("mcpResult.structuredResult") }}</div><pre class="raw">{{ structuredText }}</pre></template>
-      <template v-if="result.text"><div class="raw-label">{{ t("mcpResult.originalResult") }}</div><pre class="raw">{{ result.text }}</pre></template>
-      <template v-for="(block, i) in longTextBlocks" :key="i"><div class="raw-label">{{ t("mcpResult.textBlock", { n: i + 1 }) }}</div><pre class="raw">{{ block.text }}</pre></template>
-      <div class="raw-label">{{ t("mcpResult.metadata") }}</div><pre class="raw">{{ metadata }}</pre>
+      <template v-if="hasArgs"><div class="raw-label">{{ t("mcpResult.arguments") }}</div><ResultContent class="raw" :text="argsText" /></template>
+      <template v-if="hasStructured"><div class="raw-label">{{ t("mcpResult.structuredResult") }}</div><ResultContent class="raw" :text="structuredText" /></template>
+      <template v-if="result.text"><div class="raw-label">{{ t("mcpResult.originalResult") }}</div><ResultContent class="raw" :text="result.text" /></template>
+      <template v-for="(block, i) in longTextBlocks" :key="i"><div class="raw-label">{{ t("mcpResult.textBlock", { n: i + 1 }) }}</div><ResultContent class="raw" :text="block.text ?? ''" /></template>
+      <div class="raw-label">{{ t("mcpResult.metadata") }}</div><ResultContent class="raw" :text="metadata" />
     </div>
   </div>
 </template>

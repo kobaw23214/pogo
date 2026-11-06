@@ -21,6 +21,7 @@ package web
 //     内存实现，单实例自托管足够。
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/pbkdf2"
 	"crypto/rand"
@@ -738,6 +739,8 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 // 删除即刻生效：该账号的密码登录、固定 token 与 MCP 凭据随行消失，进行中
 // 的会话 cookie 在下一个请求就被 sessionUser 的存在性复查拒绝。只动凭据，
 // 不碰该用户已有的会话与工作区数据——那是目录里的内容，与账号行分开。
+// 已配置的受管 Web 服务先写入 owner fence 并清理其运行资源；这不改变
+// 上述历史会话/源码保留语义。清理失败保留凭据供管理员明确重试。
 func (s *Server) handleDeleteAccount(w http.ResponseWriter, r *http.Request) {
 	if !s.auth.Enabled() {
 		http.Error(w, "password login not enabled (set POGO_USERS_FILE and restart)", http.StatusNotFound)
@@ -755,6 +758,27 @@ func (s *Server) handleDeleteAccount(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "account not found", http.StatusNotFound)
 		return
 	}
+	if s.mgr.cfg.WebServices != nil {
+		// Persist the runtime admission fence before deleting credentials. Do not
+		// hold the account lock across private runner/gateway I/O: unrelated
+		// users must retain their normal login and session access.
+		s.auth.mu.Unlock()
+		owner := identity.LocalScope(target)
+		ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+		err := s.mgr.cfg.WebServices.DeleteOwner(ctx, sessionResultOwnerKey(&owner))
+		cancel()
+		if err != nil {
+			http.Error(w, "account deletion is pending managed Web cleanup; credentials retained for retry", http.StatusServiceUnavailable)
+			return
+		}
+		s.auth.mu.Lock()
+		rec, known = s.auth.users[target]
+		if !known {
+			s.auth.mu.Unlock()
+			http.Error(w, "account not found", http.StatusNotFound)
+			return
+		}
+	}
 	delete(s.auth.users, target)
 	saveErr := s.auth.save()
 	if saveErr != nil {
@@ -764,6 +788,10 @@ func (s *Server) handleDeleteAccount(w http.ResponseWriter, r *http.Request) {
 	}
 	s.auth.mu.Unlock()
 	if saveErr != nil {
+		if s.mgr.cfg.WebServices != nil {
+			http.Error(w, "managed Web services were revoked, but account credentials could not be saved; retry deletion", http.StatusInternalServerError)
+			return
+		}
 		http.Error(w, saveErr.Error(), http.StatusInternalServerError)
 		return
 	}

@@ -24,7 +24,6 @@ import (
 	"github.com/yosukeno/pogo/sentinelexec"
 	"github.com/yosukeno/pogo/taskqueue"
 	"github.com/yosukeno/pogo/tools"
-	"github.com/yosukeno/pogo/workflow"
 )
 
 func taskRunsDB(t *testing.T, m *Manager) *taskqueue.Store {
@@ -767,76 +766,5 @@ func TestTaskRunsCancelledPublicationRepairsNativeBatchAndAllowsFutureEvents(t *
 	}
 	if preserved, err := db.Get(old.ID); err != nil || !reflect.DeepEqual(preserved, cancelled) {
 		t.Fatal("future work overwrote the original cancellation record", err)
-	}
-}
-
-func TestTaskRunsWorkflowWrapperCompletionCannotDuplicateUnfinishedNativeRun(t *testing.T) {
-	for _, nodeStatus := range []string{workflow.NodeRunning, workflow.NodeWaitingHuman} {
-		t.Run(nodeStatus, func(t *testing.T) {
-			scheduleEnv(t)
-			m := schedulerManager(t, time.Hour, func(context.Context, schedule.Job, schedule.LogPaths, io.Writer) schedule.RunOutcome {
-				t.Error("workflow duplicate fell through to legacy runner")
-				return schedule.RunOutcome{}
-			})
-			server, err := NewServer(m, ServerOptions{Token: "test-token"})
-			if err != nil {
-				t.Fatal(err)
-			}
-			front := httptest.NewServer(server.Handler())
-			defer front.Close()
-			release := taskRunsHoldSlots(t, m)
-			defer release()
-			j := taskCenterAddSchedule(t, server, "workflow-human-guard", "", "published-workflow", nil)
-			db := taskRunsDB(t, m)
-			payload, _ := json.Marshal(scheduleTaskPayload{Directory: schedule.DefaultDir()})
-			var wrapper taskqueue.Run
-			func() {
-				m.taskRuns.mu.Lock()
-				defer m.taskRuns.mu.Unlock()
-				var err error
-				wrapper, _, err = db.Enqueue(taskqueue.Request{TaskID: "schedule:" + j.ID, Source: "schedule", SourceID: j.ID, Trigger: schedule.TriggerManual, TriggerID: "manual:original-workflow", DefinitionHash: schedule.DefinitionHash(j), OwnerID: "single-user", WorkflowID: j.WorkflowID, Title: j.Title, Payload: payload})
-				if err != nil {
-					t.Fatal(err)
-				}
-				wrapper, err = db.Claim(wrapper.ID, 10000)
-				if err != nil {
-					t.Fatal(err)
-				}
-				wrapper, err = db.Finish(wrapper.ID, wrapper.Revision, taskqueue.Outcome{Status: taskqueue.Completed, SessionID: "native-workflow-awaiting-human", EndReason: "waiting_human"})
-				if err != nil {
-					t.Fatal(err)
-				}
-			}()
-			record := workflow.RunRecord{ID: wrapper.SessionID, WorkflowID: j.WorkflowID, Status: workflow.RunWorking, Nodes: map[string]workflow.NodeState{"review": {Status: nodeStatus}}}
-			if err := writeWFRecord(m.wfruns.recordPath(record.ID), record); err != nil {
-				t.Fatal(err)
-			}
-			code, out := scheduleRequest(t, front, http.MethodPost, "/api/schedule/jobs/"+j.ID+"/run-now", "")
-			if code != http.StatusConflict {
-				t.Fatalf("completed wrapper duplicated unfinished native workflow: %d %v", code, out)
-			}
-			if _, created, err := m.taskRuns.enqueueSchedule(j, schedule.TriggerScheduled, time.Now()); !errors.Is(err, schedule.ErrRunning) || created {
-				t.Fatalf("clock tick bypassed native workflow status: created=%v err=%v", created, err)
-			}
-			rows, err := db.List(taskqueue.Filter{TaskID: wrapper.TaskID})
-			if err != nil || len(rows) != 1 || !reflect.DeepEqual(rows[0], wrapper) {
-				t.Fatalf("rejected trigger changed wrapper history: %+v %v", rows, err)
-			}
-			// Waiting-human is not a permanent string-based latch: once native
-			// execution really ends, a later period may be admitted again.
-			record.Status = workflow.RunCompleted
-			record.EndedAt = time.Now().UTC().Format(time.RFC3339Nano)
-			record.Nodes["review"] = workflow.NodeState{Status: workflow.NodeSuccess}
-			if err := writeWFRecord(m.wfruns.recordPath(record.ID), record); err != nil {
-				t.Fatal(err)
-			}
-			next, created, err := m.taskRuns.enqueueSchedule(j, schedule.TriggerScheduled, time.Now())
-			if err != nil || !created || next.ID == wrapper.ID {
-				t.Fatalf("completed native workflow remained permanently blocked: %+v %v %v", next, created, err)
-			}
-			if _, err := m.taskRuns.cancel(next.ID, next.Revision); err != nil {
-				t.Fatal(err)
-			}
-		})
 	}
 }

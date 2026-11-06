@@ -6,12 +6,12 @@ import { contextLevel } from '@/agent/contextEstimate';
 import type { TaskContextReading } from '@/agent/taskContextUsage';
 
 const props = defineProps<{ reading?: TaskContextReading | null }>();
-const { t } = useI18n();
+const { t, locale } = useI18n();
 const reading = computed(() => props.reading);
 const percent = computed(() => contextRingPercent(reading.value?.percent));
 const label = computed(() => reading.value?.percent == null ? '—' : `${reading.value.source === 'estimated' ? '~' : ''}${Math.round(reading.value.percent)}%`);
 const level = computed(() => reading.value?.source === 'unknown' ? '' : contextLevel(reading.value?.used || 0, reading.value?.window || 0, reading.value?.clearTrigger));
-const tokens = (value: number) => value.toLocaleString('en-US');
+const tokens = (value: number) => value.toLocaleString(locale.value);
 const description = computed(() => {
   const value = reading.value;
   const usage = !value || value.source === 'unknown' ? t('taskContextRing.unknown')

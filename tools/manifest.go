@@ -64,7 +64,8 @@ var (
 	// built-in would change the loop's contract from underneath it — the
 	// registry is not a runtimeSkill point for the harness's own verbs.
 	builtinNames = map[string]bool{
-		"read": true, "ls": true, "find": true, "grep": true,
+		WebServiceName: true,
+		"read":         true, "ls": true, "find": true, "grep": true,
 		ToolResultReadName: true,
 		"write":            true, "edit": true, "bash": true,
 		ShellTasksName: true, ShellOutputName: true, ShellStopName: true,

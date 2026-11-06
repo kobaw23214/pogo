@@ -10,6 +10,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/yosukeno/pogo/webservice"
 )
 
 // Tool is the contract the agent loop depends on.
@@ -122,7 +124,7 @@ func (r *Registry) WithMCP(projected []Tool) *Registry {
 	ts := append([]Tool(nil), base[:start]...)
 	for _, t := range projected {
 		mt, ok := t.(*MCPTool)
-		if !ok || taken[t.Name()] || hostShellJobName(t.Name()) || hostShortcutName(t.Name()) || hostSkillAuthorName(t.Name()) || hostWatchName(t.Name()) || hostWorkflowName(t.Name()) || hostUserInputName(t.Name()) || (r.readOnly && !mt.IsReadOnly()) {
+		if !ok || taken[t.Name()] || hostShellJobName(t.Name()) || hostShortcutName(t.Name()) || hostSkillAuthorName(t.Name()) || hostWatchName(t.Name()) || hostWorkflowName(t.Name()) || hostUserInputName(t.Name()) || t.Name() == WebServiceName || (r.readOnly && !mt.IsReadOnly()) {
 			continue
 		}
 		taken[t.Name()] = true
@@ -180,9 +182,15 @@ const EnvReadRoots = "POGO_READ_ROOTS"
 // want three different sets: the terminal, the web server, and a subagent child
 // that must not have the same tools its parent does.
 type Options struct {
+	// WebServices is an optional host-bound managed runtime, absent in children and hosted runs.
+	WebServices webservice.Backend
 	// ShellJobs is the host-owned process and notification lifetime for this session.
 	ShellJobs *ShellJobRunner
 	Cwd       string
+	// FileAccess may widen ordinary file reads and writes to the authenticated
+	// owner's workspace while that session is in full-access mode. Nil keeps
+	// the existing working-directory/read-root rules, including CLI callers.
+	FileAccess *FileAccess
 	// Scope is an optional strict per-session OS boundary for Bash. It does
 	// not enable shell tools in ReadOnly mode or change unscoped behavior.
 	Scope *CommandScope
@@ -314,11 +322,7 @@ type Options struct {
 	// BackgroundTasks is a separate optional grant; selecting watch alone must
 	// never add permission to create scheduled Agent executions.
 	BackgroundTasks BackgroundTaskBackend
-	// Workflow is the host-bound workflow authoring facade. Tool selection
-	// does not grant a user permission to edit, run or publish a workflow.
-	Workflow WorkflowBackend
-	// AgentWorkflows is bound to the current user and Agent. It manages private
-	// Agent-internal flows independently of the platform Workflow capability.
+	// AgentWorkflows manages procedures bound to the current user and Agent.
 	AgentWorkflows AgentWorkflowBackend
 	// BrowserImageMode describes the actual image delivery path. A configured
 	// helper upgrades DOM-only mode below, only when that tool is registered.
@@ -403,10 +407,10 @@ func New(o Options) *Registry {
 		// moment anything edits the original, and — since the spill file is itself
 		// read with these tools — set up a truncate-spill-read-truncate cascade
 		// with nothing at the bottom of it.
-		&Read{Cwd: o.Cwd, Roots: readRoots, skillReads: skillReadIndex(o.SkillReads)},
-		&Ls{Cwd: o.Cwd, Roots: readRoots},
-		&Find{Cwd: o.Cwd, Roots: readRoots},
-		&Grep{Cwd: o.Cwd, Roots: readRoots},
+		&Read{Cwd: o.Cwd, Roots: readRoots, FileAccess: o.FileAccess, skillReads: skillReadIndex(o.SkillReads)},
+		&Ls{Cwd: o.Cwd, Roots: readRoots, FileAccess: o.FileAccess},
+		&Find{Cwd: o.Cwd, Roots: readRoots, FileAccess: o.FileAccess},
+		&Grep{Cwd: o.Cwd, Roots: readRoots, FileAccess: o.FileAccess},
 		&ToolResultRead{Store: resultStore},
 	}
 	if o.Information != nil {
@@ -441,14 +445,11 @@ func New(o Options) *Registry {
 			}
 		}
 	}
+	if o.WebServices != nil && !o.ReadOnly && o.keeps(WebServiceName) {
+		ts = append(ts, &WebService{Backend: o.WebServices})
+	}
 	if o.BackgroundTasks != nil && !o.ReadOnly && o.keeps(BackgroundTaskName) {
 		ts = append(ts, &BackgroundTask{Backend: o.BackgroundTasks})
-	}
-	for _, tool := range NewWorkflowTools(o.Workflow) {
-		readOnly, _ := tool.(ReadOnlyCapable)
-		if o.keeps(tool.Name()) && (!o.ReadOnly || readOnly != nil && readOnly.IsReadOnly()) {
-			ts = append(ts, tool)
-		}
 	}
 	for _, tool := range NewAgentWorkflowTools(o.AgentWorkflows) {
 		if o.keeps(tool.Name()) && (!o.ReadOnly || tool.(ReadOnlyCapable).IsReadOnly()) {
@@ -466,10 +467,10 @@ func New(o Options) *Registry {
 		// may withhold any of them (Options.Enabled), and each is filtered on
 		// its own name so e.g. a no-bash analyst keeps write and edit.
 		if o.keeps("write") {
-			ts = append(ts, &Write{Cwd: o.Cwd, Roots: writeRoots, Journal: o.Journal, ProtectionManifest: o.CommandProtectionManifest})
+			ts = append(ts, &Write{Cwd: o.Cwd, Roots: writeRoots, FileAccess: o.FileAccess, Journal: o.Journal, ProtectionManifest: o.CommandProtectionManifest})
 		}
 		if o.keeps("edit") {
-			ts = append(ts, &Edit{Cwd: o.Cwd, Roots: writeRoots, Journal: o.Journal, ProtectionManifest: o.CommandProtectionManifest})
+			ts = append(ts, &Edit{Cwd: o.Cwd, Roots: writeRoots, FileAccess: o.FileAccess, Journal: o.Journal, ProtectionManifest: o.CommandProtectionManifest})
 		}
 		if o.keeps("bash") {
 			ts = append(ts, &Bash{Cwd: o.Cwd, Guard: o.Guard, SpillDir: spillDir, Scope: o.Scope, ProtectionManifest: o.CommandProtectionManifest, Jobs: o.ShellJobs})
@@ -481,7 +482,7 @@ func New(o Options) *Registry {
 	// on Options because the annotation lives on the tool and the filter is
 	// only ever asked here.
 	for _, t := range o.Synth {
-		if t.Name() == ToolResultReadName || hostShellJobName(t.Name()) || hostShortcutName(t.Name()) || hostWatchName(t.Name()) || hostWorkflowName(t.Name()) || hostUserInputName(t.Name()) {
+		if t.Name() == ToolResultReadName || hostShellJobName(t.Name()) || hostShortcutName(t.Name()) || hostWatchName(t.Name()) || hostWorkflowName(t.Name()) || hostUserInputName(t.Name()) || t.Name() == WebServiceName {
 			continue // the host's read-only recovery boundary cannot be replaced
 		}
 		if hostSkillAuthorName(t.Name()) {
@@ -508,7 +509,7 @@ func New(o Options) *Registry {
 	// (the pool) builds the tool while the session owns the spill directory.
 	mcpStart := len(ts)
 	for _, t := range o.MCP {
-		if t.Name() == ToolResultReadName || hostShellJobName(t.Name()) || hostShortcutName(t.Name()) || hostSkillAuthorName(t.Name()) || hostWatchName(t.Name()) || hostWorkflowName(t.Name()) || hostUserInputName(t.Name()) {
+		if t.Name() == ToolResultReadName || hostShellJobName(t.Name()) || hostShortcutName(t.Name()) || hostSkillAuthorName(t.Name()) || hostWatchName(t.Name()) || hostWorkflowName(t.Name()) || hostUserInputName(t.Name()) || t.Name() == WebServiceName {
 			continue
 		}
 		if ro, ok := t.(ReadOnlyCapable); ok && o.ReadOnly && !ro.IsReadOnly() {
@@ -569,6 +570,7 @@ func New(o Options) *Registry {
 		// Same assignment as the synth tools above and for the same reason: the
 		// caller builds the tool, the session decides where output goes.
 		o.Subagent.SpillDir = spillDir
+		o.Subagent.FileAccess = o.FileAccess
 		ts = append(ts, o.Subagent)
 		// The status tool only exists alongside a background runner: without one
 		// every delegation is synchronous and there is never anything to list.

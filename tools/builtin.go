@@ -149,6 +149,7 @@ func IsPlatformWorkflowTool(name string) bool {
 // catalog pretending the registration is unconditional.
 func BuiltinCatalog() []BuiltinInfo {
 	result := []BuiltinInfo{
+		{Name: WebServiceName, Description: "启动与管理受管 Python/Node.js 网站，提供网站地址、重命名、自定义续期、日志、重启及停止；按已配置的运行环境提供"},
 		{Name: "read", Description: "读取工作区文件内容", ReadOnly: true, Protected: true},
 		{Name: "ls", Description: "列出目录内容", ReadOnly: true, Protected: true},
 		{Name: "find", Description: "按名称模式查找文件", ReadOnly: true, Protected: true},

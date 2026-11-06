@@ -316,7 +316,13 @@ func TestMCPClientBootProjection(t *testing.T) {
 	var trusted []string
 	for time.Now().Before(deadline) {
 		proj, trusted = h.mgr.mcpProjection(nil, nil)
-		if len(proj) > 0 && len(trusted) > 0 {
+		ready := map[string]bool{}
+		for _, tool := range proj {
+			ready[tool.Name()] = true
+		}
+		// The servers connect independently: the trusted remote can appear
+		// before plain, so a nonempty projection/grant list is not enough.
+		if ready["mcp_remote_agent_submit_task"] && ready["mcp_plain_agent_submit_task"] && len(trusted) > 0 {
 			break
 		}
 		time.Sleep(20 * time.Millisecond)

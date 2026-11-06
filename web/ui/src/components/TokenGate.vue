@@ -14,7 +14,7 @@ import { api, setToken } from "@/api/client";
 // the server sets an HttpOnly cookie, so success just reloads and boot runs
 // authorized.
 const props = defineProps<{ rejected?: boolean; password?: boolean; published?: boolean }>();
-const { t, locale } = useI18n();
+const { t } = useI18n();
 
 const value = ref("");
 const shake = ref(false);
@@ -71,10 +71,10 @@ async function submitPassword() {
       <div class="mark">
         <Logo :size="40" />
       </div>
-      <h1>{{ published ? (locale === "zh-CN" ? "登录后开始对话" : "Sign in to start chatting") : t("tokenGate.title") }}</h1>
-      <p class="sub">{{ published ? (locale === "zh-CN" ? "使用你的 Pogo 账号或访问密钥继续。" : "Continue with your Pogo account or access key.") : t("tokenGate.subtitle") }}</p>
+      <h1>{{ t(published ? "settingsCoverage.publishedTitle" : "tokenGate.title") }}</h1>
+      <p class="sub">{{ t(published ? "settingsCoverage.publishedSubtitle" : "tokenGate.subtitle") }}</p>
 
-      <p v-if="rejected" class="rejected">{{ published ? (locale === "zh-CN" ? "登录已失效或访问密钥不正确，请重新登录。" : "Your sign-in expired or the access key is invalid. Please sign in again.") : t("tokenGate.rejected") }}</p>
+      <p v-if="rejected" class="rejected">{{ t(published ? "settingsCoverage.publishedRejected" : "tokenGate.rejected") }}</p>
       <p v-else-if="message" class="rejected">{{ message }}</p>
 
       <template v-if="tab === 'token'">

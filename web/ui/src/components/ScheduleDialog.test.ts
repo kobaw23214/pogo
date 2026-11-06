@@ -4,7 +4,7 @@ import type { ScheduleDraft } from "@/agent/schedulePresentation";
 import type { ScheduleJob, ScheduleJobsInfo, ScheduleRunsInfo } from "@/api/types";
 const host = vi.hoisted(() => ({ jobs: vi.fn(), detail: vi.fn(), runs: vi.fn(), enabled: vi.fn(), run: vi.fn(), remove: vi.fn(), cleanup: [] as (() => void)[] }));
 vi.mock("vue", async original => ({ ...await original<typeof import("vue")>(), onBeforeUnmount: (fn: () => void) => host.cleanup.push(fn), useSSRContext: () => ({ modules: new Set() }) }));
-vi.mock("vue-i18n", async () => { const { ref } = await import("vue"); return { useI18n: () => ({ t: (key: string) => key, locale: ref("zh-CN") }) }; });
+vi.mock("vue-i18n", async original => { const { ref } = await import("vue"); return { ...await original<typeof import("vue-i18n")>(), useI18n: () => ({ t: (key: string) => key, locale: ref("zh-CN") }) }; });
 vi.mock("@/api/client", () => ({ api: { scheduleJobs: host.jobs, scheduleJob: host.detail, scheduleRuns: host.runs, scheduleSetEnabled: host.enabled, scheduleRunNow: host.run, scheduleDeleteJob: host.remove } }));
 vi.mock("./ScheduleEditorDialog.vue", () => ({ default: {} })); vi.mock("./OrderedMessageContent.vue", () => ({ default: {} })); vi.mock("./ConfirmDialog.vue", () => ({ default: {} }));
 import ScheduleDialog from "./ScheduleDialog.vue";

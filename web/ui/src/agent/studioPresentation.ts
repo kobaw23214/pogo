@@ -1,3 +1,4 @@
+import { gt as tr } from "@/i18n";
 import type {
   AgentTemplate,
   PlatformAgent,
@@ -18,7 +19,7 @@ export type { StudioSection } from "./studioRoutes";
 // reading window, so the tests pin the exact string the dialog will show.
 
 /** The SettingsDialog's own grouping: Studio modules map onto its sheets. */
-export type StudioSettingsSection = "models" | "mcp" | "account" | "general";
+export type StudioSettingsSection = "models" | "mcp" | "account" | "general" | "memory";
 
 export interface StudioNavItem {
   section: StudioSection;
@@ -30,14 +31,14 @@ export interface StudioNavItem {
 /** Top-level Studio modules, in sidebar order. Templates are not a module —
     they are choices inside the creation dialog. */
 export const STUDIO_NAV: readonly StudioNavItem[] = [
-  { section: "agents", path: "/", label: "我的 Agents" },
-  { section: "information", path: "/manage/information", label: "信息库" },
-  { section: "workflows", path: "/manage/workflows", label: "平台工作流" },
-  { section: "models", path: "/manage/models", label: "模型配置" },
-  { section: "mcp", path: "/manage/mcp", label: "MCP 管理" },
-  { section: "skills", path: "/manage/skills", label: "Skill 管理" },
-  { section: "account", path: "/manage/account", label: "账号与安全" },
-  { section: "settings", path: "/manage/settings", label: "设置" },
+  { section: "agents", path: "/", get label() { return tr('studioManagement.text618'); } },
+  { section: "information", path: "/manage/information", get label() { return tr('studioManagement.text600'); } },
+  { section: "models", path: "/manage/models", get label() { return tr('studioManagement.text620'); } },
+  { section: "mcp", path: "/manage/mcp", get label() { return tr('studioManagement.text621'); } },
+  { section: "skills", path: "/manage/skills", get label() { return tr('studioManagement.text601'); } },
+  { section: "memory", path: "/manage/memory", get label() { return tr('memoryPanel.preferencesTitle'); } },
+  { section: "account", path: "/manage/account", get label() { return tr('studioManagement.text622'); } },
+  { section: "settings", path: "/manage/settings", get label() { return tr('studioManagement.text623'); } },
 ];
 
 /** Modules that only exist as account surfaces. A deployment without the
@@ -61,26 +62,26 @@ export function visibleSection(section: StudioSection, passwordEnabled: boolean)
 }
 
 export const STUDIO_SECTION_LABELS: Record<StudioSection, string> = {
-  agents: "我的 Agents",
-  information: "信息库",
-  workflows: "平台工作流",
-  models: "模型配置",
-  mcp: "MCP 管理",
-  skills: "Skill 管理",
-  account: "账号与安全",
-  settings: "设置",
+  get agents() { return tr('studioManagement.text618'); },
+  get information() { return tr('studioManagement.text600'); },
+  get models() { return tr('studioManagement.text620'); },
+  get mcp() { return tr('studioManagement.text621'); },
+  get skills() { return tr('studioManagement.text601'); },
+  get memory() { return tr('memoryPanel.preferencesTitle'); },
+  get account() { return tr('studioManagement.text622'); },
+  get settings() { return tr('studioManagement.text623'); },
 };
 
 /** One honest line under each module title: what this page actually edits. */
 export const STUDIO_SECTION_DESCS: Record<StudioSection, string> = {
-  agents: "创建、发布并管理你的 Agent；从模板开始，或从空白起步。",
-  information: "文件与快捷方式统一整理，工作空间内所有 Agent 和子 Agent 按需引用。",
-  workflows: "在管理页面编排、发布和运行平台流程，也可嵌入业务系统。Agent 对话中的内部工作流由各 Agent 单独管理。",
-  models: "统一配置模型服务商、可用模型与默认模型。",
-  mcp: "连接外部 MCP 工具服务，或把当前工作空间作为 MCP 服务提供出去。",
-  skills: "上传和管理 Skill；说明、工具、运行环境与数据统一随 Skill 提供。",
-  account: "查看账号与登录方式，管理账号安全。",
-  settings: "外观、语言与存储等通用偏好。",
+  get agents() { return tr('studioManagement.text624'); },
+  get information() { return tr('studioManagement.text625'); },
+  get models() { return tr('studioManagement.text627'); },
+  get mcp() { return tr('studioManagement.text628'); },
+  get skills() { return tr('studioManagement.text629'); },
+  get memory() { return tr('memoryPanel.description'); },
+  get account() { return tr('studioManagement.text630'); },
+  get settings() { return tr('studioManagement.text631'); },
 };
 
 /** Studio module → the SettingsDialog section that renders it. "settings" is
@@ -93,7 +94,9 @@ export function settingsSectionFor(section: StudioSection): StudioSettingsSectio
       return "mcp";
     case "account":
       return "account";
-    // skills/workflows render their own management pages, never the
+    case "memory":
+      return "memory";
+    // Skills render their own management pages, never the
     // SettingsDialog; "general" is only the total-function fallback.
     default:
       return "general";
@@ -116,6 +119,8 @@ export function sectionForSettingsSection(section: StudioSettingsSection): Studi
       return "mcp";
     case "account":
       return "account";
+    case "memory":
+      return "memory";
     default:
       return "settings";
   }
@@ -150,11 +155,11 @@ export function managedChatPath(agentId: string): string {
 export const CATEGORY_ORDER = ["general", "writing", "research", "code", "planning"] as const;
 
 const CATEGORY_LABELS: Record<string, string> = {
-  general: "通用",
-  writing: "写作",
-  research: "研究",
-  code: "代码",
-  planning: "规划",
+  get general() { return tr('studioManagement.text632'); },
+  get writing() { return tr('studioManagement.text358'); },
+  get research() { return tr('studioManagement.text429'); },
+  get code() { return tr('studioManagement.text322'); },
+  get planning() { return tr('studioManagement.text633'); },
 };
 
 export function categoryLabel(category: string): string {
@@ -167,7 +172,7 @@ export function categoryChips(agents: readonly PlatformAgent[]): { value: string
   const present = new Set(agents.map((a) => a.category));
   const ordered = CATEGORY_ORDER.filter((c) => present.has(c));
   const extra = [...present].filter((c) => !(CATEGORY_ORDER as readonly string[]).includes(c)).sort();
-  return [{ value: "all", label: "全部" }, ...[...ordered, ...extra].map((c) => ({ value: c, label: categoryLabel(c) }))];
+  return [{ value: "all", label: tr('studioManagement.text213') }, ...[...ordered, ...extra].map((c) => ({ value: c, label: categoryLabel(c) }))];
 }
 
 export type AgentStatusFilter = "all" | "ready" | "draft";
@@ -198,22 +203,22 @@ export function agentStats(agents: readonly PlatformAgent[], models: readonly Pl
   };
 }
 
-/** Short timestamp: today's cards get a clock time, this year a month-day,
-    older a full date. */
-export function formatAgentTime(iso: string, now: Date = new Date()): string {
+/** Today's cards name the day and clock time; every other day gets a full date. */
+export function formatAgentTime(iso: string, now: Date = new Date(), todayLabel: string = tr('studioSentences.today')): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
   const pad = (n: number) => String(n).padStart(2, "0");
-  if (d.toDateString() === now.toDateString()) return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
-  if (d.getFullYear() === now.getFullYear()) return `${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  if (d.toDateString() === now.toDateString()) {
+    return `${todayLabel} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
 export function modelLabel(models: readonly PlatformModel[], id: string): string {
-  if (!id) return "未选择模型";
+  if (!id) return tr('studioManagement.text634');
   const m = models.find((x) => x.id === id);
   if (!m) return id;
-  return m.available ? `${m.provider} · ${m.id}` : `${m.provider} · ${m.id}（不可用）`;
+  return m.available ? `${m.provider} · ${m.id}` : tr('studioManagement.text635', { value0: m.provider, value1: m.id });
 }
 
 /** The preselected model for a new Agent: k3 first, glm-5.3 next, then the
@@ -334,9 +339,9 @@ export function agentCapabilitySummary(
 ): string {
   const models = agent.models ?? (agent.model ? [agent.model] : []);
   const parts: string[] = [];
-  parts.push(models.length === 1 ? "1 个模型" : `${models.length} 个模型`);
+  parts.push(models.length === 1 ? tr('studioManagement.text636') : tr('studioManagement.text637', { value0: models.length }));
   if (agent.skills === undefined && agent.mcp_servers === undefined) {
-    parts.push("Skill/MCP 继承工作空间");
+    parts.push(tr('studioManagement.text638'));
   } else {
     if (agent.skills !== undefined) parts.push(`${agent.skills.length} Skill`);
     if (agent.mcp_servers !== undefined) parts.push(`${agent.mcp_servers.length} MCP`);
@@ -351,7 +356,7 @@ export function agentModelsLabel(
 ): string {
   const selected = agent.models ?? (agent.model ? [agent.model] : []);
   const label = modelLabel(models, agent.model);
-  return selected.length > 1 ? `${label} 等 ${selected.length} 个` : label;
+  return selected.length > 1 ? tr('studioManagement.text639', { value0: label, value1: selected.length }) : label;
 }
 
 /* ---------------------------------- form ---------------------------------- */
@@ -426,14 +431,14 @@ export function starterToWire(entry: StarterFormEntry): StarterEntry {
 export function validateAgentForm(form: AgentFormState): Record<string, string> {
   const errors: Record<string, string> = {};
   const name = form.name.trim();
-  if (!name) errors.name = "请填写名称";
-  else if (name.length > AGENT_FORM_LIMITS.name) errors.name = `名称不能超过 ${AGENT_FORM_LIMITS.name} 个字符`;
+  if (!name) errors.name = tr('studioManagement.text640');
+  else if (name.length > AGENT_FORM_LIMITS.name) errors.name = tr('studioManagement.text641', { value0: AGENT_FORM_LIMITS.name });
   if (form.description.trim().length > AGENT_FORM_LIMITS.description)
-    errors.description = `简介不能超过 ${AGENT_FORM_LIMITS.description} 个字符`;
+    errors.description = tr('studioManagement.text642', { value0: AGENT_FORM_LIMITS.description });
   if (form.instructions.trim().length > AGENT_FORM_LIMITS.instructions)
-    errors.instructions = `指令不能超过 ${AGENT_FORM_LIMITS.instructions} 个字符`;
-  if (!form.models.length || !form.model) errors.model = "请至少选择一个模型";
-  else if (!form.models.includes(form.model)) errors.model = "默认模型必须在已选模型中";
+    errors.instructions = tr('studioManagement.text643', { value0: AGENT_FORM_LIMITS.instructions });
+  if (!form.models.length || !form.model) errors.model = tr('studioManagement.text644');
+  else if (!form.models.includes(form.model)) errors.model = tr('studioManagement.text645');
   return errors;
 }
 
@@ -509,10 +514,10 @@ export function toolsetWarning(
   form: Pick<AgentFormState, "tools" | "skills" | "mcpServers">,
   catalog: Pick<PlatformCapabilities, "skills" | "builtin_tools">,
 ): string {
-  const canAct = form.tools.some((name) => ["write", "edit", "bash", "browser", "shortcut_manage", "shortcut_create", "shortcut_update", "shortcut_folder_create", "shortcut_folder_rename", "shortcut_move", "shortcut_delete", "shortcut_merge", "skill_save", "watch", "background_task", "watch_test", "workflow_edit", "workflow_test", "workflow_run", "workflow_publish", "agent_workflow_edit", "agent_workflow_enable", "agent_workflow_run"].includes(name));
+  const canAct = form.tools.some((name) => ["write", "edit", "bash", "browser", "shortcut_manage", "shortcut_create", "shortcut_update", "shortcut_folder_create", "shortcut_folder_rename", "shortcut_move", "shortcut_delete", "shortcut_merge", "skill_save", "watch", "background_task", "watch_test", "agent_workflow_edit", "agent_workflow_enable", "agent_workflow_run"].includes(name));
   if (canAct) return "";
   const selected = new Set(form.skills);
   const declaredSkill = catalog.skills.some((s) => selected.has(s.id) && (s.tool_count > 0 || (s.runtime_count ?? 0) > 0));
   if (declaredSkill || form.mcpServers.length > 0) return "";
-  return "当前配置仅包含读取和讨论能力；未启用写入、浏览器、快捷方式管理、Skill 保存、后台任务或外部工具。";
+  return tr('studioManagement.text646');
 }

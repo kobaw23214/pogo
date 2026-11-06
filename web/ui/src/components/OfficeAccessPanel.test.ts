@@ -4,7 +4,7 @@ import type { OfficeAccess, OfficeOpen, OfficeSession } from "@/agent/officeTran
 
 const host = vi.hoisted(() => ({ request: vi.fn(), confirm: vi.fn(), cleanups: [] as (() => void)[] }));
 vi.mock("vue", async original => ({ ...await original<typeof import("vue")>(), onBeforeUnmount: (fn: () => void) => host.cleanups.push(fn), useSSRContext: () => ({ modules: new Set() }) }));
-vi.mock("vue-i18n", () => ({ useI18n: () => ({ t: (key: string) => key }) }));
+vi.mock("vue-i18n", async original => { const { ref } = await import("vue"); return { ...await original<typeof import("vue-i18n")>(), useI18n: () => ({ t: (key: string) => key, locale: ref("zh-CN") }) }; });
 vi.mock("element-plus", () => ({ ElMessageBox: { confirm: host.confirm } }));
 vi.mock("@/api/client", () => ({ officeRequest: host.request, authHeaders: () => ({ Authorization: "Bearer synthetic-only" }) }));
 import OfficeAccessPanel from "./OfficeAccessPanel.vue";
@@ -203,7 +203,7 @@ describe("Office explicit clearing of an editing lock", () => {
     current = resettable(); const { controller } = mount(); await flush(); controller.showReset();
     expect(controller.resetDialogOpen.value).toBe(true); expect(controller.resetTitle.value).toBe("Review");
     expect(controller.resetConnection.value).toBe("officeEditor.access.resetConnection.disconnected");
-    expect(controller.resetLastSaved.value).toBe(new Date("2026-10-16T09:11:22Z").toLocaleString());
+    expect(controller.resetLastSaved.value).toBe(new Date("2026-10-16T09:11:22Z").toLocaleString("zh-CN"));
     expect(controller.canConfirmReset.value).toBe(false); await controller.clearOccupancy(); expect(posts()).toHaveLength(0);
     controller.resetAcknowledged.value = true; expect(controller.canConfirmReset.value).toBe(true); controller.cancelReset();
     expect(controller.resetDialogOpen.value).toBe(false); expect(controller.resetAcknowledged.value).toBe(false);

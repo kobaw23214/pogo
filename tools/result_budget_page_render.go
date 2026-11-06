@@ -2,6 +2,8 @@ package tools
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"strconv"
 	"strings"
@@ -367,10 +369,17 @@ func budgetReadStringPage(in ModelResultBudgetRequest, limit int, request result
 		return ModelResultBudgetView{Text: in.Text, ResultID: in.ResultID, Delivery: delivery}
 	}
 	base := budgetReadCompactMetadata(host)
+	_, stringFingerprints := host["page_sha256"].(string)
 	makePage := func(bytes int) string {
 		fragment := resultUTF8Prefix(body, bytes)
 		end := start + len(fragment)
 		base["value_fragment"], base["end_offset"] = fragment, end
+		if stringFingerprints {
+			// The model allocator may shorten the host's page again. Never
+			// keep the original page digest beside a different fragment.
+			digest := sha256.Sum256([]byte(fragment))
+			base["page_sha256"], base["page_string_bytes"] = hex.EncodeToString(digest[:]), len(fragment)
+		}
 		base["fragment_only"] = start != 0 || len(fragment) < len(body) || host["fragment_only"] == true
 		base["complete"] = len(fragment) == len(body) && host["complete"] == true
 		base["page_displayed"] = len(fragment) > 0 || body == "" && host["complete"] == true
@@ -380,14 +389,27 @@ func budgetReadStringPage(in ModelResultBudgetRequest, limit int, request result
 		}
 		return resultBudgetJSON(base)
 	}
-	low, high := 0, len(body)
-	for low < high {
-		n := low + (high-low+1)/2
-		if len(makePage(n)) <= limit {
-			low = n
-		} else {
-			high = n - 1
+	fit := func() int {
+		low, high := 0, len(body)
+		for low < high {
+			n := low + (high-low+1)/2
+			if len(makePage(n)) <= limit {
+				low = n
+			} else {
+				high = n - 1
+			}
 		}
+		return low
+	}
+	low := fit()
+	if stringFingerprints && (resultUTF8Prefix(body, low) == "" && body != "" || len(makePage(low)) > limit) {
+		// Fingerprints are optional metadata: keep an actual read page
+		// useful at small budgets before falling back to an omitted receipt.
+		for _, field := range []string{"stored_value_sha256", "page_sha256", "page_string_bytes", "hash_scope"} {
+			delete(base, field)
+		}
+		stringFingerprints = false
+		low = fit()
 	}
 	fragment := resultUTF8Prefix(body, low)
 	if fragment == "" && body != "" || len(makePage(low)) > limit {

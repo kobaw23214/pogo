@@ -288,7 +288,7 @@ func (m *Manager) replaceUserShortcuts(owner *identity.Scope, agentID string, re
 	if err := enc.Encode(shortcutDocument{Version: 1, shortcutView: view, ToolCreates: doc.ToolCreates}); err != nil || encoded.Len() > shortcutsMaxBody {
 		return shortcutView{}, errors.New("资料列表超过存储上限")
 	}
-	if err := writeWorkflowFileAtomic(path, encoded.Bytes()); err != nil {
+	if err := writePrivateFileAtomic(path, encoded.Bytes()); err != nil {
 		return shortcutView{}, errors.New("资料保存失败；原版本已保留")
 	}
 	return view, nil

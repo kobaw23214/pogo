@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { setLocale } from "@/i18n";
+import { beforeEach, describe, expect, it } from "vitest";
 import type { AgentTemplate, PlatformAgent, PlatformCapabilities, PlatformModel } from "./platformTypes";
 import {
   AGENT_FORM_LIMITS,
@@ -93,24 +94,24 @@ const blank: AgentFormState = {
 };
 
 describe("Studio navigation modules", () => {
-  it("declares the eight top-level modules, agents first", () => {    expect(STUDIO_NAV.map((n) => n.section)).toEqual(["agents", "information", "workflows", "models", "mcp", "skills", "account", "settings"]);
+  it("declares the management modules including memory, agents first", () => {    expect(STUDIO_NAV.map((n) => n.section)).toEqual(["agents", "information", "models", "mcp", "skills", "memory", "account", "settings"]);
     expect(STUDIO_NAV.map((n) => n.path)).toEqual([
       "/",
       "/manage/information",
-      "/manage/workflows",
       "/manage/models",
       "/manage/mcp",
       "/manage/skills",
+      "/manage/memory",
       "/manage/account",
       "/manage/settings",
     ]);
     expect(STUDIO_NAV.map((n) => n.label)).toEqual([
       "我的 Agents",
       "信息库",
-      "平台工作流",
       "模型配置",
       "MCP 管理",
       "Skill 管理",
+      "记忆与偏好",
       "账号与安全",
       "设置",
     ]);
@@ -123,9 +124,9 @@ describe("Studio navigation modules", () => {
     expect(settingsSectionFor("mcp")).toBe("mcp");
     expect(settingsSectionFor("account")).toBe("account");
     expect(settingsSectionFor("settings")).toBe("general");
+    expect(settingsSectionFor("memory")).toBe("memory");
     expect(settingsSectionFor("agents")).toBe("general");
     expect(settingsSectionFor("skills")).toBe("general");
-    expect(settingsSectionFor("workflows")).toBe("general");
   });
 
   it("maps settings sections back to their Studio module and route", () => {
@@ -133,6 +134,8 @@ describe("Studio navigation modules", () => {
     expect(sectionForSettingsSection("mcp")).toBe("mcp");
     expect(sectionForSettingsSection("account")).toBe("account");
     expect(sectionForSettingsSection("general")).toBe("settings");
+    expect(sectionForSettingsSection("memory")).toBe("memory");
+    expect(studioPathForSection("memory")).toBe("/manage/memory");
     expect(studioPathForSection("mcp")).toBe("/manage/mcp");
     expect(studioPathForSection("skills")).toBe("/manage/skills");
     // The home address is the agents surface; /manage stays a valid alias.
@@ -409,9 +412,9 @@ describe("agent capability selection", () => {
 describe("timestamps", () => {
   const now = new Date("2026-09-23T15:00:00");
 
-  it("shows a clock time today, month-day this year, a full date earlier", () => {
-    expect(formatAgentTime("2026-09-23T09:05:00", now)).toBe("09:05");
-    expect(formatAgentTime("2026-03-02T09:05:00", now)).toBe("03-02");
+  it("names today and uses a full date for every other day", () => {
+    expect(formatAgentTime("2026-09-23T09:05:00", now, "今日")).toBe("今日 09:05");
+    expect(formatAgentTime("2026-03-02T09:05:00", now)).toBe("2026-03-02");
     expect(formatAgentTime("2025-12-31T23:59:00", now)).toBe("2025-12-31");
     expect(formatAgentTime("not-a-date", now)).toBe("");
   });
@@ -469,13 +472,13 @@ describe("templates", () => {
 describe("Account surfaces without the account system", () => {
   it("keeps every module when password login is enabled", () => {
     expect(visibleStudioNav(true).map((n) => n.section)).toEqual([
-      "agents", "information", "workflows", "models", "mcp", "skills", "account", "settings",
+      "agents", "information", "models", "mcp", "skills", "memory", "account", "settings",
     ]);
   });
 
   it("drops the account and settings modules on a token-only deployment", () => {
     expect(visibleStudioNav(false).map((n) => n.section)).toEqual([
-      "agents", "information", "workflows", "models", "mcp", "skills",
+      "agents", "information", "models", "mcp", "skills", "memory",
     ]);
   });
 
@@ -484,5 +487,9 @@ describe("Account surfaces without the account system", () => {
     expect(visibleSection("settings", false)).toBe("agents");
     expect(visibleSection("account", true)).toBe("account");
     expect(visibleSection("skills", false)).toBe("skills");
+    expect(visibleSection("memory", false)).toBe("memory");
   });
 });
+
+// These fixtures assert Chinese labels/order; the interface now follows an explicit locale.
+beforeEach(() => setLocale("zh-CN"));

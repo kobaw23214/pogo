@@ -2,27 +2,33 @@ import { readFileSync } from "node:fs";
 import { compile } from "@vue/compiler-dom";
 import { parse } from "@vue/compiler-sfc";
 import * as Vue from "vue";
+import { transpileModule, ScriptTarget } from "typescript";
 import { createRenderer, defineComponent, h, nextTick, onMounted, reactive, ref, type App, type Component } from "vue";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Exchange } from "@/agent/exchanges";
 import type { TimelineCall, TurnItem } from "@/agent/timeline";
 import { emptyLive } from "@/api/types";
 import { cardDisclosureKey, createCardDisclosureState } from "@/agent/cardDisclosure";
-import { worklogExpandAll, worklogRevealId, worklogRevealRow } from "@/agent/worklogPrefs";
+import { worklogExpandAll, worklogRevealId, worklogRevealRow, executionDetailMode } from "@/agent/worklogPrefs";
 import { i18n, setLocale } from "@/i18n";
 import WorkLog from "./WorkLog.vue";
 import ActivityList from "./ActivityList.vue";
+import ActivityRuns from "./ActivityRuns.vue";
+import ActivityWaiting from "./ActivityWaiting.vue";
 
 // Use the actual client templates so finishing a run exercises a mounted host,
 // rather than comparing two independent SSR snapshots.
 function clientComponent(component: Component, file: string): Component {
   const template = parse(readFileSync(new URL(file, import.meta.url), "utf8")).descriptor.template!.content;
-  const render = new Function("Vue", compile(template, { mode: "function" }).code)(Vue);
+  const render = new Function("Vue", transpileModule(compile(template, { mode: "function", expressionPlugins: ["typescript"] }).code, { compilerOptions: { target: ScriptTarget.ES2022 } }).outputText)(Vue);
+  render._rc = true;
   const original = component as unknown as { setup(props: unknown, context: unknown): Record<string, unknown> };
   return { ...component, ssrRender: undefined, setup: (props: unknown, context: unknown) => ({ ...original.setup(props, context) }), render } as Component;
 }
 const ClientWorkLog = clientComponent(WorkLog, "./WorkLog.vue");
 const ClientActivity = clientComponent(ActivityList, "./ActivityList.vue");
+const ClientRuns = clientComponent(ActivityRuns, "./ActivityRuns.vue");
+const ClientWaiting = clientComponent(ActivityWaiting, "./ActivityWaiting.vue");
 interface HostNode {
   tag: string; text: string; props: Record<string, unknown>; style: Record<string, string>;
   children: HostNode[]; parent: HostNode | null; contains(other: unknown): boolean; focus(): void;
@@ -57,7 +63,7 @@ const sample = (finished = true, calls = [call("a"), call("b")]): Exchange => {
     stats: { calls: calls.length, failed: 0, files: 0, tools: { read: calls.length } }, turns: [turn] };
 };
 const apps: App[] = [];
-beforeEach(() => { vi.useFakeTimers(); setLocale("zh-CN"); worklogExpandAll.value = false; worklogRevealId.value = ""; worklogRevealRow.value = ""; vi.stubGlobal("document", { activeElement: null }); });
+beforeEach(() => { vi.useFakeTimers(); setLocale("zh-CN"); worklogExpandAll.value = false; executionDetailMode.value = "summary"; worklogRevealId.value = ""; worklogRevealRow.value = ""; vi.stubGlobal("document", { activeElement: null }); });
 afterEach(() => { apps.splice(0).forEach(app => app.unmount()); vi.clearAllTimers(); vi.useRealTimers(); vi.unstubAllGlobals(); });
 function mount(exchange = sample(), extra: Record<string, unknown> = {}, state = createCardDisclosureState(() => "session-a")) {
   const props = reactive({ exchange, runActive: !exchange.finished, active: !exchange.finished, live: emptyLive(), ...extra });
@@ -65,6 +71,8 @@ function mount(exchange = sample(), extra: Record<string, unknown> = {}, state =
   const app = renderer.createApp({ render: () => h(ClientWorkLog, props) }).use(i18n);
   app.provide(Vue.ssrContextKey, { modules: new Set() }); app.provide(cardDisclosureKey, state);
   app.component("ActivityList", ClientActivity);
+  app.component("ActivityRuns", ClientRuns);
+  app.component("ActivityWaiting", ClientWaiting);
   app.component("ToolCall", defineComponent({ props: ["call"], setup: props => {
     onMounted(() => mounts.set(props.call.callId, (mounts.get(props.call.callId) ?? 0) + 1));
     return () => h("div", { class: "call", "data-call": props.call.callId, "data-gate": props.call.gate?.gate_id }, `payload:${props.call.callId}`);
@@ -139,7 +147,7 @@ describe("mounted work log disclosure continuity", () => {
     props.exchange.turns[0].calls.push(call("c")); await nextTick();
     props.exchange.finished = true; props.exchange.turns[0].streaming = false; props.runActive = false; props.active = false; await nextTick();
     expect(hasClass(work(), "open")).toBe(true); expect(shown(find(root, node => node.props["data-call"] === "a"))).toBe(false);
-    expect(state.choice("row:u1:activity:m1:a")).toBe(false);
+    expect(state.choice("row:u1:run:call:a")).toBe(false);
   });
   it("hides intermediate narration with the process while keeping the final answer and user steering readable", async () => {
     const exchange = sample(); exchange.turns[0].text = "first narration";
@@ -176,8 +184,34 @@ describe("mounted work log disclosure continuity", () => {
     const bodyId = String(work().props["data-reveal-id"]);
     worklogRevealRow.value = "wl-body-other:activity:m1:a"; await nextTick(); expect(hasClass(work(), "open")).toBe(false);
     worklogRevealRow.value = `${bodyId}:activity:m1:a`; await nextTick(); expect(hasClass(work(), "open")).toBe(true); expect(shown(find(root, node => node.props["data-call"] === "a"))).toBe(true);
-    expect(state.choice("row:u1:activity:m1:a")).toBe(true);
+    expect(state.choice("row:u1:run:call:a")).toBeUndefined(); // reveal is temporary, not a saved manual choice
     toggle(); await nextTick(); expect(hasClass(work(), "open")).toBe(false);
     worklogRevealRow.value = `${bodyId}:a:explore`; await nextTick(); expect(hasClass(work(), "open")).toBe(true); expect(shown(find(root, node => node.props["data-call"] === "a"))).toBe(true);
+  });
+  it("shows known abnormal reasons but does not invent a cause for unknown history", () => {
+    const unknown = mount(sample());
+    expect(hasClass(unknown.work(), "open")).toBe(false);
+    expect(flat(unknown.root).some(node => hasClass(node, "end-reason"))).toBe(false);
+    const known = mount(sample(), { endReason: "transport_error" });
+    expect(hasClass(known.work(), "open")).toBe(true);
+    expect(text(known.root)).toContain("模型连接中断");
+    const unfamiliar = mount(sample(), { endReason: "not-a-recorded-reason" });
+    expect(flat(unfamiliar.root).some(node => hasClass(node, "end-reason"))).toBe(false);
+    expect(hasClass(unfamiliar.work(), "open")).toBe(false);
+  });
+  it("does not force an unrelated exchange open for a different pending question", () => {
+    const live = { ...emptyLive(), pending_user_inputs: [{ request_id: "q", call_id: "another-call", questions: [], deadline: 0 }] };
+    const other = mount(sample(), { live });
+    expect(hasClass(other.work(), "open")).toBe(false);
+    const pending = call("ask", { name: "request_user_input_async", result: { call_id: "ask", text: "question sent", details: { status: "pending", async: true, questions: [] } } });
+    const current = mount(sample(true, [pending]));
+    expect(hasClass(current.work(), "open")).toBe(true);
+  });
+  it("keeps full mode open without erasing the reader's saved outer choice", async () => {
+    const { work, state, toggle } = mount(sample(false));
+    toggle(); await nextTick(); expect(state.choice("work:u1")).toBe(false);
+    executionDetailMode.value = "full"; await nextTick(); expect(hasClass(work(), "open")).toBe(true);
+    toggle(); await nextTick(); expect(hasClass(work(), "open")).toBe(true); expect(state.choice("work:u1")).toBe(false);
+    executionDetailMode.value = "summary"; await nextTick(); expect(hasClass(work(), "open")).toBe(false);
   });
 });

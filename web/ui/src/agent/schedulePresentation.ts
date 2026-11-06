@@ -1,3 +1,4 @@
+import { getLocale, gt } from "@/i18n";
 import type { InputLayout, MessageInputPart, ScheduleJob, ScheduleJobCreate, ScheduleRunRecord } from "@/api/types";
 import { browserTimeZone, dateTimeInputToISO, localDateTimeInput } from "./scheduleDateTime";
 
@@ -46,7 +47,7 @@ export function scheduleState(job: ScheduleJob, now = Date.now()): string {
 }
 export function scheduleNeedsAttention(job: ScheduleJob): boolean { return ["waiting", "unavailable", "error", "autoPaused"].includes(scheduleState(job)); }
 export function scheduleTitle(job: ScheduleJob): string { return job.title?.trim() || job.id; }
-export function scheduleDate(iso: string | undefined | null, zone: string | undefined, locale = "zh-CN"): string {
+export function scheduleDate(iso: string | undefined | null, zone: string | undefined, locale: string = getLocale()): string {
   if (!iso || iso.startsWith("0001-")) return "—";
   try { return new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short", ...(zone ? { timeZone: zone } : {}) }).format(new Date(iso)); } catch { return iso; }
 }
@@ -55,10 +56,18 @@ export function describeSchedule(job: ScheduleJob, t: Translate): string {
   if (v.frequency === "once") return t("scheduleDialog.onceAt", { time: scheduleDate(job.at, job.timezone || job.effective_timezone) });
   if (v.frequency === "daily") return t("scheduleDialog.dailyAt", { time });
   if (v.frequency === "weekdays") return t("scheduleDialog.weekdaysAt", { time });
-  if (v.frequency === "weekly") return t("scheduleDialog.weeklyDays", { days: v.weekdays.map(day => t(`scheduleDialog.dow${day}`)).join("、"), time });
+  if (v.frequency === "weekly") return t("scheduleDialog.weeklyDays", { days: new Intl.ListFormat(getLocale(), { style: "short", type: "conjunction" }).format(v.weekdays.map(day => t(`scheduleDialog.dow${day}`))), time });
   if (v.frequency === "monthly") return t("scheduleDialog.monthlyAt", { day: v.monthDay, time });
   if (v.frequency === "hourly") return t("scheduleDialog.hourlyAt", { m: v.minute });
   if (v.frequency === "interval") return t(`scheduleDialog.every${v.unit}`, { n: v.every });
   return t("scheduleDialog.customSummary", { cron: job.cron || "" });
 }
 export function runState(run: ScheduleRunRecord): string { return run.end_reason === "waiting_human" ? "waiting" : run.status; }
+
+/** The scheduler returns either an IANA identifier or its legacy local-zone label.
+ * Translate only the host label and retain the observed zone/UTC offset. */
+export function scheduleTimezoneLabel(label: string | undefined | null): string {
+  if (!label || label === "Local") return gt("uiCoverage.schedule.localTimezone");
+  const hostLabel = /^服务器本地时区\s*(.*)$/.exec(label);
+  return hostLabel ? gt("uiCoverage.schedule.serverLocalTimezone", { zone: hostLabel[1] }).trim() : label;
+}

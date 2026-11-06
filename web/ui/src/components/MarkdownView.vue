@@ -13,6 +13,7 @@ import { installMarkdownMath } from "./markdownMath";
 const DataTable = defineAsyncComponent(() => import("./DataTable.vue"));
 const MathBlock = defineAsyncComponent(() => import("./MathBlock.vue"));
 const HTMLArtifact = defineAsyncComponent(() => import("./HTMLArtifact.vue"));
+const WebServiceArtifact = defineAsyncComponent(() => import("./WebServiceArtifact.vue"));
 import { canonicalCiteLabel, planCitations, type CitePlanItem } from "@/agent/cite";
 import { citeIconSvg } from "@/agent/citeIcons";
 import { citePresentation } from "@/agent/citePresentation";
@@ -20,6 +21,7 @@ import { useCitePopover } from "@/agent/useCitePopover";
 import { useInlineCiteFavicons } from "@/agent/useInlineCiteFavicons";
 import { installMarkdownFileLinks, workspaceFileRenderScope, workspaceFileTargetFromButtonData, workspaceMarkdownImageURL } from "@/agent/markdownFileLinks";
 import { workspaceFileNavigationKey } from "@/agent/workspaceFileNavigation";
+import { webArtifactNavigationKey } from "@/agent/webArtifactNavigation";
 import { gt } from "@/i18n";
 import type { CiteSource } from "@/api/types";
 
@@ -37,7 +39,7 @@ import type { CiteSource } from "@/api/types";
 // slots stayed empty and the diagram was never visible in the document.
 interface Segment {
   id: string;
-  kind: "html" | "mermaid" | "echarts" | "math" | "table" | "html-preview" | "code";
+  kind: "html" | "mermaid" | "echarts" | "math" | "table" | "html-preview" | "web-preview" | "code";
   // Set for kind "html"; empty otherwise.
   html: string;
   // Set for the fence kinds; empty otherwise.
@@ -223,12 +225,18 @@ md.renderer.rules.link_close = (tokens, idx, options, env, self) => {
 };
 
 const fileNavigation = inject(workspaceFileNavigationKey, null);
+const webNavigation = inject(webArtifactNavigationKey, null);
 const markdownRoot = ref<HTMLElement | null>(null);
 const previewImage = ref("");
 function fileScope() {
   const element = markdownRoot.value;
   if (props.passive || !props.fileLinks || !element?.closest(".conv-inner") || element.closest(".subsheet, .share-page")) return null;
   return fileNavigation?.scope() ?? null;
+}
+function webScope() {
+  const element = markdownRoot.value;
+  if (props.passive || !element?.closest(".conv-inner") || element.closest(".subsheet, .share-page")) return null;
+  return webNavigation?.scope() ?? null;
 }
 installMarkdownFileLinks(md, {
   scope: fileScope,
@@ -348,6 +356,7 @@ const segments = computed<Segment[]>(() => {
       else if (lang === "math") kind = "math";
       else if (lang === "csv" || lang === "table" || lang === "json-table") kind = "table";
       else if (lang === "html-preview") kind = "html-preview";
+      else if (lang === "web-preview") kind = "web-preview";
     }
     out.push({
       id: `s${out.length}`,
@@ -434,6 +443,19 @@ useInlineCiteFavicons(markdownRoot, () => props.passive ? undefined : props.sour
         class="block"
         :source="segment.source"
         :scope="fileScope()"
+      />
+      <CodeBlock
+        v-else-if="segment.kind === 'web-preview' && streaming"
+        class="block"
+        :code="segment.source"
+        lang="json"
+        :collapsed-height="420"
+      />
+      <WebServiceArtifact
+        v-else-if="segment.kind === 'web-preview'"
+        class="block"
+        :source="segment.source"
+        :scope="webScope()"
       />
       <CodeBlock
         v-else

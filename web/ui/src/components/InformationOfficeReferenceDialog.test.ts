@@ -1,10 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { getLocale, setLocale } from "@/i18n";
 import { effectScope, nextTick, reactive, type Ref } from "vue";
 import type { InformationEntry } from "@/api/information";
 import type { OfficeReferenceSnapshot } from "@/api/types";
 const host = vi.hoisted(() => ({ tree: vi.fn(), cleanups: [] as (() => void)[] }));
 vi.mock("vue", async original => ({ ...await original<typeof import("vue")>(), useSSRContext: () => ({ modules: new Set() }), onBeforeUnmount: (fn: () => void) => host.cleanups.push(fn) }));
-vi.mock("vue-i18n", () => ({ useI18n: () => ({ t: (key: string) => key }) }));
+vi.mock("vue-i18n", async original => ({ ...await original<typeof import("vue-i18n")>(), useI18n: () => ({ t: (key: string) => key }) }));
 vi.mock("@/api/information", () => ({ informationApi: { tree: host.tree } }));
 vi.mock("./fileIcons", () => ({ fileIcon: () => "test" }));
 import InformationOfficeReferenceDialog from "./InformationOfficeReferenceDialog.vue";
@@ -25,6 +26,23 @@ function mount() {
 beforeEach(() => { host.tree.mockReset().mockResolvedValue({ entries: [file("a", "报告.xlsx"), file("d", "说明.docx"), file("e", "代码.py"), { ...file("f", "folder"), kind: "folder", file: undefined }] }); vi.stubGlobal("window", { innerWidth: 1440 }); });
 afterEach(() => { for (const fn of host.cleanups.splice(0)) fn(); for (const scope of scopes.splice(0)) scope.stop(); vi.unstubAllGlobals(); });
 describe("Information Office native read-only selection workspace", () => {
+  it("reorders file names for the selected locale without restarting the selected Office viewer", async () => {
+    const previous = getLocale();
+    try {
+      setLocale("zh-CN");
+      host.tree.mockResolvedValueOnce({ entries: [file("a", "東京.xlsx"), file("b", "大阪.xlsx"), file("c", "京都.xlsx")] });
+      const { c } = mount(); await flush();
+      expect(c.files.value.map(value => value.name)).toEqual(["大阪.xlsx", "東京.xlsx", "京都.xlsx"]);
+      c.choose(c.files.value[0]!);
+      const binding = c.viewerKey.value;
+      setLocale("ja"); await nextTick();
+      expect(c.files.value.map(value => value.name)).toEqual(["京都.xlsx", "大阪.xlsx", "東京.xlsx"]);
+      expect(c.viewerKey.value).toBe(binding);
+      expect(c.chosen.value?.name).toBe("大阪.xlsx");
+      expect(host.tree).toHaveBeenCalledTimes(1);
+    } finally { setLocale(previous); }
+  });
+
   it("lists only saved Word/Excel files and filters their names", async () => {
     const { c } = mount(); await flush(); expect(c.files.value.map(f => f.name)).toEqual(["报告.xlsx", "说明.docx"]); c.query.value = "说明"; expect(c.visibleFiles.value.map(f => f.name)).toEqual(["说明.docx"]);
   });

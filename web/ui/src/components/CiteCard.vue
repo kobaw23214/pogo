@@ -93,7 +93,7 @@ const date = computed(() => {
   const value = new Date(src.value.ts);
   return Number.isNaN(value.getTime()) ? undefined : value;
 });
-const time = computed(() => date.value?.toLocaleString(locale.value === "zh-CN" ? "zh-CN" : "en", {
+const time = computed(() => date.value?.toLocaleString(locale.value, {
   year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
 }) ?? "");
 const fileAvailable = computed(() => Boolean(src.value && props.canOpenFile?.(src.value)));

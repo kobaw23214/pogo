@@ -5,7 +5,7 @@ import { renderToString } from "vue/server-renderer";
 import type { FileContent, WorkspaceHTMLPreview } from "@/api/types";
 const host = vi.hoisted(() => ({ content: vi.fn(), create: vi.fn(), revoke: vi.fn(), save: vi.fn(), cleanup: [] as (() => void)[] }));
 vi.mock("vue", async original => ({ ...await original<typeof import("vue")>(), onBeforeUnmount: (cleanup: () => void) => host.cleanup.push(cleanup), useSSRContext: () => ({ modules: new Set() }) }));
-vi.mock("vue-i18n", () => ({ useI18n: () => ({ t: (key: string) => key, d: () => "" }) }));
+vi.mock("vue-i18n", async original => { const { ref } = await import("vue"); return { ...await original<typeof import("vue-i18n")>(), useI18n: () => ({ t: (key: string) => key, d: () => "", locale: ref("zh-CN") }) }; });
 vi.mock("@/api/client", () => ({ api: { fileContent: host.content, createHTMLPreview: host.create, revokeHTMLPreview: host.revoke, saveFile: host.save }, authHeaders: () => ({}), fileDownloadURL: (path: string) => `/download/${path}`, fileRawURL: (path: string) => `/raw/${path}` }));
 vi.mock("@/agent/officeTransport", () => ({ officeApi: {}, officePathMounted: () => false }));
 vi.mock("./CodeBlock.vue", () => ({ default: defineComponent({ props: ["code", "highlightStart", "highlightEnd"], setup: props => () => h("pre", { "data-testid": "source-code", "data-highlight-start": props.highlightStart, "data-highlight-end": props.highlightEnd }, props.code) }) }));

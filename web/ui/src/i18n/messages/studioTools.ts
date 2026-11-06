@@ -2,9 +2,9 @@ export default {
   namespace: "studioTools",
   messages: {
     "zh-CN": {
-      pending: "工具配置待生效，本轮结束后自动应用",
-      currentKept: "当前继续使用已生效的工具。",
-      syncFailed: "暂时无法确认工具配置更新，正在显示上次确认的工具。",
+      pending: "能力配置待生效，当前任务结束后自动应用",
+      currentKept: "当前继续使用已生效的 MCP、技能和工具。",
+      syncFailed: "暂时无法确认能力配置更新，正在显示上次确认的 MCP、技能和工具。",
       retry: "重试更新",
       view: "查看技能与工具",
       nativeTitle: "内置工具",
@@ -19,9 +19,9 @@ export default {
       protected: "核心",
     },
     en: {
-      pending: "Tool changes are pending and will apply after this run",
-      currentKept: "The current effective tools remain available.",
-      syncFailed: "Tool changes could not be confirmed. The last confirmed tools are shown.",
+      pending: "Capability changes are pending and will apply after the current task",
+      currentKept: "The current effective MCP servers, skills and tools remain available.",
+      syncFailed: "Capability changes could not be confirmed. The last confirmed MCP servers, skills and tools are shown.",
       retry: "Retry update",
       view: "View skills and tools",
       nativeTitle: "Built-in tools",

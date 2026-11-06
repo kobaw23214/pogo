@@ -365,6 +365,9 @@ func (m *Manager) awCompileShortcut(ctx context.Context, owner *identity.Scope, 
 				} else {
 					text.WriteString(p.Text)
 				}
+			case "mcp":
+				// A reference in material is a selector, never an implicit call.
+				text.WriteString(skills.MCPInputText(p.Server, p.Name))
 			case "skill":
 				var sk skills.Skill
 				matchedID := ""

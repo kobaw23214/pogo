@@ -5,7 +5,7 @@ import type { ScheduleDraft } from "@/agent/schedulePresentation";
 import type { ScheduleJob } from "@/api/types";
 const host = vi.hoisted(() => ({ list: vi.fn(), enabled: vi.fn(), cancel: vi.fn(), retry: vi.fn(), detail: vi.fn(), history: vi.fn(), runNow: vi.fn(), remove: vi.fn(), cleanup: [] as (() => void)[] }));
 vi.mock("vue", async original => ({ ...await original<typeof import("vue")>(), onBeforeUnmount: (fn: () => void) => host.cleanup.push(fn), useSSRContext: () => ({ modules: new Set() }) }));
-vi.mock("vue-i18n", async () => { const { ref } = await import("vue"); return { useI18n: () => ({ t: (key: string) => key, locale: ref("zh-CN") }) }; });
+vi.mock("vue-i18n", async original => { const { ref } = await import("vue"); return { ...await original<typeof import("vue-i18n")>(), useI18n: () => ({ t: (key: string) => key, locale: ref("zh-CN") }) }; });
 vi.mock("@/api/taskCenterApi", () => ({ taskCenterApi: { list: host.list, setEnabled: host.enabled, cancel: host.cancel, retry: host.retry } }));
 vi.mock("@/api/client", () => ({ api: { scheduleJob: host.detail, scheduleRuns: host.history, scheduleRunNow: host.runNow, scheduleDeleteJob: host.remove } }));
 vi.mock("./ScheduleEditorDialog.vue", () => ({ default: {} })); vi.mock("./OrderedMessageContent.vue", () => ({ default: {} })); vi.mock("./ConfirmDialog.vue", () => ({ default: {} }));
@@ -69,7 +69,7 @@ describe("Background task center", () => {
   it("blocks direct foreign task and run actions", async () => { const { c, emit } = mount(); await flush(); c.confirm.value = { ask: vi.fn().mockResolvedValue(true) }; await c.mutateTask(task({ agent_id: "b" }), "run"); await c.mutateRun(run({ agent_id: "b" }), "cancel"); c.openRunResult(run({ agent_id: "b", session_id: "foreign" })); expect(host.runNow).not.toHaveBeenCalled(); expect(host.cancel).not.toHaveBeenCalled(); expect(emit).not.toHaveBeenCalledWith("open-session", expect.anything(), expect.anything(), expect.anything()); });
   it("preserves the dirty schedule editor when close/create/edit is declined", async () => { const { c, emit } = mount(); await flush(); c.editorOpen.value = true; c.editing.value = job(); c.editor.value = { confirmLeave: vi.fn().mockResolvedValue(false) }; await c.openCreate(); await c.openEdit(task()); await c.close(); expect(c.editorOpen.value).toBe(true); expect(c.editing.value?.id).toBe("j1"); expect(emit).not.toHaveBeenCalledWith("update:modelValue", false); });
   it("rejects late or mismatched schedule detail responses", async () => { const { c, props } = mount(); await flush(); const result = pending<{ job: ScheduleJob }>(); host.detail.mockReturnValueOnce(result.promise); const edit = c.openEdit(task()); props.modelValue = false; await flush(); result.resolve({ job: job() }); await edit; expect(c.editorOpen.value).toBe(false); props.modelValue = true; await flush(); host.detail.mockResolvedValueOnce({ job: job({ id: "other" }) }); await c.openEdit(task()); expect(c.editorOpen.value).toBe(false); });
-  it("routes native results correctly and rejects unsafe result links", async () => { const { c, emit } = mount(); await flush(); c.openRunResult(run({ session_id: "session-result" })); expect(emit).toHaveBeenCalledWith("open-task", "schedule:j1", "A 晨报", "a", "session-result"); c.openRunResult(run({ workflow_id: "wf", session_id: "wf-run" })); expect(emit).toHaveBeenCalledWith("open-workflow-run", "wf-run", "wf"); c.openRunResult(run({ result_url: "https://external.example/" })); expect(emit.mock.calls.filter(call => call[0] === "open-task")).toHaveLength(1); });
+  it("routes native results correctly and rejects unsafe result links", async () => { const { c, emit } = mount(); await flush(); c.openRunResult(run({ session_id: "session-result" })); expect(emit).toHaveBeenCalledWith("open-task", "schedule:j1", "A 晨报", "a", "session-result"); c.openRunResult(run({ workflow_id: "wf", session_id: "wf-run" })); expect(emit.mock.calls.some(call => call[0] === "open-workflow-run")).toBe(false); c.openRunResult(run({ result_url: "https://external.example/" })); expect(emit.mock.calls.filter(call => call[0] === "open-task")).toHaveLength(1); });
   it("opens a sentinel sheet before its first event creates a worker conversation", async () => {
     const { c, emit } = mount(); await flush();
     const watch = { ...watchTask(), parent_session_id: "main" };
@@ -108,13 +108,13 @@ describe("Background task center", () => {
     c.openTaskResult(watchTask()); c.openRunResult(run({ source: "sentinel", source_id: "w1", session_id: "worker" }));
     expect(emit.mock.calls.some(call => ["open-sentinel", "open-session", "open-workflow-run"].includes(call[0]))).toBe(false);
   });
-  it("retains schedule result conversations and workflow viewers", async () => {
+  it("retains schedule result conversations and ignores retired platform results", async () => {
     host.detail.mockResolvedValueOnce({ job: job({ session_id: "schedule-result" }) });
     const { c, emit } = mount(); await flush();
     c.openTaskResult(task());
     expect(emit).toHaveBeenCalledWith("open-task", "schedule:j1", "A 晨报", "a", "schedule-result");
-    c.openTaskResult(task({ id: "schedule:wf-trigger", source_id: "wf-trigger", workflow_id: "wf", executor: "workflow", result_url: "/manage/workflows/wf?run=workflow-result" }));
-    expect(emit).toHaveBeenCalledWith("open-workflow-run", "workflow-result", "wf");
+    c.openTaskResult(task({ id: "schedule:wf-trigger", source_id: "wf-trigger", workflow_id: "wf", executor: "legacy", result_url: "/manage/workflows/wf?run=workflow-result" }));
+    expect(emit.mock.calls.some(call => call[0] === "open-workflow-run")).toBe(false);
     expect(emit.mock.calls.some(call => call[0] === "open-sentinel")).toBe(false);
   });
   it("keeps expired tasks visible without offering a resume or manual run", async () => { const { c } = mount(); await flush(); const expired = task({ enabled: false, state: "expired", expires_at: Date.now() - 1000 }); expect(c.canToggle(expired)).toBe(false); expect(c.canRunNow(expired)).toBe(false); await c.mutateTask(expired, "resume"); await c.mutateTask(expired, "run"); expect(host.enabled).not.toHaveBeenCalled(); expect(host.runNow).not.toHaveBeenCalled(); });

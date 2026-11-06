@@ -2,8 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { effectScope, reactive, type Ref } from "vue";
 import type { PlatformSkill, SkillLibraryCatalog } from "@/agent/platformTypes";
 import type { SkillDocumentContent } from "@/api/types";
+import { setLocale } from "@/i18n";
 const host = vi.hoisted(() => ({ library: vi.fn(), content: vi.fn(), dispatch: vi.fn(), cleanup: [] as (() => void)[], guards: [] as (() => Promise<boolean>)[] }));
 vi.mock("vue", async original => ({ ...await original<typeof import("vue")>(), onMounted() {}, onBeforeUnmount: (fn: () => void) => host.cleanup.push(fn), useSSRContext: () => ({ modules: new Set() }) }));
+vi.mock("vue-i18n", async original => ({ ...await original<typeof import("vue-i18n")>(), useI18n: () => ({ t: (key: string) => key }) }));
 vi.mock("@/api/client", () => ({ api: { skillLibrary: host.library, managedSkillContent: host.content } }));
 vi.mock("@/agent/studioNavigation", () => ({ registerStudioNavigationGuard: (fn: () => Promise<boolean>) => { host.guards.push(fn); return () => {}; } }));
 vi.mock("@/components/SkillsPanel.vue", () => ({ default: {} }));
@@ -17,6 +19,7 @@ const second: PlatformSkill = { ...first, id: "skill-b", name: "other" };
 const catalog = (skills = [first, second]): SkillLibraryCatalog => ({ skills, tools: [], execution: null, max_upload_bytes: 1024 });
 const doc: SkillDocumentContent = { content: "# 原说明", revision: "rev-a", editable: true, truncated: false };
 interface Controller {
+  skills: Ref<PlatformSkill[]>;
   selected: Ref<PlatformSkill | null>; detailOpen: Ref<boolean>; instructions: Ref<SkillDocumentContent | null>; action: Ref<string | null>;
   packageBrowser: Ref<{ confirmLeave(): Promise<boolean> } | null>;
   reload(): Promise<void>; show(skill: PlatformSkill): Promise<void>; create(skill: PlatformSkill): Promise<void>; askAction(kind: string, skill: PlatformSkill): Promise<void>;
@@ -34,8 +37,20 @@ beforeEach(() => {
   vi.stubGlobal("window", { addEventListener: vi.fn(), removeEventListener: vi.fn(), dispatchEvent: host.dispatch });
   vi.stubGlobal("CustomEvent", class { constructor(readonly type: string) {} });
 });
-afterEach(() => { for (const cleanup of host.cleanup.splice(0)) cleanup(); for (const scope of scopes.splice(0)) scope.stop(); vi.unstubAllGlobals(); });
+afterEach(() => { for (const cleanup of host.cleanup.splice(0)) cleanup(); for (const scope of scopes.splice(0)) scope.stop(); vi.unstubAllGlobals(); setLocale("zh-CN"); });
 describe("managed Skill detail parent leave guards", () => {
+  it("re-sorts Skill names with the active language without translating user-defined names", async () => {
+    const values = ["Zulu", "中", "Alice"].map((name, index) => ({ ...first, id: `skill-${index}`, name }));
+    host.library.mockResolvedValueOnce(catalog(values));
+    const { c } = await mount();
+    setLocale("zh-CN");
+    const chinese = c.skills.value.map(skill => skill.name);
+    expect(chinese).toEqual(values.map(skill => skill.name).sort(new Intl.Collator("zh-CN").compare));
+    setLocale("en");
+    const english = c.skills.value.map(skill => skill.name);
+    expect(english).toEqual(values.map(skill => skill.name).sort(new Intl.Collator("en").compare));
+    expect(new Set(english)).toEqual(new Set(values.map(skill => skill.name)));
+  });
   it("routes drawer close, Skill switch, Agent creation, management actions and Studio navigation through the editor guard", async () => {
     const { c, emit } = await mount(); await c.show(first); const guard = vi.fn(async () => false); c.packageBrowser.value = { confirmLeave: guard };
     const done = vi.fn(); await c.closeDetail(done); await c.show(second); await c.create(first); await c.askAction("delete", first);

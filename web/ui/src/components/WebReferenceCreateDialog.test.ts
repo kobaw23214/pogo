@@ -7,7 +7,7 @@ import type { ElementPick } from "@/agent/elementPicker";
 import { createWebReference } from "@/agent/webReference";
 
 vi.mock("vue", async original => ({ ...await original<typeof import("vue")>(), useSSRContext: () => ({ modules: new Set() }) }));
-vi.mock("vue-i18n", () => ({ useI18n: () => ({ t: (key: string) => key }) }));
+vi.mock("vue-i18n", async original => { const { ref } = await import("vue"); return { ...await original<typeof import("vue-i18n")>(), useI18n: () => ({ t: (key: string) => key, locale: ref("zh-CN") }) }; });
 vi.mock("./NativeBrowserPane.vue", () => ({ default: {} }));
 vi.mock("./ElementPageIcon.vue", () => ({ default: {} }));
 vi.mock("./ElementCard.vue", () => ({ default: {} }));

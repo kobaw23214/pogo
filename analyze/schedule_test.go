@@ -1,6 +1,7 @@
 package analyze
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -156,8 +157,6 @@ func TestEveryNativeToolHasASchedule(t *testing.T) {
 		// Persisted legacy grants that older transcripts still call.
 		tools.ShortcutSearchName, tools.ShortcutReadName, tools.ShortcutCreateName, tools.ShortcutListName,
 		tools.ShortcutFolderCreateName, tools.ShortcutUpdateName, tools.ShortcutFolderRenameName, tools.ShortcutMoveName,
-		tools.WorkflowDiscoverName, tools.WorkflowReadName, tools.WorkflowValidateName, tools.WorkflowEditName,
-		tools.WorkflowTestName, tools.WorkflowRunName, tools.WorkflowPublishName,
 	}
 	for _, info := range tools.BuiltinRuntimeCatalog() {
 		names = append(names, info.Name)
@@ -249,5 +248,52 @@ func TestRecordedToolStatsAreNotCountedTwice(t *testing.T) {
 	// The schedule still reads the result's duration, which is the call itself.
 	if stats.BatchSizes.ToolTimeMS != 40 {
 		t.Errorf("tool time = %dms, want 40", stats.BatchSizes.ToolTimeMS)
+	}
+}
+
+// Managed website reads overlap only after their complete argument validation;
+// opening a grant or changing a service remains a sequential lifecycle action.
+func TestWebServiceScheduleUsesValidatedActionArguments(t *testing.T) {
+	for _, tc := range []struct {
+		name, input string
+		want        callMode
+	}{
+		{"list", `{"action":"list"}`, modeParallel},
+		{"status", `{"action":"status","service_id":"ws_one"}`, modeParallel},
+		{"logs", `{"action":"logs","service_id":"ws_one","generation":1,"limit_bytes":1024}`, modeParallel},
+		{"start", `{"action":"start","operation_id":"start_one","name":"site","project_root":"site","profile":"python-web","start_argv":["python","app.py"]}`, modeSequential},
+		{"open", `{"action":"open","service_id":"ws_one","operation_id":"open_one"}`, modeSequential},
+		{"stop", `{"action":"stop","service_id":"ws_one","operation_id":"stop_one"}`, modeSequential},
+		{"restart", `{"action":"restart","service_id":"ws_one","operation_id":"restart_one"}`, modeSequential},
+		{"renew", `{"action":"renew","service_id":"ws_one","operation_id":"renew_one","lease_seconds":7200}`, modeSequential},
+		{"invalid read", `{"action":"status"}`, modeSequential},
+		{"unknown read argument", `{"action":"list","service_id":"ws_one"}`, modeSequential},
+		{"unknown action", `{"action":"delete","service_id":"ws_one"}`, modeSequential},
+		{"malformed", `{`, modeSequential},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			mode, readOnly := classify(tools.WebServiceName, json.RawMessage(tc.input))
+			if mode != tc.want || readOnly {
+				t.Fatalf("schedule=%v readOnly=%t; want %v and false", mode, readOnly, tc.want)
+			}
+		})
+	}
+}
+
+func TestWebServiceOpenSeparatesParallelReadBatches(t *testing.T) {
+	b := analyzeTurns(t, turn{calls: []string{
+		call("1", "read", `{"path":"a"}`),
+		call("2", tools.WebServiceName, `{"action":"list"}`),
+		call("3", tools.WebServiceName, `{"action":"status","service_id":"ws_one"}`),
+		call("4", tools.WebServiceName, `{"action":"logs","service_id":"ws_one"}`),
+		call("5", tools.WebServiceName, `{"action":"open","service_id":"ws_one","operation_id":"open_one"}`),
+		call("6", "read", `{"path":"b"}`),
+		call("7", tools.WebServiceName, `{"action":"status","service_id":"ws_one"}`),
+	}}).BatchSizes
+	if b.DispatchSteps != 3 || b.Overlapped != 6 || b.Stalled != 0 || b.SplitBy[tools.WebServiceName] != 1 {
+		t.Fatalf("wrong website batch scheduling: %+v", b)
+	}
+	if len(b.UnknownMode) != 0 || len(b.ReadOnlySequential) != 0 || b.IfReadOnlyParallel != nil {
+		t.Fatalf("website schedules should be known without a read-only counterfactual: %+v", b)
 	}
 }

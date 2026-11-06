@@ -113,6 +113,8 @@ func shortcutToolSearchText(parts []inputref.Part) string {
 				out.WriteString(path.Base(p.Path))
 			case "skill":
 				out.WriteString(p.Name)
+			case "mcp":
+				out.WriteString(skills.MCPInputText(p.Server, p.Name))
 			case "office":
 				if p.Office != nil {
 					out.WriteString(p.Office.Title + " " + p.Office.Text)
@@ -233,6 +235,9 @@ func (b *shortcutToolBackend) sourceReferences(ctx context.Context, source, quer
 				case "skill":
 					source = "skill"
 					title = part.Name
+				case "mcp":
+					source = "mcp"
+					title = part.Server + "/" + part.Name
 				case "shortcut":
 					title = part.Title
 				}
@@ -281,6 +286,8 @@ func shortcutToolMessageParts(message Message) []inputref.Part {
 			parts = append(parts, inputref.Clone([]inputref.Part{{Type: "office", Office: block.InputOffice}})...)
 		case block.InputElement:
 			parts = append(parts, inputref.Part{Type: "element", Text: block.Text, Favicon: block.InputElementFavicon})
+		case block.InputMCP != nil:
+			parts = append(parts, inputref.Part{Type: "mcp", Server: block.InputMCP.Server, Name: block.InputMCP.Name})
 		case block.InputSkill != "":
 			parts = append(parts, inputref.Part{Type: "skill", Name: block.InputSkill})
 		case block.FilePath != "":

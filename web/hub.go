@@ -782,7 +782,7 @@ func (h *Hub) seedLocked(history []session.Timed) {
 					// The persisted text carries the citation header the model
 					// read; the card shows the raw output, the same shape the
 					// live stream's ToolOutput has.
-					Text: agent.StripCiteHeader(b.Text), IsError: b.IsError,
+					Text: agent.StripCiteHeader(b.Text), IsError: projectedToolResultError(names[b.ToolUseID], b.IsError, b.Details),
 					// Passed through as raw JSON rather than decoded into a
 					// concrete type: the Hub has no reason to know which tool
 					// produced which shape, and json.RawMessage re-marshals

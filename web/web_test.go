@@ -2280,6 +2280,40 @@ func TestRunEndClearsIncomingCalls(t *testing.T) {
 	}
 }
 
+func TestCreateSessionApprovalMode(t *testing.T) {
+	h := newHarness(t, nil)
+	for _, tc := range []struct {
+		body string
+		want Mode
+	}{
+		{body: `{}`, want: ModeStandard},
+		{body: `{"approval_mode":"standard"}`, want: ModeStandard},
+		{body: `{"approval_mode":"strict"}`, want: ModeStrict},
+		{body: `{"approval_mode":"auto"}`, want: ModeAuto},
+	} {
+		resp := h.do(http.MethodPost, "/api/sessions", tc.body)
+		var out struct {
+			SessionID string `json:"session_id"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+			resp.Body.Close()
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusCreated {
+			t.Fatalf("create %s: status %d", tc.body, resp.StatusCode)
+		}
+		if got := h.session(out.SessionID).policy.State().Mode; got != string(tc.want) {
+			t.Fatalf("create %s: policy = %q, want %q", tc.body, got, tc.want)
+		}
+	}
+	resp := h.do(http.MethodPost, "/api/sessions", `{"approval_mode":"full"}`)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("invalid approval mode: status %d, want %d", resp.StatusCode, http.StatusBadRequest)
+	}
+}
+
 // The new-session dialog's contract: a subdirectory of the root becomes the
 // session's working directory; anything outside the root is refused, because
 // the session cwd is where the tool path guard bites.

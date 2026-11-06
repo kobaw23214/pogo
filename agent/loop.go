@@ -44,6 +44,9 @@ type Agent struct {
 	registry     *tools.Registry
 	schemas      []llm.ToolSchema
 	systemPrompt string
+	// runtimePrompt reads trusted, live session facts for each model request.
+	runtimePrompt         func() string
+	runtimePromptSnapshot string
 	// systemPromptParts labels systemPrompt for the overhead breakdown. Always
 	// a validated description of systemPrompt (see labeledSystemPrompt), set
 	// together with it.
@@ -195,6 +198,9 @@ type Config struct {
 	Client       llm.Client
 	Registry     *tools.Registry
 	SystemPrompt string
+	// RuntimePrompt supplements the configured prompt without rebuilding the
+	// agent or freezing mutable access policy into conversation history.
+	RuntimePrompt func() string
 	// SystemPromptParts optionally labels SystemPrompt for the itemized
 	// overhead breakdown. Ignored unless the parts concatenate to exactly
 	// SystemPrompt; see SystemPromptParts.
@@ -313,6 +319,7 @@ func New(c Config) *Agent {
 		registry:              c.Registry,
 		schemas:               schemas,
 		systemPrompt:          c.SystemPrompt,
+		runtimePrompt:         c.RuntimePrompt,
 		systemPromptParts:     labeledSystemPrompt(c.SystemPrompt, c.SystemPromptParts),
 		softTurns:             c.SoftTurns,
 		continuation:          c.Continuation.normalized(),
@@ -332,6 +339,9 @@ func New(c Config) *Agent {
 		contextEdit:           c.ContextEdit,
 		compactCfg:            c.Compact,
 		imageResolver:         c.ImageResolver,
+	}
+	if c.RuntimePrompt != nil {
+		agent.runtimePromptSnapshot = strings.TrimSpace(c.RuntimePrompt())
 	}
 	agent.maxTurns.Store(int64(c.MaxTurns))
 	if c.Citations {
@@ -977,6 +987,7 @@ func (a *Agent) runMessage(ctx context.Context, first llm.Message, out chan<- Ev
 		// on this one (skillview.go). Before context editing and the turn-start
 		// event, so both see the fixed cost this request actually carries.
 		a.refreshSkillToolView()
+		a.refreshRuntimePrompt()
 
 		// Context editing runs here: after steering has landed, immediately before the
 		// request is built, on the history exactly as it will be sent. a.messages is
@@ -1045,6 +1056,13 @@ func (a *Agent) runMessage(ctx context.Context, first llm.Message, out chan<- Ev
 		// The optional checkpoint has now reached a real request. If it asks
 		// for further tools, their subsequent work obeys the normal budgets.
 		coveragePending = false
+		a.refreshRuntimePrompt()
+		sentFixedCost = a.fixedCostTokens
+		if repairingFinal {
+			sentFixedCost -= a.toolSchemaTokens
+		}
+		sentPromptEstimate = sentHistoryEstimate + sentFixedCost
+		a.measuredThrough = len(a.messages)
 		resp, err := a.client.Stream(callCtx, a.modelSystemPrompt(), prompt, schemas, func(d llm.Delta) {
 			// Only proposed prose/tool calls stay buffered until review. Actual
 			// reasoning is visible while it arrives and retained on any fallback.
@@ -1097,8 +1115,11 @@ func (a *Agent) runMessage(ctx context.Context, first llm.Message, out chan<- Ev
 			// the next turn's turn_start carries the larger figure in both front ends.
 			if !repairingFinal && llm.IsContextOverflow(err) {
 				if retryPrompt, ok := a.forceClear(); ok {
+					a.refreshRuntimePrompt()
+					sentFixedCost = a.fixedCostTokens
 					sentPromptEstimate = llm.EstimateTokensFor(a.client, retryPrompt) + sentFixedCost
 					prompt = a.resolveImages(retryPrompt)
+					a.measuredThrough = len(a.messages)
 					// nil observer: the first attempt streamed nothing (an overflow is
 					// rejected before generation), but a consumer that had already been
 					// handed fragments must not receive a second copy of them.

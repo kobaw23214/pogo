@@ -19,7 +19,6 @@ import (
 	"github.com/yosukeno/pogo/skills"
 	"github.com/yosukeno/pogo/tools"
 	"github.com/yosukeno/pogo/wire"
-	"github.com/yosukeno/pogo/workflow"
 )
 
 // EventType is the SSE `event:` name.
@@ -77,11 +76,13 @@ const (
 	EvUserInputRequest  EventType = "user_input_request"
 	EvUserInputResolved EventType = "user_input_resolved"
 
-	EvPolicyChanged      EventType = "policy_changed"
-	EvPolicyReverted     EventType = "policy_reverted"
-	EvModelChanged       EventType = "model_changed"
-	EvModelConfigPending EventType = "model_config_pending"
-	EvToolConfig         EventType = "tool_config"
+	EvPolicyChanged       EventType = "policy_changed"
+	EvPolicyReverted      EventType = "policy_reverted"
+	EvModelChanged        EventType = "model_changed"
+	EvModelConfigPending  EventType = "model_config_pending"
+	EvToolConfig          EventType = "tool_config"
+	EvWebServiceChanged   EventType = "web_service_changed"
+	EvCapabilitiesChanged EventType = "capabilities_changed"
 
 	// EvRewound tells subscribers the session was rewound to an earlier
 	// message: everything they hold past that point describes a branch that
@@ -133,32 +134,6 @@ const (
 	// and shows the step still in flight.
 	EvImageDescribeStart EventType = "image_describe_start"
 	EvImageDescribeEnd   EventType = "image_describe_end"
-
-	// EvWorkflowRunStart, EvWorkflowNodeStart, EvWorkflowNodeEnd and
-	// EvWorkflowRunEnd track one workflow run (web/workflowrun.go). Web's own
-	// for the same reason the subagent_* events are: a workflow run belongs to
-	// no session — it has its own hub and its own record file — so its
-	// lifecycle cannot travel a session's event channel. All four are logged,
-	// so a stream resuming with ?from= replays the transitions; the record
-	// each carries is the state authority, so start plus live events always
-	// converges.
-	EvWorkflowRunStart  EventType = "workflow_run_start"
-	EvWorkflowNodeStart EventType = "workflow_node_start"
-	EvWorkflowNodeEnd   EventType = "workflow_node_end"
-	EvWorkflowRunEnd    EventType = "workflow_run_end"
-
-	// EvWorkflowNodeFrame is one translated loop event of the agent executing
-	// a node, fanned out live for the run-observation view. Not logged — same
-	// class as tool_partial: a reconnecting client heals from the record
-	// snapshot, not from a replay of the typing.
-	EvWorkflowNodeFrame EventType = "workflow_node_frame"
-
-	// EvWorkflowDispatchStart and EvWorkflowDispatchEnd track one orchestrator
-	// delegation (web/workflowrun.go). Both are logged: a dispatch is a state
-	// transition of the node, so a stream resuming with ?from= must replay it
-	// to keep the delegation list whole.
-	EvWorkflowDispatchStart EventType = "workflow_dispatch_start"
-	EvWorkflowDispatchEnd   EventType = "workflow_dispatch_end"
 )
 
 // logged reports whether an event goes into the replay log.
@@ -171,7 +146,7 @@ const (
 // transcript rather than to how much a model streamed or a command printed.
 func logged(t EventType) bool {
 	switch t {
-	case EvToken, EvThinking, EvToolArgs, EvToolPartial, EvSnapshot, EvRewound, EvCompacted, EvSubagentFrame, EvWorkflowNodeFrame, EvShellTaskOutput:
+	case EvToken, EvThinking, EvToolArgs, EvToolPartial, EvSnapshot, EvRewound, EvCompacted, EvSubagentFrame, EvShellTaskOutput:
 		// EvRewound joins the unlogged kinds: it is a control signal, not
 		// history, and a reconnecting client already gets the post-rewind
 		// truth from the snapshot the cleared log forces it to take.
@@ -179,9 +154,7 @@ func logged(t EventType) bool {
 		// EvSubagentFrame is progress, same class as tool_partial: folded into
 		// the hub's background-task state, which the snapshot serves. The start
 		// and end of a task stay logged — they are state transitions a replaying
-		// client must not miss. EvWorkflowNodeFrame is the same class again:
-		// live progress of a workflow node, with the run record as the state
-		// authority a reconnecting client heals from.
+		// client must not miss.
 		return false
 	}
 	return true
@@ -191,6 +164,7 @@ func logged(t EventType) bool {
 // so that each field has a name and a type in exactly one place; the cost is a
 // wide struct, the benefit is that no consumer has to guess a payload shape.
 type Event struct {
+	WebService json.RawMessage `json:"web_service,omitempty"`
 	ToolConfig *studioToolSync `json:"tool_config,omitempty"`
 	// A scoped invalidation only: clients reread the authenticated shortcut API.
 	ShortcutAgentID  string `json:"shortcut_agent_id,omitempty"`
@@ -350,21 +324,6 @@ type Event struct {
 	// in by the publisher (the Hub only computes durations for tool calls).
 	ImageRef  string `json:"image_ref,omitempty"`
 	ImageName string `json:"image_name,omitempty"`
-
-	// Workflow run observation. RunID above doubles as the workflow run id on
-	// these events — the two never share a hub, so one field names both.
-	// NodeID/NodeStatus/Artifact are the per-node convenience fields; the
-	// whole record rides WorkflowRun, because it is the state authority the
-	// client heals from. On EvWorkflowNodeFrame, Frame above carries the
-	// translated loop event of the node's agent.
-	WorkflowID  string              `json:"workflow_id,omitempty"`
-	NodeID      string              `json:"node_id,omitempty"`
-	NodeStatus  string              `json:"node_status,omitempty"`
-	Artifact    string              `json:"artifact,omitempty"`
-	WorkflowRun *workflow.RunRecord `json:"workflow_run,omitempty"`
-	// Dispatch rides the workflow_dispatch_* events: one orchestrator
-	// delegation, in the same shape the run record's dispatches list keeps.
-	Dispatch *workflow.DispatchRecord `json:"dispatch,omitempty"`
 }
 
 // Message is a settled conversation entry as the browser sees it.

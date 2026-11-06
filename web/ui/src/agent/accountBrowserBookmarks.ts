@@ -1,3 +1,4 @@
+import { gt } from "@/i18n";
 import { computed, inject, onBeforeUnmount, onMounted, reactive, readonly, type InjectionKey } from "vue";
 import { accountBookmarksAPI, agentBookmarksAPI, type AccountBookmarksAPI, type AccountBookmarksSnapshot } from "@/api/browserBookmarks";
 import { BOOKMARKS_CHANGED, BOOKMARKS_KEY, bookmarkURL, readBookmarks, type BrowserBookmark } from "./browserBookmarks";
@@ -15,7 +16,7 @@ type Claim = { account_id: string; status: "pending" | "done" };
 type Mutation = (latest: BrowserBookmark[]) => BrowserBookmark[];
 const clone = (items: readonly BrowserBookmark[]) => items.map(item => ({ ...item }));
 const sameBookmark = (a: BrowserBookmark, b: BrowserBookmark) => a.title === b.title && a.url === b.url;
-const changedAccount = () => new Error("账号已变化，请刷新收藏后重试。");
+const changedAccount = () => new Error(gt("uiCoverage.bookmarks.accountChanged"));
 function validAccountURL(value: string, origin: string) {
   if (!/^https?:\/\//i.test(value)) return false;
   const normalized = normalizeUrl(value, origin);
@@ -47,7 +48,7 @@ export function createAccountBrowserBookmarks(api: AccountBookmarksAPI, storage:
     try {
       const rawClaim = storage.getItem(BOOKMARKS_ACCOUNT_CLAIM);
       const claim: Claim | null = rawClaim ? JSON.parse(rawClaim) : null;
-      if (claim && (typeof claim.account_id !== "string" || !["pending", "done"].includes(claim.status))) throw new Error("本机收藏同步记录无效，原数据已保留。");
+      if (claim && (typeof claim.account_id !== "string" || !["pending", "done"].includes(claim.status))) throw new Error(gt("uiCoverage.bookmarks.invalidSync"));
       state.legacyClaimedElsewhere = !!claim && claim.account_id !== state.accountId;
       state.legacyNeedsClaim = !claim;
       state.localBookmarks = state.legacyClaimedElsewhere ? [] : readBookmarks(storage).filter(item =>
@@ -60,7 +61,7 @@ export function createAccountBrowserBookmarks(api: AccountBookmarksAPI, storage:
   function validate(snapshot: AccountBookmarksSnapshot) {
     if (!snapshot || snapshot.source !== "pogo_bookmarks" || (agentId ? snapshot.scope !== "agent" || snapshot.agent_id !== agentId || !snapshot.owner_account_id || snapshot.scope_id !== snapshot.account_id : snapshot.scope !== "account") || !["ready", "not_initialized"].includes(snapshot.status) || !snapshot.account_id || !Number.isSafeInteger(snapshot.revision) || snapshot.revision < 0 || !Array.isArray(snapshot.bookmarks) || snapshot.total !== snapshot.bookmarks.length || snapshot.bookmarks.length > MAX_ACCOUNT_BOOKMARKS ||
       !snapshot.bookmarks.every(item => item && typeof item.id === "string" && !!item.id && typeof item.title === "string" && !!item.title.trim() && typeof item.url === "string" && validAccountURL(item.url, origin))) {
-      throw new Error("收藏服务返回了无效数据，请重试。原收藏未被覆盖。");
+      throw new Error(gt("uiCoverage.bookmarks.invalidResponse"));
     }
   }
   function apply(snapshot: AccountBookmarksSnapshot) {
@@ -117,7 +118,7 @@ export function createAccountBrowserBookmarks(api: AccountBookmarksAPI, storage:
         if (snapshot.account_id !== accountId) { apply(snapshot); throw changedAccount(); }
         apply(snapshot);
         const next = transform(clone(snapshot.bookmarks));
-        if (next.length > MAX_ACCOUNT_BOOKMARKS) throw new Error(`最多可保存 ${MAX_ACCOUNT_BOOKMARKS} 个收藏。`);
+        if (next.length > MAX_ACCOUNT_BOOKMARKS) throw new Error(gt("uiCoverage.bookmarks.limit", { count: MAX_ACCOUNT_BOOKMARKS }));
         // An explicit empty import still initializes an account whose local
         // collection has never been synchronized. Only an already-ready
         // identical snapshot is a genuine no-op.
@@ -146,15 +147,15 @@ export function createAccountBrowserBookmarks(api: AccountBookmarksAPI, storage:
   async function upsert(card: BrowserBookmark, original?: BrowserBookmark) {
     return mutate(latest => {
       const current = latest.find(item => item.id === card.id);
-      if (original && (!current || !sameBookmark(current, original))) throw new Error("这个收藏已在另一窗口修改或删除，请重新打开编辑。");
-      if (!current && latest.some(item => item.url === card.url)) throw new Error("这个网址已经收藏。");
+      if (original && (!current || !sameBookmark(current, original))) throw new Error(gt("uiCoverage.bookmarks.changedBeforeEdit"));
+      if (!current && latest.some(item => item.url === card.url)) throw new Error(gt("uiCoverage.bookmarks.duplicate"));
       return current ? latest.map(item => item.id === card.id ? { ...card } : item) : [...latest, { ...card }];
     });
   }
   async function remove(card: BrowserBookmark) {
     return mutate(latest => {
       const current = latest.find(item => item.id === card.id);
-      if (current && !sameBookmark(current, card)) throw new Error("这个收藏已在另一窗口修改，请刷新后再删除。");
+      if (current && !sameBookmark(current, card)) throw new Error(gt("uiCoverage.bookmarks.changedBeforeDelete"));
       return latest.filter(item => item.id !== card.id);
     });
   }
@@ -165,7 +166,7 @@ export function createAccountBrowserBookmarks(api: AccountBookmarksAPI, storage:
       if (!claim || claim.account_id !== state.accountId) throw changedAccount();
       const next = readBookmarks(storage);
       const current = next.find(item => item.id === card.id);
-      if (current && !sameBookmark(current, card)) throw new Error("这个本机收藏已在另一窗口修改，请刷新后再删除。");
+      if (current && !sameBookmark(current, card)) throw new Error(gt("uiCoverage.bookmarks.localChangedBeforeDelete"));
       storage.setItem(BOOKMARKS_KEY, JSON.stringify(next.filter(item => item.id !== card.id)));
       localSource();
       return true;
@@ -188,7 +189,7 @@ export function createAccountBrowserBookmarks(api: AccountBookmarksAPI, storage:
     try {
       localSource();
       if (state.localError) throw new Error(state.localError);
-      if (state.legacyClaimedElsewhere) throw new Error("本机旧收藏已绑定其他账号。请通过导出文件自行选择要导入的收藏。");
+      if (state.legacyClaimedElsewhere) throw new Error(gt("uiCoverage.bookmarks.claimedElsewhere"));
       const raw = storage.getItem(BOOKMARKS_KEY);
       if (!storage.getItem(BOOKMARKS_ACCOUNT_BACKUP)) storage.setItem(BOOKMARKS_ACCOUNT_BACKUP, JSON.stringify({ version: 1, account_id: accountId, bookmarks: raw }));
       items = state.localBookmarks.flatMap(item => {
@@ -209,7 +210,7 @@ export function createAccountBrowserBookmarks(api: AccountBookmarksAPI, storage:
       try {
         storage.setItem(BOOKMARKS_ACCOUNT_CLAIM, JSON.stringify({ account_id: accountId, status: "done" } satisfies Claim));
         localSource();
-      } catch (error) { state.localError = `账号收藏已保存，本机迁移标记未保存：${String(error)}`; }
+      } catch (error) { state.localError = gt("uiCoverage.bookmarks.migrationMarkerFailed", { error: String(error) }); }
     }
     return { ...result, invalid };
   }

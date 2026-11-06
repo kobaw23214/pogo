@@ -94,10 +94,21 @@ func TestStudioWebRuntimeMatchesAnOrdinarySessionPlusAgentInstructions(t *testin
 		t.Fatalf("model calls = %d, want one ordinary and one Studio call", len(systems))
 	}
 	suffix := "\n\n# Agent configuration\nYou are Runtime Bot.\nRUNTIME-INSTRUCTIONS-61ac: keep persona."
+	// Live access guidance belongs to each session's own workspace and policy.
+	// Verify it separately before comparing the shared runtime instructions.
+	withoutAccess := func(prompt string, sess *Session) string {
+		hint := "\n\n" + sess.fileAccessPrompt()
+		if !strings.HasSuffix(prompt, hint) {
+			t.Fatal("model prompt missed the session's current file access guidance")
+		}
+		return strings.TrimSuffix(prompt, hint)
+	}
+	ordinaryPrompt := withoutAccess(systems[0], h.session(ordinary))
+	studioSystem := withoutAccess(systems[1], h.session(web.ID))
 	// Only Studio owns the host-bound task tools, so it also receives their
 	// conditional handoff guide. Its exact content/tool-selection behavior is
 	// covered by agent tests; compare the ordinary runtime independently here.
-	studioPrompt, handoffGuide, hasHandoff := strings.Cut(systems[1], "\n\nFor background-task setup requests,")
+	studioPrompt, handoffGuide, hasHandoff := strings.Cut(studioSystem, "\n\nFor background-task setup requests,")
 	if !hasHandoff || !strings.Contains(handoffGuide, "Do not sleep") || !strings.Contains(handoffGuide, "registration alone is never proof") {
 		t.Fatal("Studio task tools missed their foreground-handoff guidance")
 	}
@@ -106,7 +117,7 @@ func TestStudioWebRuntimeMatchesAnOrdinarySessionPlusAgentInstructions(t *testin
 	// slice. That difference is by design; everything else must match, so the
 	// working-directory line is normalized away before the exact compare.
 	envWorkdir := regexp.MustCompile(`(?m)^working directory: .*$`)
-	if got, plain := envWorkdir.ReplaceAllString(studioPrompt, "working directory: <ws>"), envWorkdir.ReplaceAllString(systems[0]+suffix, "working directory: <ws>"); got != plain {
+	if got, plain := envWorkdir.ReplaceAllString(studioPrompt, "working directory: <ws>"), envWorkdir.ReplaceAllString(ordinaryPrompt+suffix, "working directory: <ws>"); got != plain {
 		t.Fatalf("Studio prompt is not the ordinary prompt plus its Agent instructions:\nordinary:\n%s\nstudio:\n%s", plain, got)
 	}
 	for _, surface := range []string{"note.md", "studioskill"} {

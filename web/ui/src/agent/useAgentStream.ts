@@ -7,6 +7,7 @@ import { bumpWorkspaceChanges } from "@/components/changesStore";
 import { parseFrame } from "./sse";
 import { createNewlineCounter } from "./argsPreview";
 import { browserStreamBacklogThrough, createBrowserReveal, type BrowserEventDelivery } from "./browserView";
+import { isWebServiceRecord, type WebServiceChange } from "@/api/webServices";
 import { createBrowserFocusObserver } from "./browserFocus";
 import { emptyLive, type AgentEvent, type AttachmentMeta, type BgTask, type CompactionView, type ContextPrompt, type InboxItem, type Live, type Message, type OverheadPart, type PolicyState, type RunInfo, type ShellJobRecord, type StarterCard, type ToolResult, type Usage } from "@/api/types";
 import { liveAgentWorkflowUpdate, type AgentWorkflowUpdate } from "./agentWorkflowUpdates";
@@ -137,6 +138,9 @@ export function useAgentStream(options: { attachments?: boolean } = {}) {
   // of allowed models. Consumers must also observe those model_changed events.
   const modelChangeVersion = ref(0);
   const toolConfig = shallowRef<{ sessionId: string; config: StudioToolConfigSync } | null>(null);
+  const capabilitiesChanged = shallowRef<{ sessionId: string; version: number } | null>(null);
+  const webServiceChanged = shallowRef<WebServiceChange | null>(null);
+  let capabilitiesVersion = 0;
   const policy = ref<PolicyState>({ mode: "standard" });
   const usage = ref<Usage>({ input: 0, output: 0 });
   // contextTokens is the latest turn's prompt size. Kept apart from `usage` on
@@ -394,7 +398,6 @@ export function useAgentStream(options: { attachments?: boolean } = {}) {
         const s = e.snapshot;
         if (!s) return;
         streamInstance = typeof s.stream_instance === 'string' && /^[A-Za-z0-9_-]{16,128}$/.test(s.stream_instance) ? s.stream_instance : undefined;
-        displaySessionId.value = delivery?.sessionId ?? sessionId;
         workspaceDirty = false;
         messages.value = normalizeMessages(s.messages);
         compactions.value = s.compactions ?? [];
@@ -433,6 +436,10 @@ export function useAgentStream(options: { attachments?: boolean } = {}) {
         switching.value = false;
         streamError.value = runNotice();
         flushLive();
+        // Publish the identity only after all transcript fields are committed.
+        // Entry readiness and synchronous consumers must never observe a new
+        // session id alongside the previous (or initially empty) transcript.
+        displaySessionId.value = delivery?.sessionId ?? sessionId;
         return;
       }
 
@@ -792,6 +799,16 @@ export function useAgentStream(options: { attachments?: boolean } = {}) {
         toolConfig.value = { sessionId: delivery.sessionId, config: { ...e.tool_config, tools: [...e.tool_config.tools] } };
         return;
 
+      case "capabilities_changed":
+        if (!delivery?.sessionId || delivery.replay || sessionId && delivery.sessionId !== sessionId) return;
+        capabilitiesChanged.value = { sessionId: delivery.sessionId, version: ++capabilitiesVersion };
+        return;
+
+      case "web_service_changed":
+        if (!delivery?.sessionId || delivery.replay || sessionId && delivery.sessionId !== sessionId || !isWebServiceRecord(e.web_service)) return;
+        webServiceChanged.value = { sessionId: delivery.sessionId, record: e.web_service };
+        return;
+
       case "model_config_pending":
         run.value = { ...run.value, model_config_pending: e.model_config_pending === true };
         return;
@@ -1146,6 +1163,8 @@ export function useAgentStream(options: { attachments?: boolean } = {}) {
       describes.value = [];
       progressEvents.value = [];
       toolConfig.value = null;
+      capabilitiesChanged.value = null;
+      webServiceChanged.value = null;
       answerReview.value = null;
     }
     const p = open(sid);
@@ -1246,6 +1265,8 @@ export function useAgentStream(options: { attachments?: boolean } = {}) {
     progressEvents,
     modelChangeVersion,
     toolConfig,
+    capabilitiesChanged,
+    webServiceChanged,
     policy,
     usage,
     bgTasks,

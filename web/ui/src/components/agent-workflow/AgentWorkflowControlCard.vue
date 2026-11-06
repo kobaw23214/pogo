@@ -4,6 +4,7 @@ import { useI18n } from "vue-i18n";
 import type { AgentWorkflowDefinition, AgentWorkflowDiagnostic, AgentWorkflowRun, AgentWorkflowVersionSummary } from "@/api/agentWorkflows";
 import AgentWorkflowRunBadge from './AgentWorkflowRunBadge.vue';
 import { workflowToolApprovalMode } from '@/agent/agentWorkflowEditor';
+import WorkflowDiagnostics from '@/components/WorkflowDiagnostics.vue';
 
 type ControlTab = "overview" | "versions" | "runs";
 type ControlAction = { command: string; label: string; disabled: boolean; hint?: string };
@@ -112,7 +113,7 @@ function escape(event: KeyboardEvent) {
     <div :id="`${panelId}-panel`" class="aw-control-body" role="tabpanel" :aria-labelledby="`${panelId}-${tab}`" tabindex="0">
       <p v-if="operationError" class="aw-operation-feedback error" role="alert">{{ operationError }}</p>
       <p v-else-if="operationNotice" class="aw-operation-feedback" role="status">{{ operationNotice }}</p>
-      <ul v-if="diagnostics?.length" class="aw-operation-diagnostics"><li v-for="(item,index) in diagnostics" :key="index"><strong>{{ item.message }}</strong><p v-if="item.fix_hint">{{ item.fix_hint }}</p></li></ul>
+      <WorkflowDiagnostics v-if="diagnostics?.length" class="aw-operation-diagnostics" :diagnostics="diagnostics" domain="agentWorkflow" />
       <template v-if="tab === 'overview'">
         <button v-if="attentionRecord" type="button" class="aw-active-run-summary" :disabled="busy" data-testid="workflow-control-active-run" @click="emit('run', attentionRecord.id)"><AgentWorkflowRunBadge :status="attentionRecord.cancel_requested ? 'cancelling' : attentionRecord.status" :count="activeRecords.length" /><span>{{ tr('viewRun') }} ↗</span></button>
         <p v-if="workflow.deleted" class="aw-panel-intro">{{ tr('deletedHint') }}</p>

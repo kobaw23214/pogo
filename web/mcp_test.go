@@ -910,6 +910,39 @@ func awaitGate(t *testing.T, cs *mcp.ClientSession, id string) map[string]any {
 	return nil
 }
 
+// A verdict is queued before Review publishes gate_resolved. Wait only for
+// that answered gate to disappear; a new gate still requires a fresh decision.
+func awaitGateResolution(t *testing.T, cs *mcp.ClientSession, id, gateID string) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	ticker := time.NewTicker(30 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		res, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: "agent_task_status", Arguments: map[string]any{"task_id": id}})
+		if err != nil {
+			t.Fatalf("wait for gate %s resolution: %v", gateID, err)
+		}
+		sc := structured(t, res)
+		if sc["status"] != "input_required" {
+			return
+		}
+		gates, _ := sc["pending_gates"].([]any)
+		if len(gates) != 1 {
+			t.Fatalf("unexpected pending gates after answering %s: %#v", gateID, sc)
+		}
+		gate, _ := gates[0].(map[string]any)
+		if gate["gate_id"] != gateID {
+			t.Fatalf("new approval required after answering %s: %#v", gateID, sc)
+		}
+		select {
+		case <-ctx.Done():
+			t.Fatalf("gate %s did not resolve: %v", gateID, ctx.Err())
+		case <-ticker.C:
+		}
+	}
+}
+
 // TestMCPApproveGateRemote: the approval ticket carries the facts (gate_id,
 // tool, args), and a remote approve through agent_task_approve lets the run
 // proceed to completion — the web UI is an answering channel, not the only one.
@@ -938,6 +971,7 @@ func TestMCPApproveGateRemote(t *testing.T) {
 	if sc["approved"] != true {
 		t.Fatalf("approve = %#v", sc)
 	}
+	awaitGateResolution(t, cs, id, gate["gate_id"].(string))
 	sc = pollStatus(t, cs, id)
 	if sc["status"] != "completed" {
 		t.Fatalf("status after approval = %#v", sc)
@@ -969,6 +1003,7 @@ func TestMCPDenyGateWithFeedback(t *testing.T) {
 	if sc["approved"] != false {
 		t.Fatalf("deny = %#v", sc)
 	}
+	awaitGateResolution(t, cs, id, gate["gate_id"].(string))
 	sc = pollStatus(t, cs, id)
 	if sc["status"] != "completed" {
 		t.Fatalf("status after denial = %#v", sc)

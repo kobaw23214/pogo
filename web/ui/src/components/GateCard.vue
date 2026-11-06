@@ -3,6 +3,7 @@ import { computed, inject, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import type { PendingGate } from "@/api/types";
 import { approvalUiKey } from "@/agent/approvalState";
+import { resolveToolIdentity, useToolIdentityCatalog } from "@/agent/toolIdentity";
 
 const { t } = useI18n();
 
@@ -20,6 +21,8 @@ const emit = defineEmits<{
   thaw: [];
 }>();
 const approval = inject(approvalUiKey, undefined);
+const toolCatalog = useToolIdentityCatalog();
+const toolIdentity = computed(() => resolveToolIdentity(props.gate.tool, props.gate.args, undefined, toolCatalog.value));
 
 // The countdown is display only; the server's clock decides. It is computed from
 // an absolute deadline rather than counted down from a duration, which is why a
@@ -119,7 +122,7 @@ function reject() {
   <div class="gate" :class="{ expired, dangerous, compact }" :data-gate-id="gate.gate_id">
     <div class="head">
       <span class="title">{{ expired ? t("gateCard.expired") : t("gateCard.confirmRequired") }}</span>
-      <span class="tool">{{ gate.tool }}</span>
+      <span class="tool" :title="gate.tool">{{ toolIdentity.name }}<template v-if="toolIdentity.secondary"> · {{ toolIdentity.secondary }}</template></span>
       <span v-if="!expired" class="clock">{{ gate.frozen ? t("gateCard.paused") : t("gateCard.remaining", { n: seconds }) }}</span>
     </div>
 

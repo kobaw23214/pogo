@@ -2,6 +2,7 @@
 import { computed, ref, watch } from "vue";
 import Icon from "./ShortcutEditorIcon.vue";
 import { useI18n } from "vue-i18n";
+import { builtinSkillDescription } from "@/agent/builtinToolCopy";
 import type { SkillInfo } from "@/api/types";
 import type { ShortcutSnapshot } from "@/api/shortcuts";
 import type { ComposerReferencePart } from "@/agent/composerParts";
@@ -30,7 +31,7 @@ const normalizedQuery = computed(() => query.value.trim().toLocaleLowerCase());
 const matches = (...values: (string | undefined)[]) => !normalizedQuery.value || values.some(value => value?.toLocaleLowerCase().includes(normalizedQuery.value));
 const referenceText = (part: ComposerReferencePart) => part.type === "office" ? part.office.text : part.type === "element" ? part.text : part.type === "file" ? part.path || "" : "";
 const visibleReferences = computed(() => props.references.filter(part => (source.value !== "information" && part.type === source.value) && matches(part.label, referenceText(part))));
-const visibleSkills = computed(() => props.skills.filter(skill => matches(skill.name, skill.description)));
+const visibleSkills = computed(() => props.skills.map(skill => ({ ...skill, originalDescription: skill.description, description: builtinSkillDescription(skill.name, skill.description, skill.source === "embedded") })).filter(skill => matches(skill.name, skill.description, skill.originalDescription)));
 const elementCard = (part: ComposerReferencePart) => part.type === "element" && parsePickedCached(part.text).cards[0] ? { ...parsePickedCached(part.text).cards[0], favicon: part.favicon } : null;
 const count = (id: Source) => id === "information" ? 0 : id === "skill" ? props.skills.length : props.references.filter(part => part.type === id).length;
 const resultCount = computed(() => source.value === "skill" ? visibleSkills.value.length : visibleReferences.value.length);

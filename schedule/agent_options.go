@@ -1,6 +1,11 @@
 package schedule
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
+
+var ErrRetiredWorkflow = errors.New("platform workflow schedules are no longer supported")
 
 const (
 	TurnLimitUnlimited = "unlimited"
@@ -11,6 +16,9 @@ const (
 // ValidateAgentRunOptions deliberately leaves absent fields unchanged: already
 // saved jobs retain their previous cap and standard approval policy.
 func ValidateAgentRunOptions(j Job) error {
+	if j.WorkflowID != "" {
+		return ErrRetiredWorkflow
+	}
 	if j.AgentID == "" {
 		if j.TurnLimitMode != "" || j.ApprovalMode != "" {
 			return fmt.Errorf("Agent run options require an Agent binding")

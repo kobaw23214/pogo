@@ -14,6 +14,13 @@ export interface StudioSessionCapabilities {
   tools_revision?: number;
   tools_pending?: boolean;
   tools_desired_revision?: number;
+  skills_revision?: number;
+  skills_desired_revision?: number;
+  skills_pending?: boolean;
+  mcp_sync?: boolean;
+  mcp_revision?: number;
+  mcp_desired_revision?: number;
+  mcp_pending?: boolean;
 }
 
 export interface StudioModelConfigSync {
@@ -39,6 +46,15 @@ export interface StudioSkillConfigSync {
   deferred: boolean;
   revision: number;
   desired_revision: number;
+}
+
+export interface StudioMcpConfigSync {
+  changed: boolean;
+  deferred: boolean;
+  revision: number;
+  desired_revision: number;
+  /** Effective servers, never a pending selection. */
+  mcp_servers: string[];
 }
 
 export function studioSessionModels(

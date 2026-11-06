@@ -3,6 +3,7 @@
 # Pogo
 
 [![Stars](https://img.shields.io/github/stars/kobaw23214/pogo?style=social)](https://github.com/kobaw23214/pogo/stargazers)
+
 [![CI](https://github.com/kobaw23214/pogo/actions/workflows/ci.yml/badge.svg)](https://github.com/kobaw23214/pogo/actions/workflows/ci.yml)
 [![License](https://img.shields.io/github/license/kobaw23214/pogo?color=blue)](LICENSE)
 [![Go Version](https://img.shields.io/badge/Go-1.26.5%2B-00ADD8?logo=go&logoColor=white)](https://go.dev)
@@ -24,6 +25,14 @@ Early harness design inspired by [Pi](https://github.com/earendil-works/pi) (for
 - **Browser collaboration / 浏览器协作**：接入浏览器 worker 后，让 Agent 打开网页、提取和对比信息；需要登录或人工处理时，接管同一页面，再交还 Agent。[查看浏览器能力](#1-操作真实浏览器)
 - **Documents & artifacts / 从资料到产物**：整理文件、生成图表和 HTML 报告，在对话中预览结果；配置 Office 服务后，还能在共享画布中编辑文档。[查看文档能力](#2-编辑真实-office-文档)
 - **Human-in-the-loop workflows / 可审批工作流**：组合 Agent、代码与人工确认节点，连接 MCP 工具，保留执行记录；后台任务可单独管理。[查看工作流](#4-公共信息区与-agent-工作流)
+
+## 界面语言 / Interface languages
+
+支持 **简体中文、繁體中文、English、日本語、한국어、Deutsch、Français、Español**。在设置中的“外观与语言”或对话侧栏切换，选择会保存在当前浏览器；首次访问按浏览器语言匹配。
+
+UI translations are bundled locally, including Studio, chat, settings, built-in capability descriptions and common host diagnostics. Dates, numbers and component controls follow the selected language. User content, model replies, websites and external tool content retain their original language. An open Office editor applies its new language when reopened, preserving unsaved edits during a language change.
+
+新增和维护翻译见 [国际化说明](docs/i18n.md)。修改源码后需重新构建前端和应用；仓库中的旧前端产物不会自动更新。
 
 <a id="quick-start"></a>
 
@@ -157,12 +166,15 @@ Docker 部署从 [Compose 示例](compose.yml)和[浏览器运行时说明](brow
 | 写法 | 渲染 |
 |---|---|
 | ` ```mermaid ` / ` ```echarts ` | Mermaid 11 全量图表 / ECharts 交互图表 |
-| ` ```html ` / ` ```html-preview ` | **对话内沙箱渲染完整网页**(图表/交互/图片),带源码/刷新/下载工具栏 |
+| ` ```html ` | HTML 源码，按代码块展示 |
+| ` ```html-preview ` | 引用真实 HTML 文件的 JSON 元数据，**对话内沙箱预览静态网页**(图表/交互/图片)，带源码/刷新/下载工具栏 |
 | `$…$` / `$$…$$` / ` ```math ` | KaTeX 数学公式 |
 | ` ```csv ` / ` ```json-table ` | 直接渲染成数据表 |
 | ` ```diff ` / 多语言代码块 | 增删高亮 / 语法高亮 |
 | `[TOC]` `[^1]` `- [x]` `> [!NOTE]` `:::` | 目录 / 脚注 / 任务列表 / callout / 折叠块 |
 | `![图片](…)` / `[文件](路径)` | 图片/工作区文件卡片,点击内联预览 |
+
+使用本地 HTML、CSS、JS、JSON 和媒体资源的静态网页直接走内置预览，无需启动 Python/Node 服务；这是有时限的预览，不是长期网站发布。后端、SSR、服务端 API 或 WebSocket 项目需要实际可用的受管 Web 服务能力，不能用未托管后台进程或猜测的 `localhost` 地址代替。现有范围与限制见 [HTML 预览说明](docs/html-preview.md)。
 
 流式输出期间先显示代码,完成后自动成图;HTML 工件在对话里直接渲染成可交互页面,亦可侧边栏打开:
 
@@ -269,7 +281,7 @@ Docker 部署从 [Compose 示例](compose.yml)和[浏览器运行时说明](brow
 - **引用核查**:harness 给每个工具调用分配 cite 标签并快照摘录;答案里的引用锚点经正则校验,**引用没产生过的标签或伪页码会被打回重写**;悬停卡直达工具记录,来源面板分组展示
 - **子代理治理**:explore 只读模式默认后台,结果以通知送达合并唤醒;写操作经全主机唯一 flock 租约串行;子代理审批经 FD 转发回父进程,权限不可能超过父级
 - **审批门**:「替我审批」三档;审批卡编辑参数时 freeze 暂停倒计时;5 分钟超时 **fail-closed**;danger 操作不可被记住为永久授权;主/子代理双卡片车道防堵死
-- **记忆系统**:用户级/项目级/Agent 共享三层可写根,不引入新工具而是授权现有读写工具;注入的清单标注"数据非指令"防提示词污染
+- **记忆系统**:用户级/项目级/Agent 三层可写根，不引入新工具而是授权现有读写工具；注入的清单标注“数据非指令”。平台侧栏的“记忆与偏好”统一管理当前用户可访问的记忆，无需创建会话；Agent 卡片的更多菜单可直达对应范围，包含它可使用的个人/项目记忆。支持搜索、查看、编辑和删除，存储路径收在高级详情中。自动整理开关只控制后台提炼，关闭后已有记忆仍可读取。
 
 <a id="platform"></a>
 ## 10. 平台能力
@@ -284,7 +296,7 @@ Docker 部署从 [Compose 示例](compose.yml)和[浏览器运行时说明](brow
 ## 11. 集成与形态
 
 - **MCP 双向**:既接入外部 MCP 工具,又把每个 Agent 暴露为独立 MCP 端点(`/mcp/agents/{id}`);`include_tools` 白名单控制发布面,token 三态显式(空 = 明示免认证)
-- **REST API 与 CLI**:262 条路由覆盖会话/工作流/审批/调度/观测,带 SSE 事件流;CLI `-p -mode json` 输出 JSONL 事件流,与 Web 前端**同一份 wire 契约**——可被外部程序编排驱动
+- **REST API 与 CLI**:覆盖会话/Agent 内部工作流/工具审批/调度/观测,带 SSE 事件流;CLI `-p -mode json` 输出 JSONL 事件流,与 Web 前端**同一份 wire 契约**——可被外部程序编排驱动
 - **观测**:OTLP 导出兼容 `OTEL_*` 标准变量;W3C traceparent 贯穿 MCP 调用链;skill 观测按 discovery/load/execute 分阶段,多进程共享 SQLite 租约安全
 - **媒体中继**:主 web 端口同时服务 HTTP 与 TURN/TCP,一次性凭据精确到端口白名单——内网穿透实时观看容器内浏览器画面,无需公网 worker
 - **桌面端(实验性)**:Electron 桌面即浏览器执行器——站点以真实 Chromium 呈现,Agent 的 CDP 直接附着同一页面,人机共用。**现阶段不完善:仅 macOS、ad-hoc 签名未公证,Windows/Linux 未验收,请勿作生产依赖**

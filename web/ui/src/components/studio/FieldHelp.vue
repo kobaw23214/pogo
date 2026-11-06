@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useI18n } from "vue-i18n";
+const { t: tr } = useI18n();
 import { computed, onBeforeUnmount, onMounted, ref, useId } from 'vue';
 
 defineProps<{ label: string; text: string }>();
@@ -20,7 +22,7 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', outside));
   <span ref="root" class="field-help-wrap" @mouseenter="hovering = true" @mouseleave="hovering = false">
     <el-popover :visible="visible" :teleported="false" :persistent="false" :popper-options="{ strategy: 'fixed' }" :popper-style="{ '--el-bg-color-overlay': 'var(--el-bg-color)' }" placement="top" :width="280">
       <template #reference>
-        <button type="button" class="field-help" :aria-label="`${label}说明`" :aria-describedby="id"
+        <button type="button" class="field-help" :aria-label="tr('studioManagement.text186', { value0: label })" :aria-describedby="id"
           :aria-expanded="visible" @focus="focused = true" @blur="focused = false; pinned = false"
           @click.stop="pinned = !pinned" @keydown.esc.stop.prevent="dismiss">?</button>
       </template>

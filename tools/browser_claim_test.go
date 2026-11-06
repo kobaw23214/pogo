@@ -109,8 +109,8 @@ func TestBrowserClaimDetailsCannotChangeControlFromUnrelatedReplies(t *testing.T
 				raw = `{"action":"tab","tab_action":"claim","target":"t2","context_ref":"` + claimTestContext + `","control_epoch":3}`
 			}
 			result, err := (&Browser{Link: &stubLink{replies: []BrowserReply{reply}}}).Execute(context.Background(), json.RawMessage(raw))
-			if err != nil {
-				t.Fatal(err)
+			if (err != nil) != !reply.OK {
+				t.Fatalf("claim execution status was not preserved: %v", err)
 			}
 			details := result.Details.(map[string]any)
 			for _, field := range []string{"tab_action", "control", "control_epoch"} {

@@ -1,0 +1,1 @@
+var e=Symbol(`webArtifactNavigation`);export{e as t};

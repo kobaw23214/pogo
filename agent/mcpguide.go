@@ -42,6 +42,9 @@ func (a *Agent) systemPromptHints() []PromptPart {
 	if hint := a.skillToolsInstruction(); hint != "" {
 		hints = append(hints, PromptPart{Key: PromptPartSkillTools, Text: "\n\n" + hint})
 	}
+	if a.runtimePromptSnapshot != "" {
+		hints = append(hints, PromptPart{Key: PromptPartRuntime, Text: "\n\n" + a.runtimePromptSnapshot})
+	}
 	return hints
 }
 

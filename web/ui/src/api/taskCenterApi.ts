@@ -1,6 +1,6 @@
 import { taskCenterRequest } from "./client";
 
-export type BackgroundTaskSource = "schedule" | "sentinel" | "workflow";
+export type BackgroundTaskSource = "schedule" | "sentinel";
 export type BackgroundRunStatus = "queued" | "running" | "completed" | "failed" | "cancelled" | "interrupted";
 export interface BackgroundTask {
   id: string;
@@ -10,9 +10,10 @@ export interface BackgroundTask {
   description: string;
   agent_id: string;
   agent_name?: string;
+  /** Retired record discriminator; excluded from Agent task views. */
   workflow_id?: string;
   trigger: "time" | "condition";
-  executor: "agent" | "workflow" | "legacy";
+  executor: "agent" | "legacy";
   enabled: boolean;
   state: string;
   next_run?: string | null;
@@ -29,17 +30,14 @@ export interface BackgroundTask {
   can_manage: boolean;
 }
 export interface BackgroundTaskRun {
-  test_run?: boolean;
-  draft_revision?: number;
-  definition_hash?: string;
   id: string;
   task_id: string;
   source: BackgroundTaskSource;
   source_id: string;
   title: string;
   agent_id: string;
+  /** Retired record discriminator; excluded from Agent task views. */
   workflow_id?: string;
-  workflow_run_id?: string;
   trigger: string;
   status: BackgroundRunStatus;
   revision: number;

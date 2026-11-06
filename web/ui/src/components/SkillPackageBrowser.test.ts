@@ -4,7 +4,7 @@ import { renderToString } from "vue/server-renderer";
 import type { SkillDocumentContent, SkillPackageEntry, SkillPackageFiles } from "@/api/types";
 const hooks = vi.hoisted(() => ({ cleanup: [] as (() => void)[] }));
 vi.mock("vue", async original => ({ ...await original<typeof import("vue")>(), onBeforeUnmount: (fn: () => void) => hooks.cleanup.push(fn), useSSRContext: () => ({ modules: new Set() }) }));
-vi.mock("vue-i18n", () => ({ useI18n: () => ({ t: (key: string) => key }) }));
+vi.mock("vue-i18n", async original => ({ ...await original<typeof import("vue-i18n")>(), useI18n: () => ({ t: (key: string) => key }) }));
 vi.mock("./SkillDocumentViewer.vue", () => ({ default: defineComponent({ props: ["selectedPath", "fileInfo"], setup: props => () => h("div", { "data-viewer-path": props.selectedPath, "data-file-previewable": String(props.fileInfo?.previewable) }) }) }));
 import SkillPackageBrowser from "./SkillPackageBrowser.vue";
 const binary: SkillPackageEntry = { name: "huge.zip", path: "huge.zip", kind: "file", size_bytes: 1024 ** 3, previewable: false, reason: "Binary file" };

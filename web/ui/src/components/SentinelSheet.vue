@@ -11,6 +11,7 @@ import { createSentinelSessionFeed, sentinelSessionState } from "@/agent/sentine
 import { createAnswerFileNavigation } from "@/agent/answerFileNavigation";
 import { approvalUiKey } from "@/agent/approvalState";
 import { provideCardDisclosure } from "@/agent/cardDisclosure";
+import { provideToolIdentityCatalog } from "@/agent/toolIdentity";
 import { workspaceFileNavigationKey, type WorkspaceFileScope } from "@/agent/workspaceFileNavigation";
 import TurnCard from "./TurnCard.vue";
 import SteeringMessage from "./SteeringMessage.vue";
@@ -32,6 +33,7 @@ const detail = feed.detail, error = feed.error, loading = feed.loading;
 // The verified worker snapshot owns this view, not the parent conversation
 // selected behind the retained tab. An unbound worker gets local defaults.
 provideCardDisclosure(() => detail.value?.session?.id ? `sentinel:${detail.value.session.id}` : undefined);
+provideToolIdentityCatalog(() => detail.value?.session?.id);
 const snapshot = computed(() => detail.value?.session?.snapshot ?? null);
 const gates = computed(() => snapshot.value?.live.pending_gates ?? []);
 const timeline = computed(() => {

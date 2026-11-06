@@ -1,3 +1,4 @@
+import { gt } from "@/i18n";
 import type { AgentEvent, ModelInfo, SessionHit, SessionInfo, Snapshot } from "./types";
 import { randomUUID } from "@/utils/uuid";
 
@@ -52,7 +53,7 @@ function isUuidChannel(value: unknown): value is string {
 
 function hostWindow(): Window & typeof globalThis {
   if (typeof window === "undefined") {
-    reject(500, "嵌入通道只能在浏览器中使用");
+    reject(500, gt("uiCoverage.connection.embedBrowserOnly"));
   }
   return window;
 }
@@ -62,16 +63,16 @@ function newRequestId(): string {
   try {
     uuid = randomUUID();
   } catch {
-    reject(500, "无法生成安全请求标识");
+    reject(500, gt("uiCoverage.connection.cannotGenerateRequestId"));
   }
   if (!isUuidChannel(uuid)) {
-    reject(500, "无法生成安全请求标识");
+    reject(500, gt("uiCoverage.connection.cannotGenerateRequestId"));
   }
   return uuid;
 }
 
 function abortError(): Error {
-  const err = new Error("请求已取消");
+  const err = new Error(gt("uiCoverage.connection.cancelled"));
   err.name = "AbortError";
   return err;
 }
@@ -123,21 +124,21 @@ const CAPABILITY_KEYS = [
 ] as const;
 
 function parseUi(data: unknown): DelegatedUi {
-  if (!isPlainObject(data)) reject(502, "父站点返回的界面元数据无效");
+  if (!isPlainObject(data)) reject(502, gt("uiCoverage.connection.invalidUiMetadata"));
   const { profile, capabilities, models, project } = data;
-  if (!isPlainObject(capabilities)) reject(502, "父站点返回的能力清单无效");
+  if (!isPlainObject(capabilities)) reject(502, gt("uiCoverage.connection.invalidCapabilities"));
   for (const key of CAPABILITY_KEYS) {
     if (typeof capabilities[key] !== "boolean") {
-      reject(502, `父站点返回的能力 ${key} 无效`);
+      reject(502, gt("uiCoverage.connection.capabilityInvalid", { key }));
     }
   }
   if (!isPlainObject(models) || !Array.isArray(models.models) || typeof models.default !== "string" || !models.default) {
-    reject(502, "父站点返回的模型清单无效");
+    reject(502, gt("uiCoverage.connection.invalidModels"));
   }
   for (const m of models.models) {
-    if (!isPlainObject(m) || typeof m.id !== "string") reject(502, "父站点返回的模型条目无效");
+    if (!isPlainObject(m) || typeof m.id !== "string") reject(502, gt("uiCoverage.connection.invalidModel"));
   }
-  if (typeof project !== "string" || !project) reject(502, "父站点返回的项目标识无效");
+  if (typeof project !== "string" || !project) reject(502, gt("uiCoverage.connection.invalidProject"));
   return {
     profile,
     capabilities: capabilities as unknown as DelegatedCapabilities,
@@ -147,16 +148,16 @@ function parseUi(data: unknown): DelegatedUi {
 }
 
 function parseCatalogSession(value: unknown): DelegatedCatalogSession {
-  if (!isPlainObject(value)) reject(502, "父站点返回的会话无效");
+  if (!isPlainObject(value)) reject(502, gt("uiCoverage.connection.invalidConversation"));
   const { id, title, state, created_at, updated_at } = value;
-  if (typeof id !== "string" || !SID_RE.test(id)) reject(502, "父站点返回的会话标识无效");
-  if (typeof title !== "string") reject(502, "父站点返回的会话标题无效");
-  if (typeof state !== "string" || !state) reject(502, "父站点返回的会话状态无效");
+  if (typeof id !== "string" || !SID_RE.test(id)) reject(502, gt("uiCoverage.connection.invalidConversationId"));
+  if (typeof title !== "string") reject(502, gt("uiCoverage.connection.invalidConversationTitle"));
+  if (typeof state !== "string" || !state) reject(502, gt("uiCoverage.connection.invalidConversationState"));
   if (typeof created_at !== "number" || !Number.isFinite(created_at) || created_at < 0) {
-    reject(502, "父站点返回的会话时间无效");
+    reject(502, gt("uiCoverage.connection.invalidConversationTime"));
   }
   if (typeof updated_at !== "number" || !Number.isFinite(updated_at) || updated_at < 0) {
-    reject(502, "父站点返回的会话时间无效");
+    reject(502, gt("uiCoverage.connection.invalidConversationTime"));
   }
   return { id, title, state, created_at, updated_at };
 }
@@ -234,24 +235,24 @@ async function loadParentOrigins(): Promise<string[]> {
   try {
     res = await fetch("/embed/config", { headers: {}, credentials: "same-origin" });
   } catch {
-    return reject(502, "无法获取嵌入配置");
+    return reject(502, gt("uiCoverage.connection.embedConfigFetchFailed"));
   }
-  if (!res.ok) return reject(502, `嵌入配置不可用（${res.status}）`);
+  if (!res.ok) return reject(502, gt("uiCoverage.connection.embedConfigUnavailable", { status: res.status }));
   let data: unknown;
   try {
     data = await res.json();
   } catch {
-    return reject(502, "嵌入配置格式无效");
+    return reject(502, gt("uiCoverage.connection.invalidEmbedConfig"));
   }
   const origins = isPlainObject(data) ? data.parent_origins : undefined;
-  if (!Array.isArray(origins) || origins.length === 0) return reject(502, "嵌入配置缺少父站点");
+  if (!Array.isArray(origins) || origins.length === 0) return reject(502, gt("uiCoverage.connection.missingParentOrigin"));
   for (const origin of origins) {
-    if (typeof origin !== "string" || !origin) return reject(502, "嵌入配置的父站点无效");
+    if (typeof origin !== "string" || !origin) return reject(502, gt("uiCoverage.connection.invalidParentOrigin"));
     let parsed: URL;
     try {
       parsed = new URL(origin);
     } catch {
-      return reject(502, "嵌入配置的父站点无效");
+      return reject(502, gt("uiCoverage.connection.invalidParentOrigin"));
     }
     if (
       (parsed.protocol !== "https:" && parsed.protocol !== "http:") ||
@@ -260,7 +261,7 @@ async function loadParentOrigins(): Promise<string[]> {
       parsed.search ||
       parsed.hash
     ) {
-      return reject(502, "嵌入配置的父站点必须是精确 origin");
+      return reject(502, gt("uiCoverage.connection.exactParentOrigin"));
     }
   }
   return origins;
@@ -296,7 +297,7 @@ function toRpcFailure(data: Record<string, unknown>): DelegatedError {
   const status = typeof data.status === "number" && Number.isInteger(data.status) && data.status >= 400 && data.status <= 599
     ? data.status
     : 502;
-  const message = typeof data.error === "string" && data.error ? data.error : "父站点请求失败";
+  const message = typeof data.error === "string" && data.error ? data.error : gt("uiCoverage.connection.parentRequestFailed");
   return new DelegatedError(message, status);
 }
 
@@ -344,12 +345,12 @@ function handleEvent(event: MessageEvent): void {
 function performHandshake(): Promise<Handshake> {
   return new Promise<Handshake>((resolve, rejectPromise) => {
     if (disposed) {
-      rejectPromise(new DelegatedError("嵌入通道已关闭", 503));
+      rejectPromise(new DelegatedError(gt("uiCoverage.connection.connectionClosed"), 503));
       return;
     }
     const win = hostWindow();
     if (win.parent === win) {
-      rejectPromise(new DelegatedError("当前页面不在 iframe 中", 503));
+      rejectPromise(new DelegatedError(gt("uiCoverage.connection.notEmbedded"), 503));
       return;
     }
     initResolved = (hs) => resolve(hs);
@@ -363,13 +364,13 @@ function performHandshake(): Promise<Handshake> {
     win.addEventListener("message", messageListener);
     win.addEventListener("pagehide", pagehideListener);
     handshakeTimer = setTimeout(() => {
-      initFailed?.(new DelegatedError("等待父页面握手超时", 504));
+      initFailed?.(new DelegatedError(gt("uiCoverage.connection.handshakeTimedOut"), 504));
     }, HANDSHAKE_TIMEOUT_MS);
   });
 }
 
 async function ensureReady(): Promise<Handshake> {
-  if (disposed) reject(503, "嵌入通道已关闭");
+  if (disposed) reject(503, gt("uiCoverage.connection.connectionClosed"));
   if (ready) return ready;
   if (allowedOrigins === null) allowedOrigins = await loadParentOrigins();
   if (!handshakePromise) {
@@ -386,21 +387,21 @@ async function ensureReady(): Promise<Handshake> {
 function validateRpcParams(action: RpcAction, params: Record<string, unknown>): void {
   const fields = RPC_FIELDS[action];
   for (const [key, value] of Object.entries(params)) {
-    if (!fields.includes(key)) reject(400, `嵌入请求不支持字段 ${key}`);
+    if (!fields.includes(key)) reject(400, gt("uiCoverage.connection.unsupportedField", { key }));
     if (key === "from") {
       if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
-        reject(400, "事件序号必须是非负整数");
+        reject(400, gt("uiCoverage.connection.eventSequenceInvalid"));
       }
       continue;
     }
-    if (typeof value !== "string" || !value.length) reject(400, `嵌入请求字段 ${key} 无效`);
-    if (key === "sid" && !SID_RE.test(value)) reject(400, "会话标识无效");
-    if (key === "text" && value.length > 65_536) reject(400, "消息内容过长");
-    if (key === "title" && value.length > 400) reject(400, "会话标题过长");
-    if (key === "clientId" && value.length > 128) reject(400, "客户端标识过长");
+    if (typeof value !== "string" || !value.length) reject(400, gt("uiCoverage.connection.invalidField", { key }));
+    if (key === "sid" && !SID_RE.test(value)) reject(400, gt("uiCoverage.connection.conversationIdInvalid"));
+    if (key === "text" && value.length > 65_536) reject(400, gt("uiCoverage.connection.messageTooLong"));
+    if (key === "title" && value.length > 400) reject(400, gt("uiCoverage.connection.conversationTitleTooLong"));
+    if (key === "clientId" && value.length > 128) reject(400, gt("uiCoverage.connection.clientIdTooLong"));
   }
   for (const key of RPC_REQUIRED[action]) {
-    if (!(key in params)) reject(400, `嵌入请求缺少字段 ${key}`);
+    if (!(key in params)) reject(400, gt("uiCoverage.connection.missingField", { key }));
   }
 }
 
@@ -409,7 +410,7 @@ function rpc<T>(action: RpcAction, params: Record<string, unknown>, signal?: Abo
     (hs) =>
       new Promise<T>((resolve, rejectPromise) => {
         if (disposed) {
-          rejectPromise(new DelegatedError("嵌入通道已关闭", 503));
+          rejectPromise(new DelegatedError(gt("uiCoverage.connection.connectionClosed"), 503));
           return;
         }
         if (signal?.aborted) {
@@ -417,7 +418,7 @@ function rpc<T>(action: RpcAction, params: Record<string, unknown>, signal?: Abo
           return;
         }
         if (pending.size >= MAX_PENDING_RPC) {
-          rejectPromise(new DelegatedError("请求过多，请稍后再试", 429));
+          rejectPromise(new DelegatedError(gt("uiCoverage.connection.rateLimited"), 429));
           return;
         }
         validateRpcParams(action, params);
@@ -436,7 +437,7 @@ function rpc<T>(action: RpcAction, params: Record<string, unknown>, signal?: Abo
         const onAbort = () => entry.reject(abortError());
         signal?.addEventListener("abort", onAbort, { once: true });
         entry.timer = setTimeout(() => {
-          entry.reject(new DelegatedError("请求超时，请稍后重试", 504));
+          entry.reject(new DelegatedError(gt("uiCoverage.connection.requestTimedOut"), 504));
         }, RPC_TIMEOUT_MS);
         pending.set(id, entry);
         try {
@@ -445,7 +446,7 @@ function rpc<T>(action: RpcAction, params: Record<string, unknown>, signal?: Abo
             hs.origin,
           );
         } catch {
-          entry.reject(new DelegatedError("无法向父页面发送请求", 502));
+          entry.reject(new DelegatedError(gt("uiCoverage.connection.parentSendFailed"), 502));
         }
       }),
   ) as Promise<T>;
@@ -464,11 +465,11 @@ export function disposeDelegatedBridge(): void {
   detachBridgeListeners();
   for (const entry of pending.values()) {
     if (entry.timer !== null) clearTimeout(entry.timer);
-    entry.reject(new DelegatedError("嵌入通道已关闭", 503));
+    entry.reject(new DelegatedError(gt("uiCoverage.connection.connectionClosed"), 503));
   }
   pending.clear();
   handshakePromise = null;
-  fail?.(new DelegatedError("嵌入通道已关闭", 503));
+  fail?.(new DelegatedError(gt("uiCoverage.connection.connectionClosed"), 503));
 }
 
 /** The real /v1/ui metadata, fetched once over the bridge and cached. Only
@@ -488,7 +489,7 @@ export async function delegatedUpdates(
   if (from !== undefined) params.from = from;
   const data = await rpc<{ events?: unknown }>("updates", params, signal);
   if (!isPlainObject(data) || !Array.isArray(data.events)) {
-    reject(502, "父站点返回的事件批次无效");
+    reject(502, gt("uiCoverage.connection.invalidEventBatch"));
   }
   return { events: data.events as AgentEvent[] };
 }
@@ -504,12 +505,12 @@ function splitLegacyPath(path: string): { pathname: string; query: URLSearchPara
 }
 
 function requireObject(body: unknown, what: string): Record<string, unknown> {
-  if (!isPlainObject(body)) reject(400, `${what}请求体无效`);
+  if (!isPlainObject(body)) reject(400, gt("uiCoverage.connection.invalidBody", { what }));
   return body;
 }
 
 function requireString(value: unknown, what: string, max: number): string {
-  if (typeof value !== "string" || !value.trim() || value.length > max) reject(400, `${what}无效`);
+  if (typeof value !== "string" || !value.trim() || value.length > max) reject(400, gt("uiCoverage.connection.invalidValue", { what }));
   return value;
 }
 
@@ -536,7 +537,7 @@ export async function delegatedRequest<T>(
   signal?: AbortSignal,
 ): Promise<T> {
   const split = splitLegacyPath(path);
-  if (!split) reject(403, `嵌入模式不支持请求 ${path}`);
+  if (!split) reject(403, gt("uiCoverage.connection.unsupportedPath", { path }));
   const { pathname, query } = split;
 
   if (method === "GET" && pathname === "/api/auth/status") {
@@ -554,7 +555,7 @@ export async function delegatedRequest<T>(
       getDelegatedUi(signal),
       rpc<{ items?: unknown }>("list", {}, signal),
     ]);
-    if (!isPlainObject(list) || !Array.isArray(list.items)) reject(502, "父站点返回的会话清单无效");
+    if (!isPlainObject(list) || !Array.isArray(list.items)) reject(502, gt("uiCoverage.connection.invalidConversationList"));
     const sessions = list.items.map((item) => toSessionInfo(parseCatalogSession(item), ui.project));
     return { sessions, cwd: ui.project } as T;
   }
@@ -565,14 +566,14 @@ export async function delegatedRequest<T>(
     let limit = 20;
     if (limitRaw !== null) {
       const n = Number(limitRaw);
-      if (!Number.isSafeInteger(n) || n < 1 || n > 200) reject(400, "搜索数量限制无效");
+      if (!Number.isSafeInteger(n) || n < 1 || n > 200) reject(400, gt("uiCoverage.connection.searchLimitInvalid"));
       limit = n;
     }
     const [ui, list] = await Promise.all([
       getDelegatedUi(signal),
       rpc<{ items?: unknown }>("list", {}, signal),
     ]);
-    if (!isPlainObject(list) || !Array.isArray(list.items)) reject(502, "父站点返回的会话清单无效");
+    if (!isPlainObject(list) || !Array.isArray(list.items)) reject(502, gt("uiCoverage.connection.invalidConversationList"));
     const needle = q.trim().toLowerCase();
     const hits: SessionHit[] = list.items
       .map((item) => parseCatalogSession(item))
@@ -583,16 +584,16 @@ export async function delegatedRequest<T>(
   }
 
   if (method === "POST" && pathname === "/api/sessions") {
-    const input = body === undefined ? {} : requireObject(body, "创建会话");
+    const input = body === undefined ? {} : requireObject(body, gt("uiCoverage.connection.createConversation"));
     for (const key of Object.keys(input)) {
       if (key !== "model" && key !== "workspace" && key !== "title") {
-        reject(403, `嵌入模式不支持会话选项 ${key}`);
+        reject(403, gt("uiCoverage.connection.unsupportedConversationOption", { key }));
       }
     }
-    if (input.model !== undefined && input.model !== null) reject(403, "嵌入模式不能指定模型");
-    if (input.workspace !== undefined && input.workspace !== null) reject(403, "嵌入模式不能指定工作区");
+    if (input.model !== undefined && input.model !== null) reject(403, gt("uiCoverage.connection.modelNotAllowed"));
+    if (input.workspace !== undefined && input.workspace !== null) reject(403, gt("uiCoverage.connection.workspaceNotAllowed"));
     const params: Record<string, unknown> = {};
-    if (input.title !== undefined) params.title = requireString(input.title, "会话标题", 400);
+    if (input.title !== undefined) params.title = requireString(input.title, gt("uiCoverage.connection.conversationTitle"), 400);
     const [ui, created] = await Promise.all([
       getDelegatedUi(signal),
       rpc<unknown>("create", params, signal),
@@ -612,19 +613,19 @@ export async function delegatedRequest<T>(
   if (sid !== null) {
     if (method === "GET") {
       const data = await rpc<{ session?: unknown; snapshot?: unknown }>("get", { sid }, signal);
-      if (!isPlainObject(data)) reject(502, "父站点返回的会话详情无效");
+      if (!isPlainObject(data)) reject(502, gt("uiCoverage.connection.invalidConversationDetails"));
       const cs = parseCatalogSession(data.session);
-      if (cs.id !== sid) reject(502, "父站点返回了错误的会话");
-      if (!isPlainObject(data.snapshot)) reject(502, "父站点返回的快照无效");
+      if (cs.id !== sid) reject(502, gt("uiCoverage.connection.wrongConversation"));
+      if (!isPlainObject(data.snapshot)) reject(502, gt("uiCoverage.connection.invalidSnapshot"));
       return { session_id: cs.id, snapshot: data.snapshot as unknown as Snapshot } as T;
     }
     if (method === "PATCH") {
-      const patch = requireObject(body, "更新会话");
+      const patch = requireObject(body, gt("uiCoverage.connection.updateConversation"));
       for (const key of Object.keys(patch)) {
-        if (key !== "title" && key !== "pinned") reject(403, `嵌入模式不支持会话字段 ${key}`);
+        if (key !== "title" && key !== "pinned") reject(403, gt("uiCoverage.connection.unsupportedConversationField", { key }));
       }
-      if (patch.pinned !== undefined) reject(403, "嵌入模式不支持置顶会话");
-      const title = requireString(patch.title, "会话标题", 400);
+      if (patch.pinned !== undefined) reject(403, gt("uiCoverage.connection.pinNotAllowed"));
+      const title = requireString(patch.title, gt("uiCoverage.connection.conversationTitle"), 400);
       await rpc("rename", { sid, title }, signal);
       return undefined as T;
     }
@@ -636,20 +637,20 @@ export async function delegatedRequest<T>(
 
   const messageSid = sessionSubPath(pathname, "messages");
   if (messageSid !== null && method === "POST") {
-    const input = requireObject(body, "发送消息");
+    const input = requireObject(body, gt("uiCoverage.connection.sendMessage"));
     for (const key of Object.keys(input)) {
       if (key !== "prompt" && key !== "attachments" && key !== "client_id") {
-        reject(403, `嵌入模式不支持消息字段 ${key}`);
+        reject(403, gt("uiCoverage.connection.unsupportedMessageField", { key }));
       }
     }
     const attachments = input.attachments;
     if (attachments !== undefined && (!Array.isArray(attachments) || attachments.length > 0)) {
-      reject(403, "嵌入模式未开放附件");
+      reject(403, gt("uiCoverage.connection.attachmentsNotAllowed"));
     }
-    const text = requireString(input.prompt, "消息内容", 65_536);
+    const text = requireString(input.prompt, gt("uiCoverage.connection.messageContent"), 65_536);
     const params: Record<string, unknown> = { sid: messageSid, text };
     if (input.client_id !== undefined) {
-      const clientId = requireString(input.client_id, "客户端标识", 128);
+      const clientId = requireString(input.client_id, gt("uiCoverage.connection.clientId"), 128);
       params.clientId = clientId;
     }
     const data = await rpc<{ session_id?: unknown; run_id?: unknown }>("message", params, signal);
@@ -659,21 +660,21 @@ export async function delegatedRequest<T>(
       data.session_id !== messageSid ||
       typeof data.run_id !== "string"
     ) {
-      reject(502, "父站点返回的消息回执无效");
+      reject(502, gt("uiCoverage.connection.invalidMessageReceipt"));
     }
     return { run_id: data.run_id } as T;
   }
 
   const controlSid = sessionSubPath(pathname, "control");
   if (controlSid !== null && method === "POST") {
-    const input = requireObject(body, "会话控制");
+    const input = requireObject(body, gt("uiCoverage.connection.conversationControl"));
     for (const key of Object.keys(input)) {
-      if (key !== "action") reject(403, `嵌入模式不支持控制字段 ${key}`);
+      if (key !== "action") reject(403, gt("uiCoverage.connection.unsupportedControlField", { key }));
     }
-    if (input.action !== "cancel") reject(403, `嵌入模式不支持控制操作 ${String(input.action)}`);
+    if (input.action !== "cancel") reject(403, gt("uiCoverage.connection.unsupportedControlAction", { action: String(input.action) }));
     const data = await rpc<{ cancelled?: unknown }>("cancel", { sid: controlSid }, signal);
     return { cancelled: isPlainObject(data) && data.cancelled === true } as T;
   }
 
-  reject(403, `嵌入模式不支持请求 ${method} ${path}`);
+  reject(403, gt("uiCoverage.connection.unsupportedRequest", { method, path }));
 }

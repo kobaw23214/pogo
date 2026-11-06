@@ -162,12 +162,15 @@ func (b *Browser) validateCapabilities(raw json.RawMessage, inBatch bool) error 
 		if tab || context || epoch {
 			var binding BrowserPageBinding
 			if !tab || !context || !epoch || json.Unmarshal(raw, &binding) != nil || !validBrowserPageBinding(binding) {
-				return fmt.Errorf("browser %s: tab_id/context_ref/control_epoch must be supplied together from the same fresh Agent-owned page", action)
+				return fmt.Errorf("browser %s: tab_id/context_ref/control_epoch must be supplied together from the same fresh Agent-owned page; call tabs, then copy all three fields from one Agent-controlled row. Do not drop a chosen binding to bypass a control change", action)
 			}
 		}
 	}
 	for name, value := range fields {
 		if !allowed[name] {
+			if action == BrowserActionClick && (name == "name" || name == "role" || name == "label" || name == "text" || name == "placeholder" || name == "testid") {
+				return fmt.Errorf("browser click: field %q is not supported; use find with the observed name/role/text/label/placeholder/testid first, then click the returned target ref on the same page. Click does not accept locator fields directly", name)
+			}
 			return fmt.Errorf("browser %s: field %q is not supported; use the declared action fields", action, name)
 		}
 		if string(value) == "null" {

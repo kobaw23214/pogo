@@ -19,7 +19,7 @@ vi.mock("vue", async original => ({
   inject: (key: unknown, fallback: unknown) => typeof key === "symbol" && key.description === "agentWorkflowRunStatus" ? host.overview || fallback : host.updates || fallback,
   useSSRContext: () => ({ modules: new Set() }),
 }));
-vi.mock("vue-i18n", () => ({ useI18n: () => ({ t: (key: string) => key, locale: { value: "zh-CN" } }) }));
+vi.mock("vue-i18n", async original => ({ ...await original<typeof import("vue-i18n")>(), useI18n: () => ({ t: (key: string) => key, locale: { value: "zh-CN" } }) }));
 vi.mock("element-plus", () => ({ ElMessageBox: { confirm: host.confirm } }));
 vi.mock("@/api/agentWorkflows", () => ({ agentWorkflowsApi: { list: host.list, call: host.call } }));
 vi.mock("@/agent/useAgentWorkflowActivity", () => ({ useAgentWorkflowActivity: () => ({ snapshot: ref(null), connection: ref('idle'), connected: ref(false), error: ref(''), refresh: vi.fn() }) }));

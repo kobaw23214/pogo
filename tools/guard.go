@@ -9,7 +9,8 @@ import (
 // Guard catches common mistakes in delegated shell commands. It is not an OS
 // sandbox: scripts and external programs can evade command-text checks.
 type Guard struct {
-	Workspace string
+	Workspace  string
+	FileAccess *FileAccess
 }
 
 // deniedEnv are assignments that redirect git regardless of any path check.
@@ -74,7 +75,19 @@ func (g *Guard) CheckDir(resolved, requested string) error {
 // text, and resolving it would answer a question about a different string than the
 // one bash will run.
 func (g *Guard) inside(dir string) bool {
-	return within(filepath.Clean(dir), filepath.Clean(g.Workspace))
+	if within(filepath.Clean(dir), filepath.Clean(g.Workspace)) {
+		return true
+	}
+	roots, err := fileAccessRoots(g.Workspace, nil, g.FileAccess)
+	if err != nil {
+		return false
+	}
+	for _, root := range roots {
+		if within(canonical(dir), canonical(root)) {
+			return true
+		}
+	}
+	return false
 }
 
 // isGit matches the command name whether it was called plainly or by path.

@@ -14,7 +14,7 @@ interface MetadataProvider {
 // Provider and model props are read-only inputs. Detection owns only ephemeral
 // query/results state and has no settings mutation or save events.
 const props = defineProps<{ provider: MetadataProvider; model: string }>();
-const { t } = useI18n();
+const { t, locale } = useI18n();
 const preset = ref<ModelMetadataPreset>("vllm"), queryModel = ref("");
 const busy = ref(false), result = ref<ConfigProbeResult | null>(null), error = ref("");
 let disposed = false, sequence = 0, controller: AbortController | undefined;
@@ -91,7 +91,7 @@ defineExpose({ send, copy, busy, canSend });
       <header><strong>{{ result.ok ? t('modelMetadata.received') : t('settingsDialog.probeFailed') }}</strong><span>{{ result.status_text || result.status }}</span><small v-if="result.elapsed_ms !== undefined">{{ result.elapsed_ms }} ms</small></header>
       <p v-if="result.error" class="metadata-error">{{ result.error }}</p>
       <p v-if="result.truncated" class="metadata-hint" role="status">{{ t('modelMetadata.truncated') }}</p>
-      <div v-if="detected.rows.length" class="metadata-table-wrap"><table><thead><tr><th>{{ t('modelMetadata.model') }}</th><th>{{ t('modelMetadata.context') }}</th><th>{{ t('modelMetadata.output') }}</th><th>{{ t('modelMetadata.source') }}</th></tr></thead><tbody><tr v-for="(row, index) in detected.rows" :key="index"><td>{{ row.model || (preset === 'ollama-show' ? queryModel : model) }}</td><td>{{ row.contextWindow === undefined ? '—' : row.contextWindow.toLocaleString() }}</td><td>{{ row.maxOutputTokens === undefined ? '—' : row.maxOutputTokens.toLocaleString() }}</td><td><span>{{ t(`modelMetadata.kinds.${row.kind}`) }}</span><code>{{ row.source }}</code></td></tr></tbody></table></div>
+      <div v-if="detected.rows.length" class="metadata-table-wrap"><table><thead><tr><th>{{ t('modelMetadata.model') }}</th><th>{{ t('modelMetadata.context') }}</th><th>{{ t('modelMetadata.output') }}</th><th>{{ t('modelMetadata.source') }}</th></tr></thead><tbody><tr v-for="(row, index) in detected.rows" :key="index"><td>{{ row.model || (preset === 'ollama-show' ? queryModel : model) }}</td><td>{{ row.contextWindow === undefined ? '—' : row.contextWindow.toLocaleString(locale) }}</td><td>{{ row.maxOutputTokens === undefined ? '—' : row.maxOutputTokens.toLocaleString(locale) }}</td><td><span>{{ t(`modelMetadata.kinds.${row.kind}`) }}</span><code>{{ row.source }}</code></td></tr></tbody></table></div>
       <p v-if="showUnknown" class="metadata-hint">{{ t(detected.validJSON ? 'modelMetadata.unknown' : 'modelMetadata.notJSON') }}</p>
       <details v-if="prettyBody" class="metadata-raw" :open="!result.ok || !detected.rows.length"><summary>{{ t('modelMetadata.raw') }}</summary><pre>{{ prettyBody }}</pre></details>
     </section>

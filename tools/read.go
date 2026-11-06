@@ -15,7 +15,8 @@ type Read struct {
 	Cwd string
 	// Roots are extra directories this tool may read outside Cwd, already
 	// canonical. See tools.CanonicalRoots.
-	Roots []string
+	Roots      []string
+	FileAccess *FileAccess
 
 	// skillReads maps the canonical path of each registered skill's
 	// SKILL.md to its trusted identity, injected by whoever loaded the
@@ -171,6 +172,14 @@ func (t *Read) Execute(ctx context.Context, raw json.RawMessage) (Result, error)
 	if err != nil {
 		return Result{}, err
 	}
+	roots, err := fileAccessRoots(t.Cwd, t.Roots, t.FileAccess)
+	if err != nil {
+		return Result{}, err
+	}
+	// All targets in a multi-read share the access decision taken at dispatch.
+	local := *t
+	local.Roots = roots
+	t = &local
 	// One file keeps the original path exactly, Details included, because that is
 	// what the web UI's ReadResult renders and what the overwhelming majority of
 	// calls are.

@@ -115,6 +115,41 @@ func studioBody(v any) string {
 	return string(b)
 }
 
+func TestStudioConversationApprovalMode(t *testing.T) {
+	h, _ := newStudioHarness(t, nil)
+	a := createStudioAgent(t, h, "approval mode", "", "ready")
+	for _, tc := range []struct {
+		body string
+		want Mode
+	}{
+		{body: `{}`, want: ModeStandard},
+		{body: `{"approval_mode":"standard"}`, want: ModeStandard},
+		{body: `{"approval_mode":"strict"}`, want: ModeStrict},
+		{body: `{"approval_mode":"auto"}`, want: ModeAuto},
+	} {
+		resp := h.do(http.MethodPost, "/api/apps/"+a.ID+"/sessions", tc.body)
+		var out struct {
+			ID string `json:"id"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+			resp.Body.Close()
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusCreated {
+			t.Fatalf("create %s: status %d", tc.body, resp.StatusCode)
+		}
+		if got := h.session(out.ID).policy.State().Mode; got != string(tc.want) {
+			t.Fatalf("create %s: policy = %q, want %q", tc.body, got, tc.want)
+		}
+	}
+	resp := h.do(http.MethodPost, "/api/apps/"+a.ID+"/sessions", `{"approval_mode":"full"}`)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("invalid approval mode: status %d, want %d", resp.StatusCode, http.StatusBadRequest)
+	}
+}
+
 func TestStudioMaxReasoningIsPerAgentAndModel(t *testing.T) {
 	for _, model := range []string{"k3", "kimi-k3", "GLM-5.3"} {
 		t.Run(model, func(t *testing.T) {

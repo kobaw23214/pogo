@@ -7,6 +7,7 @@ import { chromium } from 'playwright';
 import { LineRPC, connectRPC } from './wayland-rpc.js';
 import { HTTPError } from './session.js';
 import { MEDIA_DEVICE_SCALE_FACTORS } from './media-config.js';
+import { gatewayChromeArguments } from './gateway-config.js';
 import { connectNativeBootstrap } from './native-bootstrap.js';
 import { BrowserDownloads } from './downloads.js';
 import { isNavigationContextError, navigationObservationError } from './navigation-recovery.js';
@@ -72,6 +73,7 @@ export function waylandCaptureScale(viewport, preferred = 1.5, maximum = 2) {
 // or a hidden alternate browser. Only the worker owns process/IPC capabilities.
 export class WaylandRuntime {
   constructor(config, { python = process.env.POGO_WAYLAND_PYTHON || '/opt/wl/bin/python3', stream = process.env.POGO_WAYLAND_STREAM || '/opt/pogo/bin/pogo-wlstream', scale = 1.5, sandbox = true, onFailure } = {}) {
+    this.gatewayChromeArgs = gatewayChromeArguments();
     this.maxScale = config.deviceScaleFactor ?? 2;
     this.config = config; this.python = python; this.stream = stream; this.scale = waylandCaptureScale({ width: 1280, height: 800 }, scale, this.maxScale); this.sandbox = sandbox;
     this.onFailure = onFailure;
@@ -148,6 +150,7 @@ export class WaylandSessionHost {
       '--force-color-profile=srgb', '--mute-audio', '--site-per-process',
       '--blink-settings=primaryHoverType=2,availableHoverTypes=2,primaryPointerType=4,availablePointerTypes=4',
       ...(!runtime.sandbox ? ['--no-sandbox'] : []),
+      ...(runtime.gatewayChromeArgs ?? []),
     ];
   }
   async start() {

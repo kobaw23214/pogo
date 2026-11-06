@@ -7,7 +7,7 @@ import { authHeaders } from "@/api/client";
 import { randomUUID } from "@/utils/uuid";
 const props = defineProps<{ path: string; conversationId: string }>();
 const emit = defineEmits<{ edit: []; claimed: [value: { claim: OfficeOpen; instanceId: string }]; refresh: []; openCopy: [path: string] }>();
-const { t } = useI18n();
+const { t, locale } = useI18n();
 const access = ref<OfficeAccess | null>(null);
 const failure = ref("");
 const busy = ref(false);
@@ -25,7 +25,7 @@ const resetTitle = computed(() => resetDialogAccess.value?.writer?.title || prop
 const resetConnection = computed(() => t(`officeEditor.access.resetConnection.${resetDialogAccess.value?.access.state || "unconfirmed"}`));
 const resetLastSaved = computed(() => {
   const value = resetDialogAccess.value?.writer?.savedAt;
-  return value ? new Date(value).toLocaleString() : t("officeEditor.access.resetSaveUnknown");
+  return value ? new Date(value).toLocaleString(locale.value) : t("officeEditor.access.resetSaveUnknown");
 });
 let takeoverAttempt: { access: OfficeAccess; instanceId: string; generation: number; path: string; conversationId: string } | null = null;
 let savedCopyAttempt: { version: string; operationId: string } | null = null;
@@ -174,7 +174,7 @@ onBeforeUnmount(() => { resetDialogOpen.value = false; resetDialogAccess.value =
 
 <template>
   <aside class="office-access-panel" :data-access-state="state" aria-live="polite">
-    <div class="access-copy"><strong>{{ t('officeEditor.access.viewing') }}</strong><span>{{ description }}</span><small v-if="access?.writer?.savedAt">{{ t('officeEditor.access.savedAt', { time: new Date(access.writer.savedAt).toLocaleString() }) }}</small></div>
+    <div class="access-copy"><strong>{{ t('officeEditor.access.viewing') }}</strong><span>{{ description }}</span><small v-if="access?.writer?.savedAt">{{ t('officeEditor.access.savedAt', { time: new Date(access.writer.savedAt).toLocaleString(locale) }) }}</small></div>
     <div class="access-actions">
       <button type="button" class="access-button" :disabled="busy || checking" @click="refresh(); emit('refresh')">{{ t('officeEditor.access.refresh') }}</button>
       <button v-if="access?.access.canRecover" type="button" class="access-button" :disabled="busy || checking || resetUnconfirmed" @click="recover(false)">{{ t('officeEditor.access.recover') }}</button>
@@ -185,7 +185,7 @@ onBeforeUnmount(() => { resetDialogOpen.value = false; resetDialogAccess.value =
     </div>
     <p v-if="failure" class="access-error" role="alert">{{ failure }}</p>
     <p v-if="access?.writer?.recoveryCopy?.error" class="access-error">{{ access.writer.recoveryCopy.error }}</p>
-    <details v-if="copies.length" class="recovery-copies"><summary>{{ t('officeEditor.access.copies', { count: copies.length }) }}</summary><p>{{ t('officeEditor.access.copyHelp') }}</p><button v-for="copy in copies" :key="copy.id" type="button" class="copy-download" :disabled="busy" @click="download(copy)">{{ copy.title }} · {{ new Date(copy.createdAt).toLocaleString() }}<span v-if="copy.source === 'forgotten'"> · {{ t('officeEditor.access.retainedSnapshot') }}</span> ↓</button></details>
+    <details v-if="copies.length" class="recovery-copies"><summary>{{ t('officeEditor.access.copies', { count: copies.length }) }}</summary><p>{{ t('officeEditor.access.copyHelp') }}</p><button v-for="copy in copies" :key="copy.id" type="button" class="copy-download" :disabled="busy" @click="download(copy)">{{ copy.title }} · {{ new Date(copy.createdAt).toLocaleString(locale) }}<span v-if="copy.source === 'forgotten'"> · {{ t('officeEditor.access.retainedSnapshot') }}</span> ↓</button></details>
   </aside>
   <el-dialog :model-value="resetDialogOpen" :title="t('officeEditor.access.resetTitle')" width="min(500px, calc(100vw - 32px))" append-to-body :close-on-click-modal="false" :close-on-press-escape="!busy" :show-close="!busy" @update:model-value="(open: boolean) => { if (!open) cancelReset(); }" data-testid="office-clear-occupancy-dialog">
     <dl class="reset-document">

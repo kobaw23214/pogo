@@ -301,7 +301,7 @@ func (m *Manager) replaceBrowserBookmarks(owner *identity.Scope, revision int64,
 	if err != nil || encoded.Len() > browserBookmarksMaxBody {
 		return browserBookmarkView{}, errors.New("bookmark set exceeds the storage limit")
 	}
-	if err := writeWorkflowFileAtomic(path, encoded.Bytes()); err != nil {
+	if err := writePrivateFileAtomic(path, encoded.Bytes()); err != nil {
 		return browserBookmarkView{}, errors.New("bookmarks could not be saved; the previous revision has been preserved")
 	}
 	return bookmarkScopedView(browserBookmarkView{Source: "pogo_bookmarks", Scope: "account", ObservationScope: "pogo_workspace", AccountID: current.AccountID, Status: "ready", Revision: revision + 1, Bookmarks: entries, Total: len(entries), Matched: len(entries)}, agentID, owner), nil

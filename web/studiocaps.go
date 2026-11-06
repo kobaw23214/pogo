@@ -151,7 +151,11 @@ func (m *Manager) validateStudioRefs(in *studioInput) error {
 			}
 		}
 		seenNames := map[string]bool{}
+		retired := m.retiredPlatformSkillIDs()
 		for _, id := range *in.Skills {
+			if retired[id] {
+				continue
+			} // Compatibility only; never registered for execution.
 			sk, ok := known[id]
 			if !ok {
 				return fmt.Errorf("未知的 Skill：%s", id)
@@ -372,8 +376,8 @@ func (m *Manager) skillCapabilities() ([]any, skillruntime.SelectionCatalog) {
 	return skillEntries, runtimeSkillCatalog
 }
 
-// handleStudioSessionCapabilities reports effective model/Skill/native policies
-// beside the original MCP selection. Legacy definitions (arrays omitted)
+// handleStudioSessionCapabilities reports effective model/Skill/native/MCP
+// policies. Legacy definitions (arrays omitted)
 // resolve against the live global catalog, so a pre-selection conversation
 // keeps answering "everything you have" instead of retroactively reading as
 // "nothing".
@@ -384,6 +388,21 @@ func (s *Server) handleStudioSessionCapabilities(w http.ResponseWriter, r *http.
 		writeErr(w, http.StatusNotFound, ErrNotFound)
 		return
 	}
+	// Loading a dormant conversation reconciles its idle policies. Read the
+	// binding afterwards, under the same lock as the effective runtime, so an
+	// old creation snapshot cannot overwrite the just-applied selection.
+	sess, err := s.mgr.Get(sid)
+	if err != nil {
+		writeErr(w, http.StatusNotFound, ErrNotFound)
+		return
+	}
+	sess.mu.Lock()
+	desired := b.Agent
+	if current, target, err := s.mgr.studio.modelPolicyState(sid); err == nil {
+		b, desired = current, target
+	}
+	privateSkills := slices.Clone(sess.invocationSkills)
+	sess.mu.Unlock()
 	b = b.effectiveSkillBinding()
 	skillIDs := []string{}
 	if b.Agent.Skills != nil {
@@ -395,32 +414,31 @@ func (s *Server) handleStudioSessionCapabilities(w http.ResponseWriter, r *http.
 		sort.Strings(skillIDs)
 	}
 	knownSkills := s.mgr.skillCatalogIDs()
+	retiredSkills := s.mgr.retiredPlatformSkillIDs()
 	skillIDs = slices.DeleteFunc(skillIDs, func(id string) bool {
 		sk, ok := knownSkills[id]
-		return ok && !agentConversationSkill(sk)
+		return retiredSkills[id] || ok && !agentConversationSkill(sk)
 	})
-	mcpNames := []string{}
-	if b.Agent.MCPServers != nil {
-		mcpNames = append(mcpNames, (*b.Agent.MCPServers)...)
-	} else {
+	inheritedMCP := []string{}
+	if b.effectiveMCPServers() == nil {
 		for name, sc := range s.mgr.mcpServerConfigs() {
 			if sc.IsEnabled() {
-				mcpNames = append(mcpNames, name)
+				inheritedMCP = append(inheritedMCP, name)
 			}
 		}
-		sort.Strings(mcpNames)
 	}
+	mcpNames := mcpSelectionNames(b.effectiveMCPServers(), inheritedMCP)
 	toolState, toolSync := s.mgr.effectiveStudioTools(sid, b)
 	// Private instruction Skills live outside the shared Agent definition.
 	// Report the captured effective set, including the old version while busy.
-	if sess, err := s.mgr.Get(sid); err == nil {
-		sess.mu.Lock()
-		for _, sk := range sess.invocationSkills {
-			if sk.Source == "authored" && !slices.Contains(skillIDs, skillIDOf(sk)) {
+	var authored []skills.Skill
+	for _, sk := range privateSkills {
+		if sk.Source == "authored" {
+			authored = append(authored, sk)
+			if !slices.Contains(skillIDs, skillIDOf(sk)) {
 				skillIDs = append(skillIDs, skillIDOf(sk))
 			}
 		}
-		sess.mu.Unlock()
 	}
 	toolNames := slices.Clone(toolState.Tools)
 	if !s.browserAllowedRequest(r) {
@@ -436,17 +454,24 @@ func (s *Server) handleStudioSessionCapabilities(w http.ResponseWriter, r *http.
 	w.Header().Set("Cache-Control", "no-store")
 	model, modelList, modelRevision := s.mgr.effectiveStudioModel(sid, b)
 	writeJSON(w, http.StatusOK, map[string]any{
-		"model_sync":             true,
-		"model_revision":         modelRevision,
-		"models":                 modelList,
-		"model":                  model,
-		"skills":                 skillIDs,
-		"mcp_servers":            mcpNames,
-		"tools":                  toolNames,
-		"tools_sync":             toolSync,
-		"tools_revision":         toolState.Revision,
-		"tools_pending":          toolState.Deferred,
-		"tools_desired_revision": toolState.DesiredRevision,
+		"model_sync":              true,
+		"model_revision":          modelRevision,
+		"models":                  modelList,
+		"model":                   model,
+		"skills":                  skillIDs,
+		"skills_revision":         b.skillRevision(),
+		"skills_desired_revision": desired.Revision,
+		"skills_pending":          skillPolicyDiffers(b, withAuthoredSelection(desired, authored)),
+		"mcp_servers":             mcpNames,
+		"mcp_sync":                b.runtime() == studioWebRuntime,
+		"mcp_revision":            b.mcpRevision(),
+		"mcp_desired_revision":    desired.Revision,
+		"mcp_pending":             b.runtime() == studioWebRuntime && mcpPolicyDiffers(b, desired),
+		"tools":                   toolNames,
+		"tools_sync":              toolSync,
+		"tools_revision":          toolState.Revision,
+		"tools_pending":           toolState.Deferred,
+		"tools_desired_revision":  toolState.DesiredRevision,
 	})
 }
 
@@ -555,7 +580,7 @@ func (s *Server) sessionSynthCatalog(list []skills.Skill) []tools.SynthInfo {
 }
 
 // sessionMCPOnly is the MCP half of a conversation's /api/tools view: the
-// pinned Studio selection (nil map meaning the whole pool, a possibly-empty
+// effective Studio selection (nil map meaning the whole pool, a possibly-empty
 // non-nil map meaning exactly those servers), the whole pool for an ordinary
 // session. The visibility rule matches sessionSkillSet's.
 func (s *Server) sessionMCPOnly(r *http.Request, sid string) (map[string]bool, error) {
@@ -563,14 +588,7 @@ func (s *Server) sessionMCPOnly(r *http.Request, sid string) (map[string]bool, e
 		return nil, errCapabilitySession
 	}
 	if b, bound := s.mgr.studio.binding(sid); bound {
-		if b.Agent.MCPServers == nil {
-			return nil, nil
-		}
-		only := make(map[string]bool, len(*b.Agent.MCPServers))
-		for _, name := range *b.Agent.MCPServers {
-			only[name] = true
-		}
-		return only, nil
+		return mcpSelectionOnly(b.effectiveMCPServers()), nil
 	}
 	// An ordinary session has no selection of its own; it still must exist —
 	// a made-up id gets the same closed answer as someone else's.

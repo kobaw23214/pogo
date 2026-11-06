@@ -4,18 +4,11 @@ import { isStudioDestination, isStudioPath, parseStudioRoute, studioAgentId, wor
 describe("Studio entry surfaces", () => {
   it("gives workspace modules their own reloadable locations", () => {
     expect(parseStudioRoute("/manage/")).toEqual({ kind: "manage", section: "agents" });
-    for (const section of ["information", "workflows", "models", "mcp", "skills", "account", "settings"]) {
+    for (const section of ["information", "models", "mcp", "skills", "account", "settings", "memory"]) {
       expect(parseStudioRoute(`/manage/${section}`)).toEqual({ kind: "manage", section });
     }
   });
 
-  it("routes the workflow editor to its own full-screen kind", () => {
-    expect(parseStudioRoute("/manage/workflows/wf_a1b2c3")).toEqual({ kind: "workflow", workflowId: "wf_a1b2c3" });
-    expect(parseStudioRoute("/manage/workflows/wf_a1b2c3/")).toEqual({ kind: "workflow", workflowId: "wf_a1b2c3" });
-    expect(parseStudioRoute("/manage/workflows/")).toEqual({ kind: "manage", section: "workflows" });
-    expect(isStudioDestination("/manage/workflows/wf_a1b2c3")).toBe(true);
-    expect(workbenchRedirect("/manage/workflows/wf_a1b2c3")).toBeNull();
-  });
 
 
   it("distinguishes a managed preview from the published and embedded views", () => {
@@ -47,7 +40,7 @@ describe("Studio entry surfaces", () => {
   });
 
   it("accepts only known local navigation destinations", () => {
-    for (const path of ["/manage", "/manage/settings", "/manage/agents/ag_1/chat?c=s1", "/a/ag_1?embed=1"]) {
+    for (const path of ["/manage", "/manage/settings", "/manage/memory?agent=ag_1", "/manage/agents/ag_1/chat?c=s1", "/a/ag_1?embed=1"]) {
       expect(isStudioDestination(path)).toBe(true);
     }
     for (const path of ["//example.com/a/x", "https://example.com/manage", "javascript:alert(1)", "/manage\\evil", "/manage\n", "/manage/../a/x", "/a/a%2Fx", "/a/x#invalid"]) {

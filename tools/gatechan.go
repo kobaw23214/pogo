@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"sync/atomic"
 )
 
 // EnvGateFD tells a child that an approval channel exists and where it starts.
@@ -37,8 +38,10 @@ type gateRequest struct {
 }
 
 type gateVerdict struct {
-	Allow  bool   `json:"allow"`
-	Reason string `json:"reason,omitempty"`
+	Allow          bool   `json:"allow"`
+	Reason         string `json:"reason,omitempty"`
+	FileAccessRoot string `json:"file_access_root,omitempty"`
+	FullAccess     bool   `json:"full_access,omitempty"`
 }
 
 // wireGate attaches the approval channel to cmd and starts serving it.
@@ -72,6 +75,8 @@ func (s *Subagent) wireGate(cmd *exec.Cmd, subagentID string) (func(), error) {
 	base := 3 + len(cmd.ExtraFiles)
 	cmd.ExtraFiles = append(cmd.ExtraFiles, reqW, verR)
 	cmd.Env = append(cmd.Env, EnvGateFD+"="+strconv.Itoa(base))
+	root, full := fileAccessSnapshot(s.FileAccess, s.Cwd)
+	cmd.Env = fileAccessChildEnv(cmd.Env, root, full)
 
 	done := make(chan struct{})
 	go func() {
@@ -114,7 +119,8 @@ func (s *Subagent) serveGate(req io.Reader, verdicts io.Writer, subagentID strin
 		d := s.Review(context.Background(), Approval{
 			Subagent: subagentID, CallID: q.CallID, Tool: q.Tool, Args: q.Args,
 		})
-		if err := enc.Encode(gateVerdict{Allow: d.Allow, Reason: d.Reason}); err != nil {
+		root, full := fileAccessSnapshot(s.FileAccess, s.Cwd)
+		if err := enc.Encode(gateVerdict{Allow: d.Allow, Reason: d.Reason, FileAccessRoot: root, FullAccess: full}); err != nil {
 			return // the child is gone
 		}
 	}
@@ -126,9 +132,11 @@ func (s *Subagent) serveGate(req io.Reader, verdicts io.Writer, subagentID strin
 // gate to delegate to. Everywhere else it is nil and the child runs exactly as
 // `pogo -p` always has.
 type FDGate struct {
-	requests *os.File
-	verdicts *bufio.Reader
-	enc      *json.Encoder
+	requests   *os.File
+	verdicts   *bufio.Reader
+	enc        *json.Encoder
+	fileAccess *FileAccess
+	fullAccess atomic.Bool
 }
 
 // OpenFDGate returns the child's gate, or nil when this process was not given one.
@@ -143,7 +151,9 @@ func OpenFDGate() *FDGate {
 	if req == nil || ver == nil {
 		return nil
 	}
-	return &FDGate{requests: req, verdicts: bufio.NewReader(ver), enc: json.NewEncoder(req)}
+	g := &FDGate{requests: req, verdicts: bufio.NewReader(ver), enc: json.NewEncoder(req)}
+	g.initFileAccess()
+	return g
 }
 
 // Ask sends one request and waits for the answer.
@@ -153,16 +163,20 @@ func OpenFDGate() *FDGate {
 // is the exact situation the gate exists to prevent.
 func (g *FDGate) Ask(callID, tool string, args json.RawMessage) (allow bool, reason string) {
 	if err := g.enc.Encode(gateRequest{CallID: callID, Tool: tool, Args: args}); err != nil {
+		g.updateFileAccess(nil)
 		return false, "could not reach the parent agent for approval, so this call was refused"
 	}
 	line, err := g.verdicts.ReadString('\n')
 	if err != nil {
+		g.updateFileAccess(nil)
 		return false, "the parent agent did not answer, so this call was refused"
 	}
 	var v gateVerdict
 	if err := json.Unmarshal([]byte(strings.TrimSpace(line)), &v); err != nil {
+		g.updateFileAccess(nil)
 		return false, "the parent agent's answer could not be read, so this call was refused"
 	}
+	g.updateFileAccess(&v)
 	if !v.Allow && v.Reason == "" {
 		v.Reason = "the parent agent refused this call"
 	}

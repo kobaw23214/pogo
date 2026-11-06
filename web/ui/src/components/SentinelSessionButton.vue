@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { getLocale } from "@/i18n";
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { Connection, Refresh } from "@element-plus/icons-vue";
@@ -9,6 +10,7 @@ const emit = defineEmits<{ open: [sentinelId: string, label: string, agentId: st
 const { t } = useI18n();
 const watches = ref<SentinelSessionSummary[]>([]);
 const expanded = ref(false), loading = ref(false), error = ref(false);
+const sortedWatches = computed(() => [...watches.value].sort((a, b) => Number(active(b)) - Number(active(a)) || a.title.localeCompare(b.title, getLocale())));
 let disposed = false, sequence = 0;
 let timer: ReturnType<typeof setTimeout> | undefined, controller: AbortController | undefined;
 const context = () => JSON.stringify([props.parentSession, props.agentId, props.enabled]);
@@ -41,7 +43,7 @@ async function load() {
     if (!value || !Array.isArray(value.watches)) throw new Error("Invalid Sentinel list");
     const unique = new Map<string, SentinelSessionSummary>();
     for (const item of value.watches) if (linked(item)) unique.set(item.id, item);
-    watches.value = [...unique.values()].sort((a, b) => Number(active(b)) - Number(active(a)) || a.title.localeCompare(b.title));
+    watches.value = [...unique.values()].sort((a, b) => Number(active(b)) - Number(active(a)) || a.title.localeCompare(b.title, getLocale()));
     error.value = false;
     if (watches.value.length < 2) expanded.value = false;
   } catch (failure) {
@@ -85,7 +87,7 @@ onBeforeUnmount(() => {
       <header class="sa-heading"><span>{{ t('sentinelAccess.heading') }}</span><button type="button" class="sa-refresh" :disabled="loading" :title="t('sentinelAccess.refresh')" :aria-label="t('sentinelAccess.refresh')" @click="load"><el-icon :class="{ 'is-loading': loading }"><Refresh /></el-icon></button></header>
       <p v-if="error" class="sa-error" role="status">{{ t('sentinelAccess.refreshFailed') }}</p>
       <div class="sa-list">
-        <button v-for="item in watches" :key="item.id" type="button" class="sa-row" :title="item.title" @click="open(item)">
+        <button v-for="item in sortedWatches" :key="item.id" type="button" class="sa-row" :title="item.title" @click="open(item)">
           <span class="sa-dot" :class="{ 'is-active': active(item) }" aria-hidden="true" /><span class="sa-name">{{ item.title }}</span><span class="sa-status">{{ t(`sentinelAccess.state_${state(item)}`) }}</span>
         </button>
       </div>

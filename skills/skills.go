@@ -368,11 +368,6 @@ func (l *loader) loadFile(path, source string) {
 		s.Aliases = []string{"后台任务", "哨兵"}
 		l.byName[name] = s
 	}
-	if source == "embedded" && name == "workflow-authoring" && filepath.Base(dir) == "workflow-authoring" {
-		s := l.byName[name]
-		s.Aliases = []string{"搭建工作流", "工作流搭建"}
-		l.byName[name] = s
-	}
 	if source == "embedded" && name == "agent-workflows" && filepath.Base(dir) == "agent-workflows" {
 		s := l.byName[name]
 		s.Aliases = []string{"内部工作流", "我的工作流"}

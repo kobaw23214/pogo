@@ -9,7 +9,7 @@ vi.mock("vue", async original => ({
   onBeforeUnmount: (fn: () => void) => host.cleanup.push(fn),
   useSSRContext: () => ({ modules: new Set() }),
 }));
-vi.mock("vue-i18n", () => ({ useI18n: () => ({ t: (key: string) => key }) }));
+vi.mock("vue-i18n", async original => ({ ...await original<typeof import("vue-i18n")>(), useI18n: () => ({ t: (key: string) => key }) }));
 vi.mock("@/api/sentinelSessions", () => ({ sentinelSessionsApi: { list: host.list } }));
 import SentinelSessionButton from "./SentinelSessionButton.vue";
 

@@ -86,22 +86,22 @@ function openPage() {
     </button>
     <div v-if="open" class="elcard-body">
       <div class="row">
-        <span class="k">selector</span>
+        <span class="k">{{ t('uiCoverage.element.selector') }}</span>
         <span class="v mono">{{ card.selector }}</span>
       </div>
       <div v-if="card.text" class="row">
-        <span class="k">text</span>
+        <span class="k">{{ t('uiCoverage.element.text') }}</span>
         <span class="v" :class="{ 'authored-quote': authoredText }">{{ card.text }}</span>
       </div>
       <div class="row">
-        <span class="k">page</span>
+        <span class="k">{{ t('uiCoverage.element.page') }}</span>
         <a v-if="pageURL" class="v link" :href="pageURL" target="_blank" rel="noopener" @click.prevent="openPage">
           {{ card.url }} ↗
         </a>
         <span v-else class="v">{{ card.url }}</span>
       </div>
       <div v-if="card.data" class="row">
-        <span class="k">data</span>
+        <span class="k">{{ t('uiCoverage.element.data') }}</span>
         <pre class="v mono data">{{ prettyData }}</pre>
       </div>
       <div v-if="card.html" class="preview" :title="t('agentView.elementCard.preview')">

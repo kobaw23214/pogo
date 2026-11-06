@@ -88,7 +88,7 @@ func (s *Session) onBgComplete(t tools.BgTask, res tools.BgResult) {
 		return
 	}
 	if s.studioID != "" {
-		_, _ = s.SyncStudioToolPolicy()
+		s.syncStudioCapabilitiesAtIdle()
 	}
 	s.notifyBg(bgNotification(t, res))
 }

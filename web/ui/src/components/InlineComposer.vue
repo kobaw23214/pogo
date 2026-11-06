@@ -16,6 +16,7 @@ import { fileIcon } from "./fileIcons";
 import { starterIconFor } from "./starterIcons";
 import { uiIconPaths } from "@/agent/uiIcons";
 import { snapshotComposerElementIcons } from "@/agent/orderedInput";
+import { mcpInvocationText, type MCPReference } from "@/agent/mcpInvocation";
 import "./commandToken.css";
 import "prosemirror-view/style/prosemirror.css";
 
@@ -40,7 +41,7 @@ const emit = defineEmits<{
   compositionstart: [event: CompositionEvent];
   compositionend: [event: CompositionEvent];
 }>();
-const { locale } = useI18n();
+const { t, locale } = useI18n();
 const faviconArchive = inject(citeFaviconKey, null);
 const host = ref<HTMLDivElement>();
 const refreshReferences = new Set<() => void>();
@@ -49,8 +50,7 @@ let pendingParts: ComposerPart[] | undefined;
 let pendingMetadataOnly = false;
 let mounted = true;
 let iconSnapshotEpoch = 0;
-const isChinese = () => locale.value.startsWith("zh");
-const removeLabel = (part: ComposerReferencePart) => isChinese() ? `移除${part.label}` : `Remove ${part.label}`;
+const removeLabel = (part: ComposerReferencePart) => t("uiCoverage.composer.remove", { label: part.label });
 
 function currentSelection(): ComposerSelection {
   return view ? { from: view.state.selection.from, to: view.state.selection.to } : { from: 1, to: 1 };
@@ -70,7 +70,7 @@ function syncAttributes() {
   if (!view) return;
   view.dom.setAttribute("data-empty", String(view.state.doc.textContent.length === 0 && !composerDocumentParts(view.state.doc).some((part) => part.type !== "text")));
   view.dom.setAttribute("data-placeholder", props.placeholder);
-  view.dom.setAttribute("aria-label", props.ariaLabel || props.placeholder || (isChinese() ? "消息，支持引用排列" : "Message with ordered references"));
+  view.dom.setAttribute("aria-label", props.ariaLabel || props.placeholder || t("uiCoverage.composer.messageLabel"));
   view.dom.setAttribute("aria-disabled", String(props.disabled));
   view.dom.querySelectorAll<HTMLButtonElement>(".inline-reference-remove").forEach((button) => { button.disabled = props.disabled; });
 }
@@ -112,9 +112,9 @@ function insertText(text: string) {
 function getSlashQuery(): { text: string; from: number; to: number } | null {
   return view ? inlineComposerSlashQuery(view.state) : null;
 }
-function completeSlash(value: string, skillName?: string) {
+function completeSlash(value: string, skillName?: string, mcp?: MCPReference) {
   if (!view || props.disabled) return false;
-  const tr = completeInlineComposerSlash(view.state, value, skillName);
+  const tr = completeInlineComposerSlash(view.state, value, skillName, mcp);
   if (!tr) return false;
   view.dispatch(tr.scrollIntoView()); view.focus(); return true;
 }
@@ -203,19 +203,20 @@ function referenceView(initial: import("prosemirror-model").Node, editor: Editor
   primary.append(copy);
   dom.append(primary, remove);
   const update = () => {
-    const skill = part.type === "skill";
-    dom.className = `inline-reference ${part.type}${skill ? " command-token-surface command-token-editable" : ""}${part.type === "file" && part.status ? ` ${part.status}` : ""}${props.disabled ? " disabled" : ""}`;
-    primary.className = `inline-reference-primary${skill ? " command-token-primary" : ""}`;
-    label.className = `inline-reference-label${skill ? " command-token-name" : ""}`;
-    remove.className = `inline-reference-remove${skill ? " command-token-remove" : ""}`;
+    const skill = part.type === "skill", method = part.type === "mcp", token = skill || method;
+    dom.className = `inline-reference ${part.type}${token ? " command-token-surface command-token-editable" : ""}${part.type === "file" && part.status ? ` ${part.status}` : ""}${props.disabled ? " disabled" : ""}`;
+    primary.className = `inline-reference-primary${token ? " command-token-primary" : ""}`;
+    label.className = `inline-reference-label${token ? " command-token-name" : ""}`;
+    remove.className = `inline-reference-remove${token ? " command-token-remove" : ""}`;
     dom.dataset.pogoComposerPart = JSON.stringify(part);
     dom.dataset.occurrenceId = part.id;
-    type.hidden = !skill;
-    type.textContent = skill ? (isChinese() ? "技能" : "Skill") : "";
+    type.hidden = !token;
+    type.textContent = method ? "MCP" : skill ? t("uiCoverage.composer.skill") : "";
     page.hidden = separator.hidden = true;
     dataBadge.hidden = true;
     icon.hidden = false;
     if (skill) icon.innerHTML = '<svg class="command-token-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5v8l-9 5-9-5V8l9-5Zm-9 5 9 5 9-5m-9 5v8M7.5 5.5l9 5"/></svg>';
+    else if (method) icon.innerHTML = '<svg class="command-token-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m8 12 3 3 7-7M7 7l-3 3a4 4 0 0 0 0 6l2 2a4 4 0 0 0 6 0l2-2M17 17l3-3a4 4 0 0 0 0-6l-2-2a4 4 0 0 0-6 0l-2 2"/></svg>';
     else if (part.type === "element") {
       const card = parsePickedCached(part.text).cards[0];
       const title = part.title || part.pick?.pageTitle || card?.title;
@@ -248,7 +249,7 @@ function referenceView(initial: import("prosemirror-model").Node, editor: Editor
       icon.innerHTML = `<svg width="22" height="22" viewBox="0 0 ${glyph.width} ${glyph.height}">${glyph.body}</svg>`;
     }
     label.textContent = part.label;
-    dom.title = part.type === "element" ? [part.title, part.pick?.preview || part.label].filter(Boolean).join("\n") : part.type === "shortcut" ? part.title : part.type === "skill" ? `/skill:${part.name}` : part.type === "office" ? part.label : part.error || part.path || part.label;
+    dom.title = part.type === "element" ? [part.title, part.pick?.preview || part.label].filter(Boolean).join("\n") : part.type === "shortcut" ? part.title : part.type === "skill" ? `/skill:${part.name}` : part.type === "mcp" ? mcpInvocationText(part.server, part.name) : part.type === "office" ? part.label : part.error || part.path || part.label;
     remove.setAttribute("aria-label", removeLabel(part));
     remove.title = removeLabel(part);
     remove.disabled = props.disabled;

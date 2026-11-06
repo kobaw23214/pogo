@@ -1,3 +1,4 @@
+import { getLocale, gt as tr } from "@/i18n";
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch, type Ref } from "vue";
 import { gsap } from "gsap";
 import { adjacentStoryStop, buildStoryStops, commitsStorySwipe, nearestStoryStop, storyTransitionDuration, type ScrollDirection, type StoryAnchor, type StoryChapter, type StoryStop } from "./landingSnapConfig";
@@ -8,7 +9,7 @@ type Options = {
   chapterIds: readonly string[];
 };
 type TouchGesture = { x: number; y: number; at: number; origin: number; delta: number; dragging: boolean; target?: StoryStop };
-const chapterTitles: Record<string, string> = { overview: "首页", capabilities: "基座能力", workspace: "工作空间", possibilities: "应用场景", begin: "开始使用" };
+const chapterTitles: Record<string, string> = { get overview() { return tr('studioManagement.text475'); }, get capabilities() { return tr('studioManagement.text369'); }, get workspace() { return tr('studioManagement.text370'); }, get possibilities() { return tr('studioManagement.text371'); }, get begin() { return tr('studioManagement.text563'); } };
 
 /** A single scroller and timeline position for reading, scenes and chapter cuts. */
 export function useLandingSnap(options: Options) {
@@ -92,29 +93,29 @@ export function useLandingSnap(options: Options) {
       if (id === "overview" && options.enabled.value && node.dataset.layout !== "compact") {
         const stage = node.querySelector<HTMLElement>(".opening-stage");
         const distance = Math.max(1, node.offsetHeight - (stage?.offsetHeight ?? root.clientHeight - header));
-        anchors.push({ key: "gather", label: "聚合", top: start }, { key: "unfold", label: "拆解", top: start + distance * 0.4 }, { key: "enter", label: "穿入", top: start + distance * 0.62 });
+        anchors.push({ key: "gather", label: tr('studioManagement.text397'), top: start }, { key: "unfold", label: tr('studioManagement.text398'), top: start + distance * 0.4 }, { key: "enter", label: tr('studioManagement.text564'), top: start + distance * 0.62 });
         cinematic = true;
       } else if (id === "capabilities") {
-        add(".anatomy-art", "anatomy", "能力组合");
-        add(".capability-folds", "details", "能力详解");
+        add(".anatomy-art", "anatomy", tr('studioManagement.text565'));
+        add(".capability-folds", "details", tr('studioManagement.text566'));
       } else if (id === "workspace") {
         const story = node.querySelector<HTMLElement>(".workspace-story");
         const stage = node.querySelector<HTMLElement>(".workspace-stage");
         if (story && stage && root.dataset.motionLayout === "full" && options.enabled.value) {
           const stageStart = layoutTop(story) - header - 16;
           const travel = Math.max(0, story.offsetHeight - stage.offsetHeight);
-          anchors.push({ key: "configure", label: "配置能力", top: stageStart }, { key: "execute", label: "推进任务", top: stageStart + travel * 0.5 }, { key: "result", label: "看见结果", top: stageStart + travel });
+          anchors.push({ key: "configure", label: tr('studioManagement.text567'), top: stageStart }, { key: "execute", label: tr('studioManagement.text568'), top: stageStart + travel * 0.5 }, { key: "result", label: tr('studioManagement.text569'), top: stageStart + travel });
         } else {
-          add(".config-paper", "configure", "配置能力");
-          add(".workbench-window", "execute", "推进任务");
-          add(".result-paper", "result", "看见结果");
+          add(".config-paper", "configure", tr('studioManagement.text567'));
+          add(".workbench-window", "execute", tr('studioManagement.text568'));
+          add(".result-paper", "result", tr('studioManagement.text569'));
         }
       } else if (id === "possibilities") {
         if (root.clientWidth <= 650) {
-          add(".card-research", "research", "研究与洞见");
-          add(".card-engineering", "engineering", "代码与工程");
-          add(".card-analysis", "analysis", "分析与知识");
-        } else add(".editorial-grid", "directions", "探索应用方向");
+          add(".card-research", "research", tr('studioManagement.text570'));
+          add(".card-engineering", "engineering", tr('studioManagement.text571'));
+          add(".card-analysis", "analysis", tr('studioManagement.text572'));
+        } else add(".editorial-grid", "directions", tr('studioManagement.text573'));
       }
       chapters.push({ id, title: chapterTitles[id] ?? id, start, end, anchors, cinematic });
     }
@@ -296,6 +297,7 @@ export function useLandingSnap(options: Options) {
 
   function suspend() { touch = undefined; pointerHeld = false; cancel(); }
   watch([options.enabled, options.reduced], () => { suspend(); void nextTick(() => refreshStoryLayout()); });
+  watch(getLocale, () => { void nextTick(() => refreshStoryLayout()); });
   watch(options.paused, suspend);
 
   onMounted(() => {
