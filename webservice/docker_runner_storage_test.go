@@ -132,6 +132,11 @@ func TestDockerStorageDataLimitAndRunnerReloadRetainCause(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitStorageStop(t, r, rec, "STORAGE_LIMIT_EXCEEDED")
+	// Container absence can precede asynchronous volume cleanup. A reload must
+	// release the old runner before another instance uses the same state store.
+	if err := r.Close(); err != nil {
+		t.Fatal(err)
+	}
 	other, err := NewDockerRunner(r.opts)
 	if err != nil {
 		t.Fatal(err)
